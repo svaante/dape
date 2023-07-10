@@ -1,0 +1,158 @@
+#+title: Dape - Debug Adapter Protocol for Emacs
+#+author: Daniel Pettersson
+#+language: en
+
+=Dape= Debug Adapter Protocol for Emacs.
+
+Use ~dape-configs~ to set up your debug adapter configurations.
+
+* Features
++ Log breakpoints
++ Conditional breakpoints
++ Variable explorer
++ Variable watch
++ Variable hover with ~eldoc~
++ REPL
++ Memory viewer with ~hexl~
++ ~compile~ integration
++ Debug adapter configuration ergonomics
++ No dependencies
+
+* Configuration
+Currently =Dape= does not come with any debug adapter configuration.
+
+#+begin_src emacs-lisp
+  (use-package dape
+    :config
+    ;; Use n for next etc. in REPL
+    ;; (setq dape-repl-use-shorthand t)
+
+    ;; Kill compile buffer on build success
+    ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
+    )
+#+end_src
+
+* Supported debug adapters
+In theory all debug adapters should be compatible with =Dape=.
+
+** Javascript - vscode-js-debug
+To install ~vscode-js-debug~ and pull down [[https://github.com/microsoft/vscode-js-debug][repo]].
+#+begin_src sh
+  npm install
+  npx gulp dapDebugServer
+#+end_src
+
+Example launch configuration for ~node~.
+#+begin_src emacs-lisp
+  (add-to-list `(vscode-js-node
+                 modes (js-mode js-ts-mode)
+                 host "localhost"
+                 port 8123
+                 command "node"
+                 command-cwd "vscode-js-debug/dist/"
+                 command-args ("src/dapDebugServer.js" "8123")
+                 :type "pwa-node"
+                 :request "launch"
+                 :cwd ,dape-cwd-fn
+                 :program dape--find-file
+                 :outputCapture "console"
+                 :sourceMapRenames t
+                 :pauseForSourceMap nil
+                 :enableContentValidation t
+                 :autoAttachChildProcesses t
+                 :console "internalConsole"
+                 :killBehavior "forceful")
+               dape-configs)
+#+end_src
+
+For more information see [[https://github.com/microsoft/vscode-js-debug/blob/main/OPTIONS.md][OPTIONS.md]].
+
+** Go - delve
+See [[https://github.com/go-delve/delve/tree/master/Documentation/installation][delve installation]].
+
+#+begin_src emacs-lisp
+  (add-to-list `(delve
+                 modes (go-mode go-ts-mode)
+                 command "dlv"
+                 command-args ("dap" "--listen" "127.0.0.1:55878")
+                 command-cwd ,dape-cwd-fn
+                 host "127.0.0.1"
+                 port 55878
+                 :type "debug"
+                 :request "launch"
+                 :cwd ,dape-cwd-fn
+                 :program ,dape-cwd-fn)
+               dape-configs)
+#+end_src
+
+For more information see [[https://github.com/go-delve/delve/blob/master/Documentation/usage/dlv_dap.md][documentation]].
+
+** C, C++ and Rust
+Download latest [[https://github.com/vadimcn/codelldb/releases][release]] and unpack ~vsix~ file with your favorite unzipper.
+
+#+begin_src emacs-lisp
+  (add-to-list `(codelldb
+                 modes (c-mode c-ts-mode
+                               c++-mode c++-ts-mode
+                               rust-ts-mode rust-mode)
+                 ;; Replace vadimcn.vscode-lldb with the vsix directory you just extracted
+                 command ,"vadimcn.vscode-lldb/adapter/codelldb"
+                 host "localhost"
+                 port 5818
+                 command-args ("--port" "5818")
+                 :type "lldb"
+                 :request "launch"
+                 :cwd ,dape-cwd-fn
+                 :program dape--find-file)
+               dape-configs)
+#+end_src
+
+See [[https://github.com/vadimcn/codelldb/blob/v1.10.0/MANUAL.md][manual]] for more information.
+
+** C and C++ - cppdbg
+Download latest [[https://github.com/microsoft/vscode-cpptools/releases][release]] and unpack ~vsix~ file with your favorite unzipper.
+Then ~chmod +x debugAdapters/bin/OpenDebugAD7~.
+
+#+begin_src emacs-lisp
+  ;; Replace ms-vscode.cpptools with the vsix directory you just extracted
+  (setq dape-cppdbg-command "ms-vscode.cpptools/debugAdapters/bin/OpenDebugAD7")
+  (add-to-list `(cppdbg
+                 modes (c-mode c-ts-mode c++-mode c++-ts-mode)
+                 command-cwd ,(file-name-directory
+                               dape--cppdbg-command)
+                 command ,cppdbg-command
+                 :type "cppdbg"
+                 :request "launch"
+                 :cwd ,dape-cwd-fn
+                 :program dape--find-file
+                 :MIMode ,(cond
+                           ((executable-find "gdb") "gdb")
+                           ((executable-find "lldb") "lldb")))
+               dape-configs)
+#+end_src
+
+See [[https://code.visualstudio.com/docs/cpp/launch-json-reference][options]].
+
+** Python - debugpy
+Install debugpy with pip ~pip install debugpy~
+
+#+begin_src emacs-lisp
+  (add-to-list `(debugpy
+                 modes (python-ts-mode python-mode)
+                 command "python3"
+                 command-args ("-m" "debugpy.adapter")
+                 :type "executable"
+                 :request "launch"
+                 :cwd ,dape-cwd-fn
+                 :program dape--find-file)
+               dape-configs)
+#+end_src
+
+See [[https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings][options]].
+
+** Other untested adapters
+If you find a working configuration for any other debug adapter please submit a PR.
+See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]].
+
+* Differences with dap-mode
+~dap-mode~ is the most popular alternative for wo
