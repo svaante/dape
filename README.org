@@ -2,9 +2,12 @@
 #+author: Daniel Pettersson
 #+language: en
 
-=Dape= Debug Adapter Protocol for Emacs.
+This package integrates debug adapters within Emacs.
 
 Use ~dape-configs~ to set up your debug adapter configurations.
+To initiate debugging sessions, use the command ~dape~.
+
+For complete functionality, activate ~eldoc-mode~ in your source buffers and enable ~repeat-mode~ for ergonomics.
 
 * Features
 + Log breakpoints
@@ -19,6 +22,7 @@ Use ~dape-configs~ to set up your debug adapter configurations.
 + No dependencies
 
 [[https://raw.githubusercontent.com/svaante/dape/resources/screenshot.png]]
+Screenshot taken with [[https://github.com/protesilaos/modus-themes][ef-trio-dark]].
 
 * Configuration
 Currently =Dape= does not come with any debug adapter configuration.
@@ -29,10 +33,25 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; Use n for next etc. in REPL
     ;; (setq dape-repl-use-shorthand t)
 
+    ;; By default dape uses gdb keybinding prefix
+    ;; (setq dape-key-prefix "\C-x\C-a")
+
     ;; Kill compile buffer on build success
     ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
     )
 #+end_src
+
+* Differences with dap-mode
+~dap-mode~ is the most popular alternative and of course much more mature and probably more feature rich (have not used ~dap-mode~ extensively).
+
+Dape takes a slightly different approach to configuration.
++ Dape does not support ~launch.json~ files, if per project configuration is needed use ~dir-locals~.
++ Tries to simplify configuration, by having just a plist.
++ No magic, no special variables.
++ Dape tries to improve config ergonomics in ~dape~ completing-read by allowing to change and add plist entries in an already existing config, example: ~adapter-config :port 5555~.
++ No batteries included.
+
+Dape has no external dependencies outside of packages included in emacs.
 
 * Supported debug adapters
 In theory all debug adapters should be compatible with =Dape=.
@@ -56,7 +75,7 @@ Example launch configuration for ~node~.
                  :type "pwa-node"
                  :request "launch"
                  :cwd ,dape-cwd-fn
-                 :program dape--find-file
+                 :program dape-find-file
                  :outputCapture "console"
                  :sourceMapRenames t
                  :pauseForSourceMap nil
@@ -105,7 +124,7 @@ Download latest [[https://github.com/vadimcn/codelldb/releases][release]] and un
                  :type "lldb"
                  :request "launch"
                  :cwd ,dape-cwd-fn
-                 :program dape--find-file)
+                 :program dape-find-file)
                dape-configs)
 #+end_src
 
@@ -126,7 +145,7 @@ Then ~chmod +x debugAdapters/bin/OpenDebugAD7~.
                  :type "cppdbg"
                  :request "launch"
                  :cwd ,dape-cwd-fn
-                 :program dape--find-file
+                 :program dape-find-file
                  :MIMode ,(cond
                            ((executable-find "gdb") "gdb")
                            ((executable-find "lldb") "lldb")))
@@ -146,7 +165,7 @@ Install debugpy with pip ~pip install debugpy~
                  :type "executable"
                  :request "launch"
                  :cwd ,dape-cwd-fn
-                 :program dape--find-file)
+                 :program dape-find-file)
                dape-configs)
 #+end_src
 
@@ -154,7 +173,7 @@ See [[https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings][op
 
 ** Other untested adapters
 If you find a working configuration for any other debug adapter please submit a PR.
-See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]].
 
-* Differences with dap-mode
-~dap-mode~ is the most popular alternative for wo
+See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]] for other adapters.
+* Bugs
+Before reporting any issues make sure that±

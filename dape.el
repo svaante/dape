@@ -30,7 +30,7 @@
 
 ;; Note:
 ;; For complete functionality, it's essential to activate `eldoc-mode'
-;; in your source buffers and enable `repeat-mode' for ergomonics.
+;; in your source buffers and enable `repeat-mode' for ergonomics
 
 ;;; Code:
 
@@ -93,7 +93,7 @@ Example:
   :type \"debug\"
   :request \"launch\"
   :cwd ,dape-cwd-fn
-  :program dape--find-file))
+  :program dape-find-file))
 (adapter-example-tcp-launch
  (modes (prog-mode)
   command \"adapter-example\"
@@ -103,7 +103,7 @@ Example:
   :type \"debug\"
   :request \"launch\"
   :cwd ,dape-cwd-fn
-  :program dape--find-file)))"
+  :program dape-find-file)))"
   :type '(alist :key-type (symbol :tag "Name")
                 :value-type
                 (plist :options
@@ -137,7 +137,7 @@ Example:
     ("pause" . dape-pause)
     ("restart" . dape-restart)
     ("quit" . dape-quit))
-  "Which actions to be displayed in `dape-info' buffer."
+  "Actions to be displayed in `dape-info' buffer."
   :type '(alist :key-type string
                 :value-type function))
 
@@ -178,7 +178,7 @@ The hook is run with one argument, the compilation buffer."
 
 (defcustom dape--debug-on
   '(io info error std-server)
-  "Which types of logs should be printed to *dape-debug*."
+  "Types of logs should be printed to *dape-debug*."
   :type '(list (const io :tag "dap IO")
                (const info :tag "info logging")
                (const error :tag "error logging")
@@ -330,7 +330,7 @@ The hook is run with one argument, the compilation buffer."
          (project-root project))
        default-directory)))
 
-(defun dape--find-file ()
+(defun dape-find-file ()
   (let* ((completion-ignored-extensions nil)
          (default-directory (funcall dape-cwd-fn)))
     (expand-file-name
