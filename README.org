@@ -29,6 +29,8 @@ Currently =Dape= does not come with any debug adapter configuration.
 
 #+begin_src emacs-lisp
   (use-package dape
+    ;; Currently only on github
+    :straight (dape :type git :host github :repo "svaante/dape")
     :config
     ;; Use n for next etc. in REPL
     ;; (setq dape-repl-use-shorthand t)
