@@ -1145,7 +1145,7 @@ Watched symbols are displayed in *dape-info* buffer.
                            (or (and (region-active-p)
                                     (buffer-substring (region-beginning)
                                                       (region-end)))
-                               (thing-at-point 'expression))))))
+                               (thing-at-point 'symbol))))))
   (if-let ((plist
             (cl-find-if (lambda (plist)
                           (equal (plist-get plist :name)
