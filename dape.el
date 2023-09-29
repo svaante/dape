@@ -54,26 +54,26 @@
 
 (defcustom dape-configs nil
   "This variable holds the Dape configurations as an alist.
-In this alist, the `car' element serves as a symbol identifying each
+In this alist, the car element serves as a symbol identifying each
 configuration. Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
 
 Symbol Keys (Used by Dape):
-- `command': Shell command to initiate the debug adapter.
-- `command-args': List of string arguments for the command.
-- `command-cwd': Working directory for the command.
-- `host': Host of the debug adapter.
-- `port': Port of the debug adapter.
-- `modes': List of modes where the configuration is active in `dape'
+- command: Shell command to initiate the debug adapter.
+- command-args: List of string arguments for the command.
+- command-cwd: Working directory for the command.
+- host: Host of the debug adapter.
+- port: Port of the debug adapter.
+- modes: List of modes where the configuration is active in `dape'
   completions.
-- `compile': Executes a shell command with `dape-compile-fn'.
+- compile: Executes a shell command with `dape-compile-fn'.
 
 Debug adapter connection in configuration:
-- If only `command' is specified (without `host' and `port'), Dape
+- If only command is specified (without host and port), Dape
   will communicate with the debug adapter through stdin/stdout.
-- If both `host' and `port' are specified, Dape will connect to the
-  debug adapter. If `command' is specified, Dape will wait until the
-  command is initiated before it connects with `host' and `port'.
+- If both host'and port are specified, Dape will connect to the
+  debug adapter. If `command is specified, Dape will wait until the
+  command is initiated before it connects with host and port.
 
 Keywords in configuration:
   Keywords are transmitted to the adapter during the initialize and
@@ -83,27 +83,7 @@ Keywords in configuration:
 
 Functions in configuration:
  If a value in a key is a function, the function's return value will
- replace the key's value before execution.
-
-Example:
-((adapter-example-launch
- (modes (prog-mode)
-  command \"adapter-example\"
-  compile \"make\"
-  :type \"debug\"
-  :request \"launch\"
-  :cwd ,dape-cwd-fn
-  :program dape-find-file))
-(adapter-example-tcp-launch
- (modes (prog-mode)
-  command \"adapter-example\"
-  command-arg '(\"--port\" \"55878\")
-  host \"localhost\"
-  port 55878
-  :type \"debug\"
-  :request \"launch\"
-  :cwd ,dape-cwd-fn
-  :program dape-find-file)))"
+ replace the key's value before execution."
   :type '(alist :key-type (symbol :tag "Name")
                 :value-type
                 (plist :options
@@ -737,6 +717,9 @@ The hook is run with one argument, the compilation buffer."
 
 (cl-defmethod dape-handle-event (process (_event (eql initialized)) _body)
   (dape--update-state "initialized")
+  ;; FIXME This is a lazy way of getting arround trainling stack
+  ;;       pointers due to crashing dap.
+  (dape--clean-stack-pointers)
   (dape--configure-breakpoints
    process
    (dape--callback
@@ -1008,6 +991,7 @@ The hook is run with one argument, the compilation buffer."
   "Kill debug session and kill related dape buffers."
   (interactive)
   (dape-kill)
+  (dape--clean-stack-pointers)
   (thread-last (buffer-list)
                (seq-filter (lambda (buffer)
                              (string-match-p "\\*dape-.+\\*" (buffer-name buffer))))
@@ -1099,7 +1083,8 @@ string is read as NAME and rest as element in CONFIG.
 
 Interactive example:
   launch :program \"bin\"
-executes launch `dape-config' with :program as \"bin\"."
+
+Executes launch `dape-config' with :program as \"bin\"."
   (interactive (dape--read-config))
   (unless (plist-get config 'start-debugging)
     (dape-kill))
@@ -1280,9 +1265,8 @@ Watched symbols are displayed in *dape-info* buffer.
   (dape--info-update-breakpoints-widget))
 
 (defun dape--clean-breakpoints ()
-  (setq dape--breakpoints (seq-filter
-                            'overlay-buffer
-                            dape--breakpoints)))
+  (setq dape--breakpoints (seq-filter 'overlay-buffer
+                                      dape--breakpoints)))
 
 
 ;;; Stack pointers
@@ -1337,6 +1321,14 @@ Watched symbols are displayed in *dape-info* buffer.
           (push overlay
                 dape--stack-pointers))
         (setq index (1+ index))))))
+
+(defun dape--clean-stack-pointers ()
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (dolist (overlay (overlays-in (point-min) (point-max)))
+        (when (eq (overlay-get overlay 'category)
+                  'dape-stack-pointer)
+          (delete-overlay overlay))))))
 
 
 ;;; Info buffer
