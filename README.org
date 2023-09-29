@@ -22,7 +22,7 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + No dependencies
 
 [[https://raw.githubusercontent.com/svaante/dape/resources/screenshot.png]]
-Screenshot taken with [[https://github.com/protesilaos/modus-themes][ef-trio-dark]].
+Screenshot taken with [[https://github.com/protesilaos/ef-themes][ef-trio-dark]].
 
 * Configuration
 Currently =Dape= does not come with any debug adapter configuration.

@@ -411,7 +411,7 @@ The hook is run with one argument, the compilation buffer."
                                (intern (plist-get object :event))
                                (plist-get object :body)))
           (t (dape--debug 'error
-              "Event ignored due to seq %d convention not followed" seq)))))
+              "Event ignored due to request seq %d < last handled seq %d" seq dape--seq-event)))))
       (_ (dape--debug 'info "No handler for type %s" type)))))
 
 (defun dape--process-filter (process string)
@@ -717,9 +717,6 @@ The hook is run with one argument, the compilation buffer."
 
 (cl-defmethod dape-handle-event (process (_event (eql initialized)) _body)
   (dape--update-state "initialized")
-  ;; FIXME This is a lazy way of getting arround trainling stack
-  ;;       pointers due to crashing dap.
-  (dape--clean-stack-pointers)
   (dape--configure-breakpoints
    process
    (dape--callback
@@ -741,15 +738,16 @@ The hook is run with one argument, the compilation buffer."
                             (plist-get body :threadId)))
                       dape--threads)))
       (progn
-        (dape--debug 'info "thread %S" body)
         (plist-put thread :status (plist-get body :reason))
         (plist-put thread :name (or (plist-get thread :name)
                                     "unnamed")))
+    ;; If new thread use thread state as global state
+    (dape--update-state (plist-get body :reason))
     (push (list :status (plist-get body :reason)
                 :id (plist-get body :threadId)
                 :name "unnamed")
           dape--threads))
-    (dape--info-update-threads-widget))
+  (dape--info-update-threads-widget))
 
 (cl-defmethod dape-handle-event (process (_event (eql stopped)) body)
   (dape--update-state "stopped")
@@ -802,6 +800,7 @@ The hook is run with one argument, the compilation buffer."
 ;;; Startup/Setup
 
 (defun dape--setup (process name config)
+  (dape--remove-stack-pointers)
   (setq dape--name name
         dape--config config
         dape--seq 0
@@ -811,7 +810,6 @@ The hook is run with one argument, the compilation buffer."
         dape--thread-id nil
         dape--capabilities nil
         dape--threads nil
-        dape--stack-pointers nil
         dape--stack-id nil
         dape--process process)
   (setq dape--widget-guard nil
@@ -926,6 +924,8 @@ The hook is run with one argument, the compilation buffer."
   (cond
    ((and (dape--live-process t)
          (plist-get dape--capabilities :supportsRestartRequest))
+    (setq dape--threads nil)
+    (setq dape--thread-id nil)
     (dape-request dape--process "restart" nil))
    ((and dape--name dape--config)
     (dape dape--name dape--config))
@@ -938,7 +938,6 @@ The hook is run with one argument, the compilation buffer."
   (let* (done
          (kill-processes
           (lambda (&rest _)
-            (dape--remove-stack-pointers)
             (ignore-errors
               (and dape--process
                    (delete-process dape--process))
@@ -946,6 +945,7 @@ The hook is run with one argument, the compilation buffer."
                    (delete-process dape--server-process))
               (and dape--parent-process
                    (delete-process dape--parent-process)))
+            (dape--remove-stack-pointers)
             ;; Clean mode-line after 2 seconds
             (run-with-timer 2 nil (lambda ()
                                      (unless (dape--live-process t)
@@ -966,6 +966,7 @@ The hook is run with one argument, the compilation buffer."
                until done
                do (accept-process-output nil 0.1)
                finally (unless done
+                         (funcall kill-processes)
                          (dape--debug 'error
                                        "Terminate request timed out"))))
      ((and (dape--live-process t)
@@ -982,6 +983,7 @@ The hook is run with one argument, the compilation buffer."
                until done
                do (accept-process-output nil 0.1)
                finally (unless done
+                         (funcall kill-processes)
                          (dape--debug 'error
                                        "Disconnect request timed out"))))
       (t
@@ -991,7 +993,6 @@ The hook is run with one argument, the compilation buffer."
   "Kill debug session and kill related dape buffers."
   (interactive)
   (dape-kill)
-  (dape--clean-stack-pointers)
   (thread-last (buffer-list)
                (seq-filter (lambda (buffer)
                              (string-match-p "\\*dape-.+\\*" (buffer-name buffer))))
@@ -1321,14 +1322,6 @@ Watched symbols are displayed in *dape-info* buffer.
           (push overlay
                 dape--stack-pointers))
         (setq index (1+ index))))))
-
-(defun dape--clean-stack-pointers ()
-  (dolist (buffer (buffer-list))
-    (with-current-buffer buffer
-      (dolist (overlay (overlays-in (point-min) (point-max)))
-        (when (eq (overlay-get overlay 'category)
-                  'dape-stack-pointer)
-          (delete-overlay overlay))))))
 
 
 ;;; Info buffer
