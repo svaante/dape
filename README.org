@@ -18,6 +18,8 @@ Use ~dape-configs~ to set up your debug adapter configurations.
 + Debug adapter configuration ergonomics
 + No dependencies
 
+[[https://raw.githubusercontent.com/svaante/dape/resources/screenshot.png]]
+
 * Configuration
 Currently =Dape= does not come with any debug adapter configuration.
 
