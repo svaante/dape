@@ -46,6 +46,8 @@ Currently =Dape= does not come with any debug adapter configuration.
 * Differences with dap-mode
 ~dap-mode~ is the most popular alternative and of course much more mature and probably more feature rich (have not used ~dap-mode~ extensively).
 
+Dape has no dependencies outside of packages included in emacs, and tries to use get as much out of them possible.
+
 Dape takes a slightly different approach to configuration.
 + Dape does not support ~launch.json~ files, if per project configuration is needed use ~dir-locals~.
 + Tries to simplify configuration, by having just a plist.
@@ -53,13 +55,13 @@ Dape takes a slightly different approach to configuration.
 + Dape tries to improve config ergonomics in ~dape~ completing-read by allowing to change and add plist entries in an already existing config, example: ~adapter-config :port 5555~.
 + No batteries included.
 
-Dape has no external dependencies outside of packages included in emacs.
+Some might say that Dape has a nicer UI others might not.
 
 * Supported debug adapters
 In theory all debug adapters should be compatible with =Dape=.
 
 ** Javascript - vscode-js-debug
-To install ~vscode-js-debug~ and pull down [[https://github.com/microsoft/vscode-js-debug][repo]].
+To install ~vscode-js-debug~ pull down the [[https://github.com/microsoft/vscode-js-debug][repo]].
 #+begin_src sh
   npm install
   npx gulp dapDebugServer
@@ -179,4 +181,4 @@ If you find a working configuration for any other debug adapter please submit a 
 See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]] for other adapters, your mileage will vary.
 
 * Bugs and issues
-Before reporting any issues take a look at ~*dape-debug*~ buffer with ~(setq dape--debug-on '(io info error std-server)~.
+Before reporting any issues take a look at ~*dape-debug*~ buffer with all debug messages enabled ~(setq dape--debug-on '(io info error std-server)~.
