@@ -40,6 +40,9 @@ Currently =Dape= does not come with any debug adapter configuration.
 
     ;; Kill compile buffer on build success
     ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
+
+    ;; Projectile users
+    ;; (setq dape-cwd-fn 'projectile-project-root)
     )
 #+end_src
 
