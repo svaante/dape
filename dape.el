@@ -71,7 +71,7 @@ Symbol Keys (Used by Dape):
 Debug adapter connection in configuration:
 - If only command is specified (without host and port), Dape
   will communicate with the debug adapter through stdin/stdout.
-- If both host'and port are specified, Dape will connect to the
+- If both host and port are specified, Dape will connect to the
   debug adapter. If `command is specified, Dape will wait until the
   command is initiated before it connects with host and port.
 
@@ -81,9 +81,11 @@ Keywords in configuration:
   information on how Dape serializes these keyword elements. Dape
   uses nil as false.
 
-Functions in configuration:
+Functions and symbols in configuration:
  If a value in a key is a function, the function's return value will
- replace the key's value before execution."
+ replace the key's value before execution.
+ If a value in a key is a symbol, the symbol will recursively resolve
+ at runtime."
   :type '(alist :key-type (symbol :tag "Name")
                 :value-type
                 (plist :options
@@ -103,7 +105,6 @@ Functions in configuration:
 (defcustom dape-buffers-on-start '(dape-info dape-repl)
   "Dape buffers to open when debugging starts."
   :type '(list (const dape-info) (const dape-repl)))
-
 
 (defcustom dape-main-functions '("main")
   "Functions to set breakpoints at startup if no other breakpoints are set."
@@ -143,7 +144,7 @@ Functions in configuration:
   "Function to run compile with."
   :type 'function)
 
-(defcustom dape-cwd-fn 'dape--default-cwd
+(defcustom dape-cwd-fn #'dape--default-cwd
   "Function to get current working directory."
   :type 'function)
 
@@ -310,11 +311,18 @@ The hook is run with one argument, the compilation buffer."
          (project-root project))
        default-directory)))
 
-(defun dape-find-file ()
+(defun dape-find-file (&optional default)
   (let* ((completion-ignored-extensions nil)
          (default-directory (funcall dape-cwd-fn)))
     (expand-file-name
-     (read-file-name "Program: " default-directory nil t))))
+     (read-file-name (if default
+                         (format "Program (default %s): " default)
+                       "Program : ")
+                     default-directory
+                     default t))))
+
+(defun dape-find-file-buffer-default ()
+  (dape-find-file (buffer-file-name)))
 
 (defun dape--overlay-region (&optional extended)
   (list (line-beginning-position)
@@ -340,8 +348,6 @@ The hook is run with one argument, the compilation buffer."
      (format ": %s"
              (propertize type
                          'face 'font-lock-type-face))))))
-
-
 
 
 ;;; Process and parsing
@@ -1085,7 +1091,7 @@ string is read as NAME and rest as element in CONFIG.
 Interactive example:
   launch :program \"bin\"
 
-Executes launch `dape-config' with :program as \"bin\"."
+Executes launch `dape-configs' with :program as \"bin\"."
   (interactive (dape--read-config))
   (unless (plist-get config 'start-debugging)
     (dape-kill))
@@ -1096,8 +1102,8 @@ Executes launch `dape-config' with :program as \"bin\"."
     (setq evaled-config
           (dape--config-eval
            (seq-reduce (apply-partially 'apply 'plist-put)
-                        (seq-partition config 2)
-                        (copy-tree base-config))))
+                       (seq-partition config 2)
+                       (copy-tree base-config))))
     (when (called-interactively-p)
       (push (dape--config-to-string name
                                     base-config
@@ -1982,23 +1988,26 @@ Buffer contains debug session information."
                  ((functionp value) (funcall-interactively value))
                  ((plistp value) (dape--config-eval value))
                  ((vectorp value) (cl-map 'vector #'eval-value value))
+                 ((and (symbolp value)
+                       (not (eq (symbol-value value) value)))
+                  (funcall #'eval-value (symbol-value value)))
                  (t value))))
     (cl-loop for (key value) on config by 'cddr
              append (cond
                      ((memq key '(modes)) (list key value))
-                     (t  (list key (funcall #'eval-value value)))))))
+                     (t (list key (funcall #'eval-value value)))))))
 
 (defun dape--config-from-string (str)
   (let (name read-config base-config)
     (when (string-empty-p str)
-      (user-error "Expected `dape-config' name."))
+      (user-error "Expected config name."))
     (setq name (read str)
           base-config (copy-tree (alist-get name dape-configs))
           str (substring str (length (symbol-name name))))
     (unless (string-empty-p str)
       (setq read-config (read (format "(%s)" str))))
     (unless (plistp read-config)
-      (user-error "Unexpected `dape-config' format, see `dape'."))
+      (user-error "Unexpected config format, see `dape-configs'."))
     (cl-loop for (key value) on read-config by 'cddr
              do (setq base-config (plist-put base-config key value)))
     (list name base-config)))
@@ -2010,7 +2019,7 @@ Buffer contains debug session information."
 
 (defun dape--config-to-string (name pre-eval-config post-eval-config)
   (let ((config-diff (dape--config-diff pre-eval-config
-                                         post-eval-config)))
+                                        post-eval-config)))
     (concat (format "%s" name)
             (when-let ((config-str (and config-diff
                                         (prin1-to-string config-diff))))
@@ -2021,18 +2030,17 @@ Buffer contains debug session information."
 
 (defun dape--read-config ()
   (let ((candidate
-         (completing-read
-          "Dape config: "
-          (append
-           (mapcan
-            (lambda (name-config)
-              (let* ((config (cdr name-config))
-                     (modes (plist-get config 'modes)))
-                (when (apply 'provided-mode-derived-p major-mode modes)
-                  (list (car name-config)))))
-            dape-configs)
-           dape--config-history)
-          nil nil nil 'dape-history)))
+         (completing-read "Dape config: "
+                          (append
+                           (mapcan
+                            (lambda (name-config)
+                              (let* ((config (cdr name-config))
+                                     (modes (plist-get config 'modes)))
+                                (when (apply 'provided-mode-derived-p major-mode modes)
+                                  (list (car name-config)))))
+                            dape-configs)
+                           dape--config-history)
+                          nil nil nil 'dape-history)))
     (if-let ((config
               (alist-get (intern candidate) dape-configs)))
         (list (intern candidate) config)

@@ -44,16 +44,17 @@ Currently =Dape= does not come with any debug adapter configuration.
 #+end_src
 
 * Differences with dap-mode
-~dap-mode~ is the most popular alternative and of course much more mature and probably more feature rich (have not used ~dap-mode~ extensively).
+[[https://github.com/emacs-lsp/dap-mode][dap-mode]] is the most popular alternative and is of course much more mature and probably more feature rich (have not used ~dap-mode~ extensively).
 
 Dape has no dependencies outside of packages included in emacs, and tries to use get as much out of them possible.
 
 Dape takes a slightly different approach to configuration.
 + Dape does not support ~launch.json~ files, if per project configuration is needed use ~dir-locals~.
 + Tries to simplify configuration, by having just a plist.
-+ No magic, no special variables.
-+ Dape tries to improve config ergonomics in ~dape~ completing-read by allowing to change and add plist entries in an already existing config, example: ~adapter-config :port 5555~.
-+ No batteries included.
++ Dape tries to improve config ergonomics in ~dape~ completing-read by allowing to change/add plist entries in an already existing config, example: ~adapter-config :program ＂/home/user/b.out＂ :compile ＂gcc -g -o b.out main.c ＂~.
++ No magic, no special variables. Instead, functions and variables are resolved before starting a new session.
++ No batteries included. Many, suffer from a significant drawback: they're tightly coupled with the vscode extension they're bundled with. This tight coupling results in launch/attach requests being specific to each adapter, devoid of reasonable defaults as they are stored within the extension itself, leading to an ever-changing and unstable API. Consequently, attempting to include default configurations for each adapter seems like a losing proposition.
++ Tries to be envision to how debug adapter configuration would be implemented in emacs if vscode never existed.
 
 Some might say that Dape has a nicer UI others might not.
 
@@ -78,8 +79,8 @@ Example launch configuration for ~node~.
                  command-args ("src/dapDebugServer.js" "8123")
                  :type "pwa-node"
                  :request "launch"
-                 :cwd ,dape-cwd-fn
-                 :program dape-find-file
+                 :cwd dape-cwd-fn
+                 :program dape-find-file-buffer-default
                  :outputCapture "console"
                  :sourceMapRenames t
                  :pauseForSourceMap nil
@@ -100,13 +101,13 @@ See [[https://github.com/go-delve/delve/tree/master/Documentation/installation][
                  modes (go-mode go-ts-mode)
                  command "dlv"
                  command-args ("dap" "--listen" "127.0.0.1:55878")
-                 command-cwd ,dape-cwd-fn
+                 command-cwd dape-cwd-fn
                  host "127.0.0.1"
                  port 55878
                  :type "debug"
                  :request "launch"
-                 :cwd ,dape-cwd-fn
-                 :program ,dape-cwd-fn)
+                 :cwd dape-cwd-fn
+                 :program dape-cwd-fn)
                dape-configs)
 #+end_src
 
@@ -118,16 +119,16 @@ Download latest [[https://github.com/vadimcn/codelldb/releases][release]] and un
 #+begin_src emacs-lisp
   (add-to-list `(codelldb
                  modes (c-mode c-ts-mode
-                               c++-mode c++-ts-mode
-                               rust-ts-mode rust-mode)
+                        c++-mode c++-ts-mode
+                        rust-ts-mode rust-mode)
                  ;; Replace vadimcn.vscode-lldb with the vsix directory you just extracted
-                 command ,"vadimcn.vscode-lldb/adapter/codelldb"
+                 command "vadimcn.vscode-lldb/adapter/codelldb"
                  host "localhost"
                  port 5818
                  command-args ("--port" "5818")
                  :type "lldb"
                  :request "launch"
-                 :cwd ,dape-cwd-fn
+                 :cwd dape-cwd-fn
                  :program dape-find-file)
                dape-configs)
 #+end_src
@@ -145,10 +146,10 @@ Then ~chmod +x debugAdapters/bin/OpenDebugAD7~.
                  modes (c-mode c-ts-mode c++-mode c++-ts-mode)
                  command-cwd ,(file-name-directory
                                dape--cppdbg-command)
-                 command ,cppdbg-command
+                 command cppdbg-command
                  :type "cppdbg"
                  :request "launch"
-                 :cwd ,dape-cwd-fn
+                 :cwd dape-cwd-fn
                  :program dape-find-file
                  :MIMode ,(cond
                            ((executable-find "gdb") "gdb")
@@ -168,8 +169,8 @@ Install debugpy with pip ~pip install debugpy~
                  command-args ("-m" "debugpy.adapter")
                  :type "executable"
                  :request "launch"
-                 :cwd ,dape-cwd-fn
-                 :program dape-find-file)
+                 :cwd dape-cwd-fn
+                 :program dape-find-file-buffer-default)
                dape-configs)
 #+end_src
 
