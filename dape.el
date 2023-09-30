@@ -414,10 +414,11 @@ The hook is run with one argument, the compilation buffer."
                (zerop seq))
            (setq dape--seq-event seq)
            (dape-handle-event process
-                               (intern (plist-get object :event))
-                               (plist-get object :body)))
+                              (intern (plist-get object :event))
+                              (plist-get object :body)))
           (t (dape--debug 'error
-              "Event ignored due to request seq %d < last handled seq %d" seq dape--seq-event)))))
+                          "Event ignored due to request seq %d < last handled seq %d"
+                          seq dape--seq-event)))))
       (_ (dape--debug 'info "No handler for type %s" type)))))
 
 (defun dape--process-filter (process string)
@@ -1629,14 +1630,24 @@ Watched symbols are displayed in *dape-info* buffer.
                 (list
                  (widget-convert
                   'file-link
-                  :format (concat "%t%[%v%]"
-                                  (overlay-get overlay 'after-string)
-                                  "\n")
+                  :format (concat
+                           "%t%[%v%]"
+                           ;; % needs to be escaped for widget-format but
+                           ;; this is not without issue as widget-format
+                           ;; inserts the escaped % without 'face.
+                           (when-let ((after-string
+                                       (overlay-get overlay
+                                                    'after-string)))
+                             (save-match-data
+                               (replace-regexp-in-string "%"
+                                                         "%%"
+                                                         after-string)))
+                           "\n")
                   :action (lambda (&rest _)
                             (dape--goto-source `(:source (:path ,file)
-                                                  :line ,line)
-                                                nil
-                                                t))
+                                                         :line ,line)
+                                               nil
+                                               t))
                   :tag (if (member (cons file line)
                                    current-stopped-files-lines)
                            (propertize "→ " 'face 'bold)
