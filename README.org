@@ -188,10 +188,10 @@ See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/]
 + More options for indicator placement
 + Improving completion in REPL
 + Usage of "setVariable" inside of "*dape-info*" buffer
-+ Exception breakpoints in "*dape-info*"
++ Exception breakpoints in "*dape-info*" buffer
 + Fleshed out memory reader with auto reload and write functionality
 + Individual thread controls
-+ Variable values displayed in source buffer, this seams to require integration with lsp-mode and eglot.
++ Variable values displayed in source buffer, this seams to require integration with lsp-mode and eglot
 
 * Bugs and issues
 Before reporting any issues take a look at ~*dape-debug*~ buffer with all debug messages enabled ~(setq dape--debug-on '(io info error std-server)~.
