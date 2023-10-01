@@ -671,14 +671,16 @@ The hook is run with one argument, the compilation buffer."
                         (funcall cb process))))
     (funcall cb process)))
 
-(defun dape--update (process)
+(defun dape--update (process &optional skip-clear-stack-frames)
   (let ((current-thread (dape--current-thread)))
-    (dolist (thread dape--threads)
-      (plist-put thread :stackFrames nil))
+    (unless skip-clear-stack-frames
+      (dolist (thread dape--threads)
+        (plist-put thread :stackFrames nil)))
+    (dolist (watched dape--watched)
+      (plist-put watched :fetched nil))
     (dape--stack-trace process
-                        current-thread
-                        (dape--callback
-                         (dape--update-ui)))))
+                       current-thread
+                       (dape--callback (dape--update-ui process)))))
 
 
 ;;; Incoming requests
@@ -1303,7 +1305,7 @@ Watched symbols are displayed in *dape-info* buffer.
     (delete-overlay overlay))
   (setq dape--stack-pointers nil))
 
-(defun dape--place-stack-pointers (_process thread)
+(defun dape--place-stack-pointers (thread)
   (when-let ((stopped-event-thread-p (eq dape--thread-id
                                          (plist-get thread :id)))
              (current-stack-frame (dape--current-stack-frame))
@@ -1428,13 +1430,14 @@ Watched symbols are displayed in *dape-info* buffer.
 (defconst dape--info-variables-fetch-depth 4)
 
 (defun dape--info-fetch-variables-1 (process object path cb)
-  (let ((objects (seq-filter (lambda (object)
-                               (and (length< path dape--info-variables-fetch-depth)
-                                    (gethash (cons (plist-get object :name)
-                                                   path)
-                                             dape--tree-widget-open-p)))
-                             (or (plist-get object :scopes)
-                                 (plist-get object :variables))))
+  (let ((objects
+         (seq-filter (lambda (object)
+                       (and (length< path dape--info-variables-fetch-depth)
+                            (gethash (cons (plist-get object :name)
+                                           path)
+                                     dape--tree-widget-open-p)))
+                     (or (plist-get object :scopes)
+                         (plist-get object :variables))))
         (requests 0))
     (if objects
         (dolist (object objects)
@@ -1452,16 +1455,16 @@ Watched symbols are displayed in *dape-info* buffer.
                                  (funcall cb process)))))))
       (funcall cb process))))
 
-(defun dape--update-scope (process)
+(defun dape--info-update-scope-widget (process)
   (dape--scopes process
-                 (dape--current-stack-frame)
-                 (dape--callback
-                  (dape--info-fetch-variables-1 process
-                                                 (dape--current-stack-frame)
-                                                 '("Variables")
-                                                 (dape--callback
-                                                  (dape--info-update-widget
-                                                   dape--scopes-widget))))))
+                (dape--current-stack-frame)
+                (dape--callback
+                 (dape--info-fetch-variables-1 process
+                                               (dape--current-stack-frame)
+                                               '("Variables")
+                                               (dape--callback
+                                                (dape--info-update-widget
+                                                 dape--scopes-widget))))))
 
 (defun dape--expand-threads (_)
   (mapcar (lambda (thread)
@@ -1480,7 +1483,7 @@ Watched symbols are displayed in *dape-info* buffer.
                             :action (lambda (widget &rest _)
                                       (setq dape--thread-id
                                             (widget-get widget :id))
-                                      (dape--update-ui))
+                                      (dape--update (dape--live-process) t))
                             :tag (plist-get thread :name)))
           dape--threads))
 
@@ -1519,7 +1522,7 @@ Watched symbols are displayed in *dape-info* buffer.
                  :action (lambda (widget &rest _)
                            (setq dape--stack-id
                                  (widget-get widget :id))
-                           (dape--update-ui))
+                           (dape--update (dape--live-process) t))
                  :tag (propertize (plist-get stack-frame :name)
                                   'face 'font-lock-function-name-face)))
               (plist-get current-thread :stackFrames)))))
@@ -2081,21 +2084,15 @@ Buffer contains debug session information."
 
 ;;; UI
 
-(defun dape--update-ui ()
+(defun dape--update-ui (process)
   (dape--remove-stack-pointers)
-  (dolist (watched dape--watched)
-    (plist-put watched :fetched nil))
-  (when-let ((process (dape--live-process))
-             (current-thread (dape--current-thread)))
-    (dape--stack-trace process
-                        current-thread
-                        (dape--callback
-                         (dape--place-stack-pointers process current-thread)
-                         (dape--info-update-widget dape--threads-widget
-                                                   dape--stack-widget
-                                                   dape--watched-widget
-                                                   dape--breakpoints-widget)
-                         (dape--update-scope process)))))
+  (when-let ((current-thread (dape--current-thread)))
+    (dape--place-stack-pointers current-thread))
+  (dape--info-update-widget dape--threads-widget
+                            dape--stack-widget
+                            dape--watched-widget
+                            dape--breakpoints-widget)
+  (dape--info-update-scope-widget process))
 
 (defun dape--update-state (msg)
   (setq dape--state msg)
