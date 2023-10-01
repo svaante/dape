@@ -1975,7 +1975,7 @@ Buffer contains debug session information."
                           (format
                            "Welcome to Dape REPL!
 Available Dape commands: %s
-Empty string will rerun last command.\n\n\n> "
+Empty input will rerun last command.\n\n\n> "
                            (mapconcat 'identity
                                       (mapcar (lambda (cmd)
                                                 (let ((str (car cmd)))
