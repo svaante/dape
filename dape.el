@@ -1973,8 +1973,20 @@ Buffer contains debug session information."
                         'comint-output-filter)
     (comint-output-filter (get-buffer-process (current-buffer))
                           (format
-                           "\nWelcome to Dape REPL\n%s\n> "
-                           (pp-to-string dape--config)))))
+                           "Welcome to Dape REPL!
+Available Dape commands: %s
+Empty string will rerun last command.\n\n\n> "
+                           (mapconcat 'identity
+                                      (mapcar (lambda (cmd)
+                                                (let ((str (car cmd)))
+                                                  (if dape-repl-use-shorthand
+                                                      (concat "["
+                                                              (substring str 0 1)
+                                                              "]"
+                                                              (substring str 1))
+                                                    str)))
+                                              dape-repl-commands)
+                                      ", ")))))
 
 (defun dape-repl ()
   "Create or select *dape-repl* buffer."
