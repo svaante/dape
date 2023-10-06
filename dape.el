@@ -1413,7 +1413,7 @@ Watched symbols are displayed in *dape-info* buffer.
 
 (defun dape--widget-sanitize-string (string)
   (save-match-data
-    (replace-regexp-in-string "%" "%%" string))
+    (replace-regexp-in-string "%" "%%" string)))
 
 (defmacro dape--with-update-ui-guard (fn args &rest body)
   (declare (indent 2))
@@ -1672,7 +1672,7 @@ Watched symbols are displayed in *dape-info* buffer.
                                    current-stopped-files-lines)
                            (propertize "→ " 'face 'bold)
                          "")
-                  :value (dape--format-file-line file line))))
+                  :value (dape--format-file-line file line)))))
             dape--breakpoints)))
 
 (defun dape--info-press-widget-at-line (predicate-p)
