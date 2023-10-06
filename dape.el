@@ -519,7 +519,8 @@ The hook is run with one argument, the compilation buffer."
                       )
                 (dape--callback
                  (setq dape--capabilities body)
-                 (dape--launch-or-attach process))))
+                 (when success
+                   (dape--launch-or-attach process)))))
 
 (defun dape--launch-or-attach (process)
   (if-let ((request (plist-get dape--config :request)))
