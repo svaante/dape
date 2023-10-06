@@ -349,6 +349,16 @@ The hook is run with one argument, the compilation buffer."
                (propertize type
                            'face 'font-lock-type-face))))))
 
+(defun dape--format-file-line (file line)
+  (concat (string-trim-left
+           file
+           (regexp-quote
+            (expand-file-name
+             (plist-get dape--config :cwd))))
+          (when line
+            (format ":%d"
+                    line))))
+
 
 ;;; Process and parsing
 
@@ -1400,6 +1410,10 @@ Watched symbols are displayed in *dape-info* buffer.
   :handle         'dape--tree-widget-space
   :no-handle      'dape--tree-widget-space)
 
+(defun dape--widget-sanitize-string (string)
+  (save-match-data
+    (replace-regexp-in-string "%" "%%" string))
+
 (defmacro dape--with-update-ui-guard (fn args &rest body)
   (declare (indent 2))
   `(cond
@@ -1511,13 +1525,18 @@ Watched symbols are displayed in *dape-info* buffer.
                  'file-link
                  :id (plist-get stack-frame :id)
                  :format (concat
-                          (when (eq (plist-get current-stack-frame :id)
+                          (if (eq (plist-get current-stack-frame :id)
                                     (plist-get stack-frame :id))
-                            "→ ")
-                          (if (thread-first stack-frame
-                                            (plist-get :source)
-                                            (plist-get :path))
-                              "%[%t%]\n"
+                              "→ "
+                            "")
+                          (if-let ((path (thread-first stack-frame
+                                                       (plist-get :source)
+                                                       (plist-get :path))))
+                              (format "%%t %%[%s%%]\n"
+                                      (dape--widget-sanitize-string
+                                       (dape--format-file-line path
+                                                               (plist-get stack-frame
+                                                                          :line))))
                             "%t\n"))
                  :action (lambda (widget &rest _)
                            (setq dape--stack-id
@@ -1641,10 +1660,7 @@ Watched symbols are displayed in *dape-info* buffer.
                            (when-let ((after-string
                                        (overlay-get overlay
                                                     'after-string)))
-                             (save-match-data
-                               (replace-regexp-in-string "%"
-                                                         "%%"
-                                                         after-string)))
+                             (dape--widget-sanitize-string after-string))
                            "\n")
                   :action (lambda (&rest _)
                             (dape--goto-source `(:source (:path ,file)
@@ -1655,13 +1671,7 @@ Watched symbols are displayed in *dape-info* buffer.
                                    current-stopped-files-lines)
                            (propertize "→ " 'face 'bold)
                          "")
-                  :value (format "%s:%d"
-                                 (string-trim-left
-                                  file
-                                  (regexp-quote
-                                   (expand-file-name
-                                    (plist-get dape--config :cwd))))
-                                 line)))))
+                  :value (dape--format-file-line file line))))
             dape--breakpoints)))
 
 (defun dape--info-press-widget-at-line (predicate-p)
