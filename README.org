@@ -80,7 +80,7 @@ Example launch configuration for ~node~.
                  host "localhost"
                  port 8123
                  command "node"
-                 command-cwd "vscode-js-debug/dist/"
+                 command-cwd "path/to/vscode-js-debug/dist/"
                  command-args ("src/dapDebugServer.js" "8123")
                  :type "pwa-node"
                  :request "launch"
@@ -127,7 +127,7 @@ Download latest [[https://github.com/vadimcn/codelldb/releases][release]] and un
                         c++-mode c++-ts-mode
                         rust-ts-mode rust-mode)
                  ;; Replace vadimcn.vscode-lldb with the vsix directory you just extracted
-                 command "vadimcn.vscode-lldb/adapter/codelldb"
+                 command "path/to/vadimcn.vscode-lldb/adapter/codelldb"
                  host "localhost"
                  port 5818
                  command-args ("--port" "5818")
@@ -145,7 +145,7 @@ Then ~chmod +x debugAdapters/bin/OpenDebugAD7~.
 
 #+begin_src emacs-lisp
   ;; Replace ms-vscode.cpptools with the vsix directory you just extracted
-  (setq dape-cppdbg-command "ms-vscode.cpptools/debugAdapters/bin/OpenDebugAD7")
+  (setq dape-cppdbg-command "path/to/ms-vscode.cpptools/debugAdapters/bin/OpenDebugAD7")
   (add-to-list 'dape-configs
                `(cppdbg
                  modes (c-mode c-ts-mode c++-mode c++-ts-mode)
