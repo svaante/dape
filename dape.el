@@ -200,6 +200,7 @@ The hook is run with one argument, the compilation buffer."
 (defvar dape--threads nil)
 (defvar dape--stack-pointers nil)
 (defvar dape--breakpoints nil)
+(defvar dape--exceptions nil)
 (defvar dape--watched nil)
 (defvar dape--server-process nil)
 (defvar dape--process nil)
@@ -212,6 +213,7 @@ The hook is run with one argument, the compilation buffer."
 (defvar dape--stack-widget nil)
 (defvar dape--threads-widget nil)
 (defvar dape--breakpoints-widget nil)
+(defvar dape--exceptions-widget nil)
 
 (defvar dape--widget-guard nil)
 (defvar dape--repl-insert-text-guard nil)
@@ -581,6 +583,46 @@ The hook is run with one argument, the compilation buffer."
                     cb)
     (funcall cb process)))
 
+(defun dape--set-exception-breakpoints (process cb)
+  (if dape--exceptions
+      (dape-request process
+                    "setExceptionBreakpoints"
+                    (list
+                     :filters
+                     (cl-map 'vector
+                             (lambda (exception)
+                               (plist-get exception :filter))
+
+                             (seq-filter (lambda (exception)
+                                           (plist-get exception :enabled))
+                                         dape--exceptions)))
+                    cb)
+    (funcall cb process)))
+
+(defun dape--configure-exceptions (process cb)
+  (setq dape--exceptions
+        (cl-map 'list
+                (lambda (exception)
+                  (let ((stored-exception
+                         (seq-find (lambda (stored-exception)
+                                     (equal (plist-get exception :filter)
+                                            (plist-get stored-exception :filter)))
+                                   dape--exceptions)))
+                    (cond
+                     (stored-exception
+                      (plist-put exception :enabled
+                                 (plist-get stored-exception :enabled)))
+                     ;; new exception
+                     (t
+                      (plist-put exception :enabled
+                                 (plist-get exception :default))))))
+                (plist-get dape--capabilities
+                           :exceptionBreakpointFilters)))
+  (dape--set-exception-breakpoints process
+                                   (dape--callback
+                                    (dape--info-update-widget dape--exceptions-widget)
+                                    (funcall cb process))))
+
 (defun dape--configure-breakpoints (process cb)
   (dape--clean-breakpoints)
   (if-let ((counter 0)
@@ -737,10 +779,13 @@ The hook is run with one argument, the compilation buffer."
 
 (cl-defmethod dape-handle-event (process (_event (eql initialized)) _body)
   (dape--update-state "initialized")
-  (dape--configure-breakpoints
+  (dape--configure-exceptions
    process
    (dape--callback
-    (dape--configuration-done process))))
+    (dape--configure-breakpoints
+     process
+     (dape--callback
+      (dape--configuration-done process))))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql process)) body)
   (let ((start-method (format "%sed"
@@ -1675,6 +1720,22 @@ Watched symbols are displayed in *dape-info* buffer.
                   :value (dape--format-file-line file line)))))
             dape--breakpoints)))
 
+(defun dape--expand-exceptions-widget (_)
+    (mapcar (lambda (exception)
+              (widget-convert
+               'toggle
+               :format (format "%s %%[%%v%%]\n"
+                               (plist-get exception :label))
+               :value (plist-get exception :enabled)
+               :action (lambda (&rest args)
+                         (plist-put exception :enabled
+                                    (not (plist-get exception :enabled)))
+                         (dape--set-exception-breakpoints
+                          (dape--live-process)
+                          (dape--callback
+                           (dape--info-update-widget dape--exceptions-widget))))))
+            dape--exceptions))
+
 (defun dape--info-press-widget-at-line (predicate-p)
   (save-excursion
     (if (funcall predicate-p (widget-at))
@@ -1700,7 +1761,7 @@ Depending on line in *dape-info* buffer."
   (dape--info-press-widget-at-line
    (lambda (widget)
      (memq (widget-type widget)
-           '(file-link link)))))
+           '(file-link link toggle)))))
 
 (defun dape-info-tree-dwim ()
   "Toggle tree expansion in *dape-info* buffer."
@@ -1787,7 +1848,14 @@ Buffer contains debug session information."
                            :path '("Breakpoints")
                            :open t
                            :expander-p 'identity ;; Always expand
-                           :expander 'dape--expand-breakpoints-widget))
+                           :expander 'dape--expand-breakpoints-widget)
+            dape--exceptions-widget
+            (widget-create 'dape--tree-widget
+                           :tag (propertize "Exceptions" 'face 'bold)
+                           :path '("Exceptions")
+                           :open t
+                           :expander-p 'identity ;; Always expand
+                           :expander 'dape--expand-exceptions-widget))
       (widget-setup))
     (setq window (display-buffer buffer
                                  '((display-buffer-in-side-window)
