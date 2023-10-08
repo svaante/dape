@@ -184,6 +184,15 @@ The hook is run with one argument, the compilation buffer."
   '((t :inherit highlight :extend t))
   nil)
 
+(defface dape-repl-exit-code-exit
+  '((t :inherit compilation-mode-line-exit :extend t))
+  nil)
+
+(defface dape-repl-exit-code-fail
+  '((t :inherit compilation-mode-line-fail :extend t))
+  nil)
+
+
 
 ;;; Vars
 
@@ -835,30 +844,23 @@ The hook is run with one argument, the compilation buffer."
      ((equal category "stdout")
       (dape--repl-insert-text (plist-get body :output)))
      ((equal category "stderr")
-      (dape--repl-insert-text (propertize
-                               (plist-get body :output)
-                               'face 'error)))
+      (dape--repl-insert-text (plist-get body :output) 'error))
      ((or (equal category "console")
           (equal category "output"))
-      (dape--repl-insert-text (propertize
-                               (plist-get body :output)
-                               'face 'italic))))))
+      (dape--repl-insert-text (plist-get body :output) 'italic)))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql exited)) body)
   (dape--update-state "exited")
   (dape--remove-stack-pointers)
-  (dape--repl-insert-text (propertize
-                           (format "* Exit code: %d *\n"
-                                   (plist-get body :exitCode))
-                           'face
-                           'highlight)))
+  (dape--repl-insert-text (format "* Exit code: %d *\n"
+                                  (plist-get body :exitCode))
+                          (if (zerop (plist-get body :exitCode))
+                              'dape-repl-exit-code-exit
+                            'dape-repl-exit-code-fail)))
 
 (cl-defmethod dape-handle-event (_process (_event (eql terminated)) _body)
   (dape--update-state "terminated")
-  (dape--repl-insert-text (propertize
-                           "* Program terminated *\n"
-                           'face
-                           'highlight))
+  (dape--repl-insert-text "* Program terminated *\n" 'italic)
   (dape--remove-stack-pointers))
 
 
@@ -1728,6 +1730,9 @@ Watched symbols are displayed in *dape-info* buffer.
                                (plist-get exception :label))
                :value (plist-get exception :enabled)
                :action (lambda (&rest args)
+                         ;; HACK updates exceptions tree after enabling exception
+                         ;;      this is only only done to get the current
+                         ;;      exception object.
                          (plist-put exception :enabled
                                     (not (plist-get exception :enabled)))
                          (dape--set-exception-breakpoints
@@ -1780,6 +1785,7 @@ Depending on line in *dape-info* buffer."
 (define-derived-mode dape-info-mode special-mode "Dape info"
   "Dape info mode is displays various dape related information.
 See `dape-info' for more information."
+  :group 'dape
   :interactive nil
   (let ((inhibit-read-only t))
     (erase-buffer))
@@ -1870,7 +1876,7 @@ Buffer contains debug session information."
 (defun dape--completion-frame-id ()
   (plist-get (dape--current-stack-frame) :id))
 
-(defun dape--repl-insert-text (msg)
+(defun dape--repl-insert-text (msg &optional face)
   (cond
    (dape--repl-insert-text-guard
     (run-with-timer 0.1 nil 'dape--repl-insert-text msg))
@@ -1891,14 +1897,16 @@ Buffer contains debug session information."
                       (let ((inhibit-read-only t))
                         (insert "\n"))))
                   (let ((inhibit-read-only t))
-                    (insert msg)))
+                    (insert (propertize msg 'font-lock-face face))))
               (error
                (setq dape--repl-insert-text-guard nil)
                (signal (car err) (cdr err))))
             (setq dape--repl-insert-text-guard nil))))
       (unless (get-buffer-window "*dape-repl*")
         (when (stringp msg)
-          (message "%s" (string-trim msg "\\\n" "\\\n"))))))))
+          (message (format "%s"
+                           (string-trim msg "\\\n" "\\\n"))
+                   'face face)))))))
 
 (defun dape--repl-input-sender (dummy-process input)
   (let (cmd)
@@ -1943,7 +1951,7 @@ Buffer contains debug session information."
        (t
         (comint-output-filter
          dummy-process
-         (format "* Unable to send \"%s\", no stopped threads *\n> "
+         (format "* Unable to send \"%s\" no stopped threads *\n> "
                  input)))))))
 
 (defun dape--repl-completion-at-point ()
@@ -2033,15 +2041,21 @@ Buffer contains debug session information."
                               nil nil 'equal)))
          annotation)))))
 
+
+(defvar dape--repl--prompt "> ")
+(defvar dape-repl-mode nil)
+
 (define-derived-mode dape-repl-mode comint-mode "Dape REPL"
-  (add-hook 'completion-at-point-functions
-            #'dape--repl-completion-at-point
-            nil
-            t)
-  (setq-local comint-prompt-read-only t
+  :group 'dape
+  :interactive nil
+  (when dape-repl-mode
+    (user-error "`dape-repl-mode' all ready enabled."))
+  (setq-local dape-repl-mode t
+              comint-prompt-read-only t
               comint-input-sender 'dape--repl-input-sender
-              comint-use-prompt-regexp nil
+              comint-prompt-regexp (concat "^" (regexp-quote dape--repl--prompt))
               comint-process-echoes nil)
+  (add-hook 'completion-at-point-functions #'dape--repl-completion-at-point nil t)
   ;; Stolen from ielm
   ;; Start a dummy process just to please comint
   (unless (comint-check-proc (current-buffer))
@@ -2050,22 +2064,26 @@ Buffer contains debug session information."
                                     nil)
     (set-process-filter (get-buffer-process (current-buffer))
                         'comint-output-filter)
-    (comint-output-filter (get-buffer-process (current-buffer))
-                          (format
-                           "Welcome to Dape REPL!
+    (insert (propertize
+               (format
+                "* Welcome to Dape REPL! *
 Available Dape commands: %s
-Empty input will rerun last command.\n\n\n> "
-                           (mapconcat 'identity
-                                      (mapcar (lambda (cmd)
-                                                (let ((str (car cmd)))
-                                                  (if dape-repl-use-shorthand
-                                                      (concat "["
-                                                              (substring str 0 1)
-                                                              "]"
-                                                              (substring str 1))
-                                                    str)))
-                                              dape-repl-commands)
-                                      ", ")))))
+Empty input will rerun last command.\n\n\n"
+                (mapconcat 'identity
+                           (mapcar (lambda (cmd)
+                                     (let ((str (car cmd)))
+                                       (if dape-repl-use-shorthand
+                                           (concat "["
+                                                   (substring str 0 1)
+                                                   "]"
+                                                   (substring str 1))
+                                         str)))
+                                   dape-repl-commands)
+                           ", "))
+               'font-lock-face 'italic))
+    (set-marker (process-mark (get-buffer-process (current-buffer))) (point))
+    (comint-output-filter (get-buffer-process (current-buffer))
+                          dape--repl--prompt)))
 
 (defun dape-repl ()
   "Create or select *dape-repl* buffer."
@@ -2073,7 +2091,8 @@ Empty input will rerun last command.\n\n\n> "
   (let ((buffer-name "*dape-repl*")
         window)
     (with-current-buffer (get-buffer-create buffer-name)
-      (dape-repl-mode)
+      (unless dape-repl-mode
+        (dape-repl-mode))
       (setq window (display-buffer (current-buffer)
                                    '((display-buffer-reuse-window
                                       display-buffer-in-side-window)
