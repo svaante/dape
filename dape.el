@@ -1137,14 +1137,12 @@ When EXPR-MESSAGE is evaluated as true threads will pause at current line."
   (dape--info-update-breakpoints-widget))
 
 ;;;###autoload
-(defun dape (name config &optional skip-compile)
+(defun dape (name options)
   "Start debugging session.
 
 Start a debugging session based on NAME in `dape-configs' alist.
-Entries in plist CONFIG override config specified by NAME.
+Entries in plist OPTIONS override config specified by NAME.
 See `dape-configs' for more information on CONFIG.
-
-SKIP-COMPILE ignores compile flag in config.
 
 When called as an interactive command, the first symbol like
 string is read as NAME and rest as element in CONFIG.
@@ -1154,35 +1152,34 @@ Interactive example:
 
 Executes launch `dape-configs' with :program as \"bin\"."
   (interactive (dape--read-config))
-  (unless (plist-get config 'start-debugging)
+  (unless (plist-get options 'start-debugging)
     (dape-kill))
   (let ((base-config (alist-get name dape-configs))
-        evaled-config)
+        config)
     (unless base-config
       (user-error "Unable to find `%s' in `dape-configs'" name))
-    (setq evaled-config
+    (setq config
           (dape--config-eval
            (seq-reduce (apply-partially 'apply 'plist-put)
-                       (seq-partition config 2)
+                       (seq-partition options 2)
                        (copy-tree base-config))))
     (when (called-interactively-p)
       (push (dape--config-to-string name
                                     base-config
-                                    evaled-config)
+                                    config)
             dape--config-history))
-    (unless (or (plist-get config 'start-debugging)
-                skip-compile)
+    (unless (plist-get options 'start-debugging)
       (when-let ((buffer (get-buffer "*dape-debug*")))
         (with-current-buffer buffer
           (let ((inhibit-read-only t))
             (erase-buffer)))))
     (cond
-     ((and (plist-get config 'compile) (not skip-compile))
-      (dape--compile name evaled-config))
+     ((plist-get config 'compile)
+      (dape--compile name config))
      ((and (plist-get config 'host) (plist-get config 'port))
-      (dape--start-multi-session name evaled-config))
+      (dape--start-multi-session name config))
      (t
-      (dape--start-single-session name evaled-config)))))
+      (dape--start-single-session name config)))))
 
 (defun dape-watch-dwim (expression)
   "Add or remove watch for EXPRESSION
@@ -1218,7 +1215,7 @@ Watched symbols are displayed in *dape-info* buffer.
   (cond
    ((equal "finished\n" str)
     (run-hook-with-args 'dape-compile-compile-hooks buffer)
-    (dape dape--name dape--config 'skip-compile))
+    (dape dape--name (plist-put (copy-tree dape--config) 'compile nil)))
    (t
     (dape--repl-insert-text (format "* Compilation failed %s *" str)))))
 
@@ -1729,7 +1726,7 @@ Watched symbols are displayed in *dape-info* buffer.
                :format (format "%s %%[%%v%%]\n"
                                (plist-get exception :label))
                :value (plist-get exception :enabled)
-               :action (lambda (&rest args)
+               :action (lambda (&rest _args)
                          ;; HACK updates exceptions tree after enabling exception
                          ;;      this is only only done to get the current
                          ;;      exception object.
