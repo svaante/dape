@@ -60,8 +60,6 @@ Dape takes a slightly different approach to configuration.
 + No batteries included. Many, suffer from a significant drawback: they're tightly coupled with the vscode extension they're bundled with. This tight coupling results in launch/attach requests being specific to each adapter, devoid of reasonable defaults as they are stored within the extension itself, leading to an ever-changing and unstable API. Consequently, attempting to include default configurations for each adapter seems like a losing proposition.
 + Tries to be envision to how debug adapter configuration would be implemented in emacs if vscode never existed.
 
-Some might say that Dape has a nicer UI others might not.
-
 * Supported debug adapters
 In theory all debug adapters should be compatible with =Dape=.
 
