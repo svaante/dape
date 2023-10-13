@@ -55,7 +55,7 @@ Dape has no dependencies outside of packages included in emacs, and tries to use
 Dape takes a slightly different approach to configuration.
 + Dape does not support ~launch.json~ files, if per project configuration is needed use ~dir-locals~.
 + Tries to simplify configuration, by having just a plist.
-+ Dape tries to improve config ergonomics in ~dape~ completing-read by using options to change/add plist entries in an already existing config, example: ~adapter-config :program ＂/home/user/b.out＂ :compile ＂gcc -g -o b.out main.c＂~.
++ Dape tries to improve config ergonomics in ~dape~ completing-read by using options to change/add plist entries in an already existing config, example: ~adapter-config :program ＂/home/user/b.out＂ compile ＂gcc -g -o b.out main.c＂~.
 + No magic, no special variables. Instead, functions and variables are resolved before starting a new session.
 + No batteries included. Many, suffer from a significant drawback: they're tightly coupled with the vscode extension they're bundled with. This tight coupling results in launch/attach requests being specific to each adapter, devoid of reasonable defaults as they are stored within the extension itself, leading to an ever-changing and unstable API. Consequently, attempting to include default configurations for each adapter seems like a losing proposition.
 + Tries to be envision to how debug adapter configuration would be implemented in emacs if vscode never existed.
