@@ -189,7 +189,7 @@ See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/]
 + More options for indicator placement
 + Improving completion in REPL
 + Usage of "setVariable" inside of ~*dape-info*~ buffer
-+ Fleshed out memory reader with auto reload and write functionality
++ Improve memory reader with auto reload and write functionality
 + Individual thread controls
 + Variable values displayed in source buffer, this seams to require integration with lsp-mode and eglot
 
