@@ -2114,8 +2114,8 @@ Empty input will rerun last command.\n\n\n"
    ((plistp value) (dape--config-eval value skip-function))
    ((vectorp value) (cl-map 'vector
                             (lambda (v)
-                              (dape--config-eval-value v skip-function)
-                              value)))
+                              (dape--config-eval-value v skip-function))
+                            value))
    ((and (symbolp value)
          (not (eq (symbol-value value) value)))
     (dape--config-eval-value (symbol-value value) skip-function))
