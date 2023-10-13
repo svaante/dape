@@ -1074,7 +1074,7 @@ Will remove log or expression breakpoint at line added with
 `dape-log-breakpoint' and/or `dape-expression-breakpoint'."
   (interactive)
   (if (dape--breakpoints-at-point)
-      (dape-remove-breakpoint-at-point)
+      (dape-remove-breakpoint-at-point '(dape-log-message dape-expr-message))
     (dape--place-breakpoint)))
 
 (defun dape-log-breakpoint (log-message)
@@ -1117,10 +1117,11 @@ When EXPR-MESSAGE is evaluated as true threads will pause at current line."
   (unless (string-empty-p expr-message)
     (dape--place-breakpoint nil expr-message)))
 
-(defun dape-remove-breakpoint-at-point ()
-  "Remove breakpoint, log breakpoint and expression at current line."
+(defun dape-remove-breakpoint-at-point (&optional skip-types)
+  "Remove breakpoint, log breakpoint and expression at current line.
+SKIP-TYPES is a list of overlay properties to skip removal of."
   (interactive)
-  (dolist (breakpoint (dape--breakpoints-at-point))
+  (dolist (breakpoint (dape--breakpoints-at-point skip-types))
     (dape--remove-breakpoint breakpoint)))
 
 (defun dape-remove-all-breakpoints ()
@@ -1277,9 +1278,12 @@ Watched symbols are displayed in *dape-info* buffer.
          (dape--overlay-region (eq (overlay-get overlay 'category)
                                    'dape-stack-pointer))))
 
-(defun dape--breakpoints-at-point ()
+(defun dape--breakpoints-at-point (&optional skip-types)
   (seq-filter (lambda (overlay)
-                (eq 'dape-breakpoint (overlay-get overlay 'category)))
+                (and (eq 'dape-breakpoint (overlay-get overlay 'category))
+                     (not (cl-some (lambda (skip-type)
+                                     (overlay-get overlay skip-type))
+                                   skip-types))))
               (overlays-in (line-beginning-position) (line-end-position))))
 
 (defun dape--update-breakpoints-in-buffer (buffer)
