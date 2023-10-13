@@ -2107,20 +2107,26 @@ Empty input will rerun last command.\n\n\n"
 
 (defvar dape-history nil)
 
-(defun dape--config-eval (config)
-  (cl-labels ((eval-value (value)
-                (cond
-                 ((functionp value) (funcall-interactively value))
-                 ((plistp value) (dape--config-eval value))
-                 ((vectorp value) (cl-map 'vector #'eval-value value))
-                 ((and (symbolp value)
-                       (not (eq (symbol-value value) value)))
-                  (funcall #'eval-value (symbol-value value)))
-                 (t value))))
-    (cl-loop for (key value) on config by 'cddr
-             append (cond
-                     ((memq key '(modes)) (list key value))
-                     (t (list key (funcall #'eval-value value)))))))
+(defun dape--config-eval-value (value &optional skip-function)
+  (cond
+   ((functionp value) (or (and skip-function value)
+                          (funcall-interactively value)))
+   ((plistp value) (dape--config-eval value skip-function))
+   ((vectorp value) (cl-map 'vector
+                            (lambda (v)
+                              (dape--config-eval-value v skip-function)
+                              value)))
+   ((and (symbolp value)
+         (not (eq (symbol-value value) value)))
+    (dape--config-eval-value (symbol-value value) skip-function))
+   (t value)))
+
+(defun dape--config-eval (config &optional skip-functions)
+  (cl-loop for (key value) on config by 'cddr
+           append (cond
+                   ((memq key '(modes)) (list key value))
+                   (t (list key (dape--config-eval-value value
+                                                         skip-functions))))))
 
 (defun dape--config-from-string (str)
   (let (name read-config base-config)
@@ -2139,7 +2145,8 @@ Empty input will rerun last command.\n\n\n"
 
 (defun dape--config-diff (pre-eval post-eval)
   (cl-loop for (key value) on post-eval by 'cddr
-           unless (equal (plist-get pre-eval key) value)
+           unless (equal (dape--config-eval-value (plist-get pre-eval key) t)
+                         value)
            append (list key value)))
 
 (defun dape--config-to-string (name pre-eval-config post-eval-config)
