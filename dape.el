@@ -1073,7 +1073,7 @@ The hook is run with one argument, the compilation buffer."
 Will remove log or expression breakpoint at line added with
 `dape-log-breakpoint' and/or `dape-expression-breakpoint'."
   (interactive)
-  (if (dape--breakpoints-at-point)
+  (if (dape--breakpoints-at-point '(dape-log-message dape-expr-message))
       (dape-remove-breakpoint-at-point '(dape-log-message dape-expr-message))
     (dape--place-breakpoint)))
 
