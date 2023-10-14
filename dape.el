@@ -5,6 +5,7 @@
 ;; License: GPL-3.0-or-later
 ;; Version: 0.1
 ;; Homepage: https://github.com/svaante/dape
+;; Package-Requires: ((emacs "29.1"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -55,7 +56,7 @@
 (defcustom dape-configs nil
   "This variable holds the Dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
-configuration. Each configuration, in turn, is a property list (plist)
+configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
 
 Symbol Keys (Used by Dape):
@@ -72,13 +73,13 @@ Debug adapter connection in configuration:
 - If only command is specified (without host and port), Dape
   will communicate with the debug adapter through stdin/stdout.
 - If both host and port are specified, Dape will connect to the
-  debug adapter. If `command is specified, Dape will wait until the
+  debug adapter.  If `command is specified, Dape will wait until the
   command is initiated before it connects with host and port.
 
 Keywords in configuration:
   Keywords are transmitted to the adapter during the initialize and
-  launch/attach requests. Refer to `json-serialize' for detailed
-  information on how Dape serializes these keyword elements. Dape
+  launch/attach requests.  Refer to `json-serialize' for detailed
+  information on how Dape serializes these keyword elements.  Dape
   uses nil as false.
 
 Functions and symbols in configuration:
@@ -160,10 +161,10 @@ The hook is run with one argument, the compilation buffer."
 (defcustom dape--debug-on
   '(io info error std-server)
   "Types of logs should be printed to *dape-debug*."
-  :type '(list (const io :tag "dap IO")
-               (const info :tag "info logging")
-               (const error :tag "error logging")
-               (const std-server :tag "dap tcp server stdout")))
+  :type '(list (const :tag "dap IO" io)
+               (const :tag "info logging" info)
+               (const :tag "error logging" error)
+               (const :tag "dap tcp server stdout" std-server)))
 ;;; Face
 
 (defface dape-log-face
@@ -191,7 +192,6 @@ The hook is run with one argument, the compilation buffer."
 (defface dape-repl-exit-code-fail
   '((t :inherit compilation-mode-line-fail :extend t))
   nil)
-
 
 
 ;;; Vars
@@ -323,8 +323,8 @@ The hook is run with one argument, the compilation buffer."
        default-directory)))
 
 (defun dape-find-file (&optional default)
-  (let* ((completion-ignored-extensions nil)
-         (default-directory (funcall dape-cwd-fn)))
+  (let ((completion-ignored-extensions nil)
+        (default-directory (funcall dape-cwd-fn)))
     (expand-file-name
      (read-file-name (if default
                          (format "Program (default %s): " default)
@@ -387,8 +387,8 @@ The hook is run with one argument, the compilation buffer."
                                             (symbol-name type))
                                     'face 'match)
                         " "
-                        (apply 'format string objects)))
-        (newline)))))
+                        (apply 'format string objects))
+               "\n")))))
 
 (defun dape--live-process (&optional nowarn)
   (if (and dape--process
@@ -684,7 +684,7 @@ The hook is run with one argument, the compilation buffer."
 (defun dape--stack-trace (process thread cb)
   (cond
    ((or (plist-get (dape--current-thread) :stackFrames)
-        (not (numberp (plist-get thread :id))))
+        (not (integerp (plist-get thread :id))))
     (funcall cb process))
    (t
     (dape-request process
@@ -839,15 +839,13 @@ The hook is run with one argument, the compilation buffer."
   (dape--update-state "running"))
 
 (cl-defmethod dape-handle-event (_process (_event (eql output)) body)
-  (let ((category (plist-get body :category)))
-    (cond
-     ((equal category "stdout")
-      (dape--repl-insert-text (plist-get body :output)))
-     ((equal category "stderr")
-      (dape--repl-insert-text (plist-get body :output) 'error))
-     ((or (equal category "console")
-          (equal category "output"))
-      (dape--repl-insert-text (plist-get body :output) 'italic)))))
+  (pcase (plist-get body :category)
+    ("stdout"
+     (dape--repl-insert-text (plist-get body :output)))
+    ("stderr"
+     (dape--repl-insert-text (plist-get body :output) 'error))
+    ((or "console" "output")
+     (dape--repl-insert-text (plist-get body :output) 'italic))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql exited)) body)
   (dape--update-state "exited")
@@ -996,8 +994,7 @@ The hook is run with one argument, the compilation buffer."
     (dape-request dape--process "restart" nil))
    ((and dape--name dape--config)
     (dape dape--name dape--config))
-   (t
-    (user-error "Unable to derive session to restart."))))
+   ((user-error "Unable to derive session to restart"))))
 
 (defun dape-kill ()
   "Kill debug session."
@@ -1164,7 +1161,7 @@ Executes launch `dape-configs' with :program as \"bin\"."
            (seq-reduce (apply-partially 'apply 'plist-put)
                        (seq-partition options 2)
                        (copy-tree base-config))))
-    (when (called-interactively-p)
+    (when (called-interactively-p 'interactive)
       (push (dape--config-to-string name
                                     base-config
                                     config)
@@ -1232,13 +1229,9 @@ Watched symbols are displayed in *dape-info* buffer.
 ;;; Memory viewer
 
 (defun dape--address-to-number (address)
-  (cond
-   ((and (> (length address) 2)
-         (equal "0x" (substring address 0 2)))
-    (string-to-number (string-trim-left address "0x0*")
-                      16))
-   (t
-    (string-to-number address))))
+  (if (string-match "\\`0x\\([[:alnum:]]+\\)" address)
+      (string-to-number (match-string 1 address) 16)
+    (string-to-number address)))
 
 (defun dape-read-memory (memory-reference count)
   "Read COUNT bytes of memory at MEMORY-REFERENCE."
@@ -1259,7 +1252,7 @@ Watched symbols are displayed in *dape-info* buffer.
                    (setq address (dape--address-to-number address)
                          data (base64-decode-string data))
                    (let ((buffer (generate-new-buffer
-                                  (format "*dape-memory @%s*"
+                                  (format "*dape-memory @ %s*"
                                           memory-reference))))
                      (with-current-buffer buffer
                        (insert data)
@@ -1796,10 +1789,11 @@ See `dape-info' for more information."
               desktop-save-buffer      nil
               tree-widget-image-enable nil))
 
-(defun dape-info ()
+(defun dape-info (&optional select-buffer)
   "Create or select *dape-info* buffer.
-Buffer contains debug session information."
-  (interactive)
+Buffer contains debug session information.  Select the buffer if invoked
+interactively or if SELECT-BUFFER is non nil."
+  (interactive (list t))
   (let ((buffer (get-buffer-create "*dape-info*"))
         window)
     (with-current-buffer buffer
@@ -1867,7 +1861,7 @@ Buffer contains debug session information."
     (setq window (display-buffer buffer
                                  '((display-buffer-in-side-window)
                                    . ((side . left)))))
-    (when (called-interactively-p)
+    (when select-buffer
       (select-window window)
       (goto-char (point-min)))))
 
@@ -1882,32 +1876,31 @@ Buffer contains debug session information."
    (dape--repl-insert-text-guard
     (run-with-timer 0.1 nil 'dape--repl-insert-text msg))
    (t
-    (progn
-      (setq dape--repl-insert-text-guard t)
-      (when-let ((buffer (get-buffer "*dape-repl*")))
-        (with-current-buffer buffer
-          (save-excursion
-            (condition-case err
-                (progn
-                  (goto-char (point-max))
-                  (comint-previous-prompt 0)
-                  (forward-line -1)
-                  (end-of-line)
-                  (when-let (line (thing-at-point 'line))
-                    (when (eq (aref line 0) ?>)
-                      (let ((inhibit-read-only t))
-                        (insert "\n"))))
-                  (let ((inhibit-read-only t))
-                    (insert (propertize msg 'font-lock-face face))))
-              (error
-               (setq dape--repl-insert-text-guard nil)
-               (signal (car err) (cdr err))))
-            (setq dape--repl-insert-text-guard nil))))
-      (unless (get-buffer-window "*dape-repl*")
-        (when (stringp msg)
-          (message (format "%s"
-                           (string-trim msg "\\\n" "\\\n"))
-                   'face face)))))))
+    (setq dape--repl-insert-text-guard t)
+    (when-let ((buffer (get-buffer "*dape-repl*")))
+      (with-current-buffer buffer
+        (save-excursion
+          (condition-case err
+              (progn
+                (goto-char (point-max))
+                (comint-previous-prompt 0)
+                (forward-line -1)
+                (end-of-line)
+                (when-let (line (thing-at-point 'line))
+                  (when (eq (aref line 0) ?>)
+                    (let ((inhibit-read-only t))
+                      (insert "\n"))))
+                (let ((inhibit-read-only t))
+                  (insert (propertize msg 'font-lock-face face))))
+            (error
+             (setq dape--repl-insert-text-guard nil)
+             (signal (car err) (cdr err))))
+          (setq dape--repl-insert-text-guard nil))))
+    (unless (get-buffer-window "*dape-repl*")
+      (when (stringp msg)
+        (message (format "%s"
+                         (string-trim msg "\\\n" "\\\n"))
+                 'face face))))))
 
 (defun dape--repl-input-sender (dummy-process input)
   (let (cmd)
@@ -2050,7 +2043,7 @@ Buffer contains debug session information."
   :group 'dape
   :interactive nil
   (when dape-repl-mode
-    (user-error "`dape-repl-mode' all ready enabled."))
+    (user-error "`dape-repl-mode' all ready enabled"))
   (setq-local dape-repl-mode t
               comint-prompt-read-only t
               comint-input-sender 'dape--repl-input-sender
@@ -2099,7 +2092,7 @@ Empty input will rerun last command.\n\n\n"
                                       display-buffer-in-side-window)
                                      . ((side . bottom)
                                         (slot . -1)))))
-      (when (called-interactively-p)
+      (when (called-interactively-p 'interactive)
         (select-window window)))))
 
 
@@ -2131,14 +2124,14 @@ Empty input will rerun last command.\n\n\n"
 (defun dape--config-from-string (str)
   (let (name read-config base-config)
     (when (string-empty-p str)
-      (user-error "Expected config name."))
+      (user-error "Expected config name"))
     (setq name (read str)
           base-config (copy-tree (alist-get name dape-configs))
           str (substring str (length (symbol-name name))))
     (unless (string-empty-p str)
       (setq read-config (read (format "(%s)" str))))
     (unless (plistp read-config)
-      (user-error "Unexpected config format, see `dape-configs'."))
+      (user-error "Unexpected config format, see `dape-configs'"))
     (cl-loop for (key value) on read-config by 'cddr
              do (setq base-config (plist-put base-config key value)))
     (list name base-config)))
@@ -2153,8 +2146,7 @@ Empty input will rerun last command.\n\n\n"
   (let ((config-diff (dape--config-diff pre-eval-config
                                         post-eval-config)))
     (concat (format "%s" name)
-            (when-let ((config-str (and config-diff
-                                        (prin1-to-string config-diff))))
+            (and-let* ((config-diff) (config-str (prin1-to-string config-diff)))
               (format " %s"
                       (substring config-str
                                  1
@@ -2181,6 +2173,9 @@ Empty input will rerun last command.\n\n\n"
 ;;; Hover
 
 (defun dape-hover-function (cb)
+  "Hook function to produce doc strings for `eldoc'.
+On success calles CB with the doc string.
+See `eldoc-documentation-functions', for more infomation."
   (when-let ((symbol (thing-at-point 'symbol)))
     (dape--evaluate-expression (dape--live-process)
                                (plist-get (dape--current-stack-frame) :id)
@@ -2232,6 +2227,7 @@ Empty input will rerun last command.\n\n\n"
 
 ;;; Keymaps
 
+;; FIXME checkout Compat or other ways to lower required emacs version
 (defvar-keymap dape-global-map
   :doc "Keymap to repeat dape commands.  Used in `repeat-mode'."
   "d" #'dape
@@ -2251,14 +2247,18 @@ Empty input will rerun last command.\n\n\n"
   "w" #'dape-watch-dwim
   "q" #'dape-quit)
 
-(map-keymap-internal (lambda (_ cmd)
-                       (unless (memq cmd '(dape
-                                           dape-repl
-                                           dape-info
-                                           dape-read-memory
-                                           dape-quit))
-                         (put cmd 'repeat-map 'dape-global-map)))
-                     dape-global-map)
+(dolist (cmd '(dape-pause
+               dape-continue
+               dape-next
+               dape-step-in
+               dape-step-out
+               dape-restart
+               dape-log-breakpoint
+               dape-expression-breakpoint
+               dape-toggle-breakpoint
+               dape-remove-all-breakpoints
+               dape-watch-dwim))
+  (put cmd 'repeat-map 'dape-global-map))
 
 (global-set-key dape-key-prefix dape-global-map)
 
