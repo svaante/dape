@@ -2399,25 +2399,26 @@ See `eldoc-documentation-functions', for more infomation."
 
 ;;; Keymaps
 
-;; FIXME checkout Compat or other ways to lower required emacs version
-(defvar-keymap dape-global-map
-  :doc "Keymap to repeat Dape commands.  Used in `repeat-mode'."
-  "d" #'dape
-  "p" #'dape-pause
-  "c" #'dape-continue
-  "n" #'dape-next
-  "s" #'dape-step-in
-  "o" #'dape-step-out
-  "r" #'dape-restart
-  "i" #'dape-info
-  "R" #'dape-repl
-  "m" #'dape-read-memory
-  "l" #'dape-log-breakpoint
-  "e" #'dape-expression-breakpoint
-  "b" #'dape-toggle-breakpoint
-  "B" #'dape-remove-all-breakpoints
-  "w" #'dape-watch-dwim
-  "q" #'dape-quit)
+(defvar dape-global-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "d" #'dape)
+    (define-key map "d" #'dape)
+    (define-key map "p" #'dape-pause)
+    (define-key map "c" #'dape-continue)
+    (define-key map "n" #'dape-next)
+    (define-key map "s" #'dape-step-in)
+    (define-key map "o" #'dape-step-out)
+    (define-key map "r" #'dape-restart)
+    (define-key map "i" #'dape-info)
+    (define-key map "R" #'dape-repl)
+    (define-key map "m" #'dape-read-memory)
+    (define-key map "l" #'dape-log-breakpoint)
+    (define-key map "e" #'dape-expression-breakpoint)
+    (define-key map "b" #'dape-toggle-breakpoint)
+    (define-key map "B" #'dape-remove-all-breakpoints)
+    (define-key map "w" #'dape-watch-dwim)
+    (define-key map "q" #'dape-quit)
+    map))
 
 (dolist (cmd '(dape-pause
                dape-continue
