@@ -2320,22 +2320,24 @@ If SKIP-FUNCTIONS function values are not called during evaluation."
 
 (defun dape--read-config ()
   "Read config name and options."
-  (let ((candidate
-         (completing-read "Dape config: "
-                          (append
-                           (mapcan
-                            (lambda (name-config)
-                              (let* ((config (cdr name-config))
-                                     (modes (plist-get config 'modes)))
-                                (when (apply 'provided-mode-derived-p major-mode modes)
-                                  (list (car name-config)))))
-                            dape-configs)
-                           dape--config-history)
-                          nil nil nil 'dape-history)))
-    (if-let ((config
-              (alist-get (intern candidate) dape-configs)))
-        (list (intern candidate) config)
-      (dape--config-from-string candidate))))
+  (if (null dape-configs)
+      (customize-variable 'dape-configs)
+    (let ((candidate
+           (completing-read "Dape config: "
+                            (append
+                             (mapcan
+                              (lambda (name-config)
+                                (let* ((config (cdr name-config))
+                                       (modes (plist-get config 'modes)))
+                                  (when (apply 'provided-mode-derived-p major-mode modes)
+                                    (list (car name-config)))))
+                              dape-configs)
+                             dape--config-history)
+                            nil nil nil 'dape-history)))
+      (if-let ((config
+                (alist-get (intern candidate) dape-configs)))
+          (list (intern candidate) config)
+        (dape--config-from-string candidate)))))
 
 ;;; Hover
 
