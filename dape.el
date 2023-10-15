@@ -24,7 +24,7 @@
 
 ;;; Commentary:
 
-;; This package integrates debug adapters within Emacs.
+;; This package is an debug adapter client for Emacs.
 ;; Use `dape-configs' to set up your debug adapter configurations.
 
 ;; To initiate debugging sessions, use the command `dape'.
