@@ -33,11 +33,20 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; Currently only on github
     :straight (dape :type git :host github :repo "svaante/dape")
     :config
-    ;; Use n for next etc. in REPL
-    ;; (setq dape-repl-use-shorthand t)
+    ;; Add inline variable hints, this feature is highly experimental
+    ;; (setq dape-inline-variables t)
+
+    ;; To remove info buffer on startup
+    ;; (remove-hook 'dape-on-start-hooks 'dape-info)
+
+    ;; To remove repl buffer on startup
+    ;; (remove-hook 'dape-on-start-hooks 'dape-repl)
 
     ;; By default dape uses gdb keybinding prefix
     ;; (setq dape-key-prefix "\C-x\C-a")
+
+    ;; Use n for next etc. in REPL
+    ;; (setq dape-repl-use-shorthand t)
 
     ;; Kill compile buffer on build success
     ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
