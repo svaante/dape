@@ -21,9 +21,13 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + ~compile~ integration
 + Debug adapter configuration ergonomics
 + No dependencies
++ Inline variable hints (experimental)
 
 [[https://raw.githubusercontent.com/svaante/dape/resources/screenshot.png]]
-Screenshot taken with [[https://github.com/protesilaos/ef-themes][ef-trio-dark]].
+
+[[https://raw.githubusercontent.com/svaante/dape/resources/screenshot_inline.png]]
+
+Screenshots taken with [[https://github.com/protesilaos/ef-themes][ef-trio-dark]].
 
 * Configuration
 Currently =Dape= does not come with any debug adapter configuration.
