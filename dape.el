@@ -90,18 +90,19 @@ Functions and symbols in configuration:
   :type '(alist :key-type (symbol :tag "Name")
                 :value-type
                 (plist :options
-                       (((const :tag "Shell command to start the debug adapter" command) string)
-                        ((const :tag "List of string arguments for command" command-args) (list string))
-                        ((const :tag "Working directory for command" command-cwd) string)
+                       (((const :tag "List of modes where config is active in `dape' completions" modes) (repeat function))
+                        ((const :tag "Shell command to initiate the debug adapter" command) (choice string symbol))
+                        ((const :tag "List of string arguments for command" command-args) (repeat string))
+                        ((const :tag "Working directory for command" command-cwd) (choice string symbol))
                         ((const :tag "Host of debug adapter" host) string)
-                        ((const :tag "Port of debug adapter" port) integer)
-                        ((const :tag "List of modes where config is active in `dape' completions" modes) function)
-                        ((const :tag "Runs shell command with `dape-compile-fn'" compile) function)
-                        (keyword sexp)))))
+                        ((const :tag "Port of debug adapter" port) natnum)
+                        ((const :tag "Compile cmd" compile) string)
+                        ((const :tag "Adapter type" :type) string)
+                        ((const :tag "Request type launch/attatch" :request) string)))))
 
 (defcustom dape-key-prefix "\C-x\C-a"
   "Prefix of all dape commands."
-  :type 'key-sequence)
+  :type 'key)
 
 (defcustom dape-on-start-hooks '(dape-info dape-repl)
   "Hook to run on session start.
@@ -114,7 +115,7 @@ The hook is run with one argument, the compilation buffer."
 
 (defcustom dape-main-functions '("main")
   "Functions to set breakpoints at startup if no other breakpoints are set."
-  :type '(list string))
+  :type '(repeat string))
 
 (defcustom dape-info-buttons
   '(("next" . dape-next)
@@ -130,7 +131,7 @@ The hook is run with one argument, the compilation buffer."
 
 (defcustom dape-read-memory-default-count 1024
   "The default count for `dape-read-memory'."
-  :type '(integer))
+  :type 'natnum)
 
 (defcustom dape-repl-commands
   '(("debug" . dape)
@@ -165,15 +166,15 @@ The hook is run with one argument, the compilation buffer."
 
 (defcustom dape-inline-variable-length 30
   "Maximum length of inline variable overlays."
-  :type '(integer))
+  :type 'natnum)
 
 (defcustom dape--debug-on
   '(io info error std-server)
   "Types of logs should be printed to *dape-debug*."
-  :type '(list (const :tag "dap IO" io)
-               (const :tag "info logging" info)
-               (const :tag "error logging" error)
-               (const :tag "dap tcp server stdout" std-server)))
+  :type '(set (const :tag "dap IO" io)
+              (const :tag "info logging" info)
+              (const :tag "error logging" error)
+              (const :tag "dap tcp server stdout" std-server)))
 
 ;;; Face
 
