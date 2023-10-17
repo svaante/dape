@@ -1864,7 +1864,7 @@ Depth is decided by `dape--info-variables-fetch-depth'."
      'dape--tree-widget
      :parent tree
      :key (plist-get variable :name)
-     :default (eq tree dape--scopes-widget)
+     :default (equal (plist-get variable :presentationHint) "locals")
      :tag (dape--variable-string variable)
      :expander-p
      (lambda (tree)
