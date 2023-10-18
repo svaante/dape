@@ -191,6 +191,19 @@ Install debugpy with pip ~pip install debugpy~
 
 See [[https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings][options]].
 
+** Godot
+Configure debug adapter port under "Editor" -> "Editor Settings" -> "Debug Adapter".
+
+#+begin_src emacs-lisp
+  (add-to-list 'dape-configs
+               '(godot-launch
+                 modes (gdscript-mode)
+                 host "127.0.0.1"
+                 port 6006
+                 :type "server"
+                 :request "launch"))
+#+end_src
+
 ** Other untested adapters
 If you find a working configuration for any other debug adapter please submit a PR.
 
