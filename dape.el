@@ -439,9 +439,10 @@ If EXTENDED end of line is after newline."
 
 ;;; Process and parsing
 
+;; HACK Issue #1 for some reason \r is not inserted into the parse
+;;      buffer by codelldb on windows. No trace in source code.
 (defconst dape--content-length-re
-  "\\(?:.*: .*\r\n\\)*Content-Length: \
-*\\([[:digit:]]+\\)\r\n\\(?:.*: .*\r\n\\)*\r\n"
+  "Content-Length: \\([[:digit:]]+\\)\r?\n\r?\n"
   "Matches debug adapter protocol header.")
 
 (defun dape--debug (type string &rest objects)
