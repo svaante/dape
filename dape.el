@@ -983,7 +983,13 @@ Starts a new process as per request of the debug adapter."
                      (plist-get body :threadId)
                      (plist-get body :allThreadsStopped)
                      (dape--callback
-                      (dape--update process))))
+                      (dape--update process)))
+  (when-let ((desc (plist-get body :description)))
+    (dape--repl-insert-text desc
+                            (if (equal "exception"
+                                       (plist-get body :reason))
+                                'error
+                              'italic))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql continued)) body)
   "Handle continued events."
