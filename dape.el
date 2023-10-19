@@ -2144,35 +2144,35 @@ interactively or if SELECT-BUFFER is non nil."
 
 (defun dape--repl-insert-text (msg &optional face)
   "Insert MSG with FACE in *dape-repl* buffer."
-  (cond
-   (dape--repl-insert-text-guard
-    (run-with-timer 0.1 nil 'dape--repl-insert-text msg))
-   (t
-    (setq dape--repl-insert-text-guard t)
-    (when-let ((buffer (get-buffer "*dape-repl*")))
-      (with-current-buffer buffer
-        (save-excursion
-          (condition-case err
-              (progn
-                (goto-char (point-max))
-                (comint-previous-prompt 0)
-                (forward-line -1)
-                (end-of-line)
-                (when-let (line (thing-at-point 'line))
-                  (when (eq (aref line 0) ?>)
-                    (let ((inhibit-read-only t))
-                      (insert "\n"))))
-                (let ((inhibit-read-only t))
-                  (insert (propertize msg 'font-lock-face face))))
-            (error
-             (setq dape--repl-insert-text-guard nil)
-             (signal (car err) (cdr err))))
-          (setq dape--repl-insert-text-guard nil))))
-    (unless (get-buffer-window "*dape-repl*")
+  (if (not (get-buffer-window "*dape-repl*"))
       (when (stringp msg)
         (message (format "%s"
                          (string-trim msg "\\\n" "\\\n"))
-                 'face face))))))
+                 'face face))
+    (cond
+     (dape--repl-insert-text-guard
+      (run-with-timer 0.1 nil 'dape--repl-insert-text msg))
+     (t
+      (setq dape--repl-insert-text-guard t)
+      (when-let ((buffer (get-buffer "*dape-repl*")))
+        (with-current-buffer buffer
+          (save-excursion
+            (condition-case err
+                (progn
+                  (goto-char (point-max))
+                  (comint-previous-prompt 0)
+                  (forward-line -1)
+                  (end-of-line)
+                  (when-let (line (thing-at-point 'line))
+                    (when (eq (aref line 0) ?>)
+                      (let ((inhibit-read-only t))
+                        (insert "\n"))))
+                  (let ((inhibit-read-only t))
+                    (insert (propertize msg 'font-lock-face face))))
+              (error
+               (setq dape--repl-insert-text-guard nil)
+               (signal (car err) (cdr err)))))))
+      (setq dape--repl-insert-text-guard nil)))))
 
 (defun dape--repl-input-sender (dummy-process input)
   "Dape repl `comint-input-sender'."
