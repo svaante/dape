@@ -2074,7 +2074,8 @@ See `dape-info' for more information."
               truncate-lines           t
               indent-tabs-mode         nil
               desktop-save-buffer      nil
-              tree-widget-image-enable nil))
+              tree-widget-image-enable nil
+              cursor-in-non-selected-windows nil))
 
 (defun dape-info (&optional select-buffer)
   "Create or select *dape-info* buffer.
@@ -2085,22 +2086,21 @@ interactively or if SELECT-BUFFER is non nil."
         window)
     (with-current-buffer buffer
       (dape-info-mode)
-      (dolist (button dape-info-buttons)
-        (pcase-let ((`(,name . ,fn) button))
-          (widget-create 'link
-                         :value name
-                         :action
-                         (lambda (&rest _)
-                           (funcall fn)))
-          (widget-insert " ")))
-      (when dape-info-buttons
-        (widget-insert "\n")
-        (forward-line -1)
-        (let ((ov (make-overlay (line-beginning-position)
-                                (line-beginning-position 2))))
-          (overlay-put ov 'face 'region)
-          (overlay-put ov 'priority 1))
-        (forward-line))
+      (setq header-line-format
+            (mapconcat (lambda (button)
+                         (pcase-let ((`(,name . ,fn) button))
+                           (propertize (format "[%s]" name)
+                                       'face
+                                       'button
+                                       'mouse-face
+                                       'highlight
+                                       'local-map
+                                       (let ((map (make-sparse-keymap)))
+                                         (define-key map [header-line mouse-1]
+                                                     fn)
+                                         map))))
+                       dape-info-buttons
+                       " "))
       (setq dape--watched-widget
             (widget-create 'dape--tree-widget
                            :tag (propertize "Watched" 'face 'bold)
