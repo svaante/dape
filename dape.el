@@ -1613,9 +1613,19 @@ Search is bounded to BEG and END."
 
 (defun dape--variable-add-overlay (variable marker)
   "Add inline variable overlay for VARIABLE at MARKER."
-  (when-let ((buffer (marker-buffer marker)))
+  (when-let ((buffer (marker-buffer marker))
+             (beg (1- (marker-position marker)))
+             (end (marker-position marker)))
     (with-current-buffer buffer
-      (when-let* ((ov (make-overlay (1- (marker-position marker)) marker))
+      (when-let* ((ov (make-overlay beg end))
+                  ;; Skip adding overlay, all ready placed this is most often
+                  ;; the correct way due to locals being the first scope for
+                  ;; most adapters
+                  ((not (cl-member 'dape-variable-overlay
+                                   (overlays-at beg)
+                                   :key
+                                   (lambda (ov)
+                                     (overlay-get ov 'category)))))
                   (var-string (plist-get variable :value))
                   (max-length (or (string-match-p "\n" var-string)
                                   dape-inline-variable-length))
@@ -1624,6 +1634,8 @@ Search is bounded to BEG and END."
                                        (propertize "..." 'face 'shadow)))))
         (overlay-put ov 'after-string
                      (format " %s " (propertize ov-string 'face 'shadow)))
+        (overlay-put ov 'help-echo ov-string)
+        (overlay-put ov 'category 'dape-variable-overlay)
         (overlay-put ov 'evaporate t)
         (push ov dape--variable-overlays)))))
 
