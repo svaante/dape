@@ -161,7 +161,7 @@ Then ~chmod +x debugAdapters/bin/OpenDebugAD7~.
                `(cppdbg
                  modes (c-mode c-ts-mode c++-mode c++-ts-mode)
                  command-cwd ,(file-name-directory
-                               dape--cppdbg-command)
+                               dape-cppdbg-command)
                  command cppdbg-command
                  :type "cppdbg"
                  :request "launch"
