@@ -189,11 +189,15 @@ The hook is run with one argument, the compilation buffer."
   "Face used to display conditional breakpoints.")
 
 (defface dape-breakpoint-face
-  '((t :inherit (bold)))
+  '((t :inherit (bold default)))
   "Face used to display breakpoint overlays.")
 
 (defface dape-stack-trace
-  '((t :inherit highlight :extend t))
+  '((t :inherit (highlight) :extend t))
+  "Face used to display stack trace overlays.")
+
+(defface dape-stack-trace-pointer
+  '((t :inherit (bold default) :extend t))
   "Face used to display stack trace overlays.")
 
 (defface dape-repl-exit-code-exit
@@ -1253,8 +1257,7 @@ Expressions within `{}` are interpolated."
   (when-let ((prev-log-breakpoint (seq-find (lambda (ov)
                                               (overlay-get ov 'dape-log-message))
                                             (dape--breakpoints-at-point))))
-    (delq prev-log-breakpoint dape--breakpoints)
-    (delete-overlay prev-log-breakpoint))
+    (dape--remove-breakpoint prev-log-breakpoint t))
   (unless (string-empty-p log-message)
     (dape--place-breakpoint log-message)))
 
@@ -1273,8 +1276,7 @@ When EXPR-MESSAGE is evaluated as true threads will pause at current line."
               (seq-find (lambda (ov)
                           (overlay-get ov 'dape-expr-message))
                         (dape--breakpoints-at-point))))
-    (delq prev-expr-breakpoint dape--breakpoints)
-    (delete-overlay prev-expr-breakpoint))
+    (dape--remove-breakpoint prev-expr-breakpoint t))
   (unless (string-empty-p expr-message)
     (dape--place-breakpoint nil expr-message)))
 
@@ -1293,10 +1295,8 @@ SKIP-TYPES is a list of overlay properties to skip removal of."
     (dolist (buffer-breakpoints buffers-breakpoints)
       (pcase-let ((`(,buffer . ,breakpoints) buffer-breakpoints))
         (dolist (breakpoint breakpoints)
-          (delq breakpoint dape--breakpoints)
-          (delete-overlay breakpoint))
-        (dape--update-breakpoints-in-buffer buffer))))
-  (dape--info-update-breakpoints-widget))
+          (dape--remove-breakpoint breakpoint t))
+        (dape--update-breakpoints-in-buffer buffer)))))
 
 (defun dape-select-thread (thread-id)
   "Selecte currrent thread by THREAD-ID."
@@ -1467,6 +1467,37 @@ Removes itself on execution."
 
 
 ;;; Breakpoints
+(defvar dape--original-margin nil
+  "Bookkeeping for buffer margin width")
+
+(defun dape--margin-cleanup (buffer)
+  "Reset BUFFERs margin if it's unused."
+  (when buffer
+    (with-current-buffer buffer
+      (when (and dape--original-margin ;; Buffer has been touched by Dape
+                 (not (thread-last dape--breakpoints
+                                   (seq-filter (lambda (ov)
+                                                 (not (overlay-get ov 'after-string))))
+                                   (seq-group-by 'overlay-buffer)
+                                   (alist-get buffer))))
+        (setq-local left-margin-width dape--original-margin
+                    dape--original-margin nil)
+        ;; Update margin
+        (when-let ((window (get-buffer-window buffer)))
+          (set-window-buffer window buffer))))))
+
+(defun dape--overlay-margin (overlay string)
+  "Insert STRING into margin by OVERLAY with FACE."
+  (when-let ((buffer (overlay-buffer overlay)))
+    (with-current-buffer buffer
+      (unless dape--original-margin
+        (setq-local dape--original-margin left-margin-width)
+        (setq left-margin-width 2)
+        (when-let ((window (get-buffer-window)))
+          (set-window-buffer window buffer))))
+    (overlay-put overlay 'before-string
+                 (propertize " "
+                             'display `((margin left-margin) ,string)))))
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
   "Make sure that Dape OVERLAY region covers line."
@@ -1519,18 +1550,19 @@ If EXPRESSION place conditional breakpoint."
                                               (format "Break: %s" expression)
                                               'face 'dape-expression-face))))
      (t
-      (overlay-put breakpoint 'before-string
-                   (propertize "B"
-                               'face 'dape-breakpoint-face))))
+      (dape--overlay-margin breakpoint
+                            (propertize "B" 'face 'dape-breakpoint-face))))
     (overlay-put breakpoint 'modification-hooks '(dape--breakpoint-freeze))
     (push breakpoint dape--breakpoints))
   (dape--info-update-breakpoints-widget)
   (dape--update-breakpoints-in-buffer (current-buffer)))
 
-(defun dape--remove-breakpoint (overlay)
+(defun dape--remove-breakpoint (overlay &optional skip-update)
   "Remove OVERLAY breakpoint from buffer and session."
-  (delq overlay dape--breakpoints)
-  (dape--update-breakpoints-in-buffer (overlay-buffer overlay))
+  (setq dape--breakpoints (delq overlay dape--breakpoints))
+  (unless skip-update
+    (dape--update-breakpoints-in-buffer (overlay-buffer overlay)))
+  (dape--margin-cleanup (overlay-buffer overlay))
   (delete-overlay overlay)
   (dape--info-update-breakpoints-widget))
 
@@ -1556,7 +1588,9 @@ If PREFIX is non nil add PREFIX to stack pointer."
           (overlay-put stack-pointer 'priority 1)
           (overlay-put stack-pointer 'window t)
           (overlay-put stack-pointer 'category 'dape-stack-pointer)
-          (overlay-put stack-pointer 'before-string (concat prefix "→"))
+          (overlay-put stack-pointer 'before-string (propertize
+                                                     (concat prefix "→")
+                                                     'face 'dape-stack-trace-pointer))
           (overlay-put stack-pointer 'modification-hooks
                        '(dape--breakpoint-freeze))
           stack-pointer)))))
