@@ -136,7 +136,9 @@ Download latest [[https://github.com/vadimcn/codelldb/releases][release]] and un
                '(codelldb
                  modes (c-mode c-ts-mode
                         c++-mode c++-ts-mode
-                        rust-ts-mode rust-mode)
+                        ;; Uncomment the following if you use rust-mode
+                        ;; rust-mode rust-ts-mode
+                        )
                  ;; Replace vadimcn.vscode-lldb with the vsix directory you just extracted
                  command "path/to/vadimcn.vscode-lldb/adapter/codelldb"
                  host "localhost"
@@ -219,4 +221,4 @@ See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/]
 
 * Bugs and issues
 Before reporting any issues take a look at ~*dape-debug*~ buffer with all debug messages enabled.
-~(setq dape--debug-on '(io info error std-server)~.
+~(setq dape--debug-on '(io info error std-server))~.
