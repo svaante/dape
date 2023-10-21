@@ -1510,11 +1510,12 @@ If SKIP-TYPES overlays with properties in SKIP-TYPES are filtered."
 (defun dape--update-breakpoints-in-buffer (buffer)
   "Update all breakpoints in BUFFER."
   (when (buffer-live-p buffer)
-    (when-let ((process (dape--live-process t))
-               (breakpoints (thread-last dape--breakpoints
-                                         (seq-group-by 'overlay-buffer)
-                                         (alist-get buffer))))
-      (dape--set-breakpoints process buffer breakpoints))))
+    (when-let ((process (dape--live-process t)))
+      (dape--set-breakpoints process
+                             buffer
+                             (thread-last dape--breakpoints
+                                          (seq-group-by 'overlay-buffer)
+                                          (alist-get buffer))))))
 
 (defun dape--place-breakpoint (&optional log-message expression)
   "Place breakpoint at current line.
