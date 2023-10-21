@@ -1416,7 +1416,7 @@ Removes itself on execution."
     (run-hook-with-args 'dape-compile-compile-hooks buffer)
     (dape dape--name (plist-put (copy-tree dape--config) 'compile nil)))
    (t
-    (dape--repl-insert-text (format "* Compilation failed %s *" str)))))
+    (dape--repl-insert-text (format "* Compilation failed %s *\n" str)))))
 
 (defun dape--compile (name config)
   "Start compilation for NAME and CONFIG."
