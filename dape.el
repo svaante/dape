@@ -168,8 +168,12 @@ The hook is run with one argument, the compilation buffer."
   "Maximum length of inline variable overlays."
   :type 'natnum)
 
-(defcustom dape--debug-on
-  '(io info error std-server)
+(defcustom dape-info-buffer-variable-format 'line
+  "How variables are formatted in *dape-info* buffer."
+  :type '(choice (const :tag "Truncate string at new line" line)
+                 (const :tag "No formatting" nil)))
+
+(defcustom dape--debug-on '(io info error std-server)
   "Types of logs should be printed to *dape-debug*."
   :type '(set (const :tag "dap IO" io)
               (const :tag "info logging" info)
@@ -1900,32 +1904,38 @@ Depth is decided by `dape--info-variables-fetch-depth'."
 
 (defun dape--variable-to-widget (tree variable)
   "Create variable widget from VARIABLE under TREE."
-  (cond
-   ((zerop (plist-get variable :variablesReference))
-    (widget-convert
-     'item
-     :tag (dape--variable-string variable)))
-   (t
-    (widget-convert
-     'dape--tree-widget
-     :parent tree
-     :key (plist-get variable :name)
-     :default (equal (plist-get variable :presentationHint) "locals")
-     :tag (dape--variable-string variable)
-     :expander-p
-     (lambda (tree)
-       (if (plist-get variable :variables)
-           t
-         (dape--variables (dape--live-process)
-                          variable
-                          (dape--callback
-                           (when (plist-get variable :variables)
-                             (dape--info-update-widget tree))))
-         nil))
-     :expander
-     (lambda (tree)
-       (mapcar (apply-partially 'dape--variable-to-widget tree)
-               (plist-get variable :variables)))))))
+  (let ((variable-string (dape--variable-string variable)))
+    ;; Apply formatting
+    (when (eq dape-info-buffer-variable-format 'line)
+      (setq variable-string
+            (substring variable-string
+                       0 (string-match-p "\n" variable-string))))
+    (cond
+     ((zerop (plist-get variable :variablesReference))
+      (widget-convert
+       'item
+       :tag variable-string))
+     (t
+      (widget-convert
+       'dape--tree-widget
+       :parent tree
+       :key (plist-get variable :name)
+       :default (equal (plist-get variable :presentationHint) "locals")
+       :tag variable-string
+       :expander-p
+       (lambda (tree)
+         (if (plist-get variable :variables)
+             t
+           (dape--variables (dape--live-process)
+                            variable
+                            (dape--callback
+                             (when (plist-get variable :variables)
+                               (dape--info-update-widget tree))))
+           nil))
+       :expander
+       (lambda (tree)
+         (mapcar (apply-partially 'dape--variable-to-widget tree)
+                 (plist-get variable :variables))))))))
 
 (defun dape--expand-scopes-p (tree)
   "Expander predicate for `dape--scopes-widget'."
