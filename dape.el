@@ -1076,7 +1076,7 @@ Starts a new process as per request of the debug adapter."
                           :buffer buffer
                           :sentinel 'dape--process-sentinel
                           :filter (lambda (_process string)
-                                    (dape--debug 'server-stdout
+                                    (dape--debug 'std-server
                                                  "Server stdout:\n%s"
                                                  string))
                           :noquery t))
