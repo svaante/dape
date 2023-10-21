@@ -2660,6 +2660,12 @@ See `eldoc-documentation-functions', for more infomation."
 
 (global-set-key dape-key-prefix dape-global-map)
 
+
+;;; Hooks
+
+;; Cleanup process before bed time
+(add-hook 'kill-emacs-hook #'dape-kill)
+
 (provide 'dape)
 
 ;;; dape.el ends here
