@@ -989,7 +989,7 @@ Starts a new process as per request of the debug adapter."
                      (dape--callback
                       (dape--update process)))
   (when-let ((desc (plist-get body :description)))
-    (dape--repl-insert-text desc
+    (dape--repl-insert-text (concat desc "\n")
                             (if (equal "exception"
                                        (plist-get body :reason))
                                 'error
