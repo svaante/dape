@@ -1072,7 +1072,8 @@ Starts a new process as per request of the debug adapter."
       (setq dape--server-process
             (make-process :name "Dape server"
                           :command (cons (plist-get config 'command)
-                                         (plist-get config 'command-args))
+                                         (cl-map 'list 'identity
+                                                 (plist-get config 'command-args)))
                           :buffer buffer
                           :sentinel 'dape--process-sentinel
                           :filter (lambda (_process string)
@@ -1112,7 +1113,8 @@ Starts a new process as per request of the debug adapter."
         process)
     (setq process (make-process :name (symbol-name name)
                                 :command (cons (plist-get config 'command)
-                                               (plist-get config 'command-args))
+                                               (cl-map 'list 'identity
+                                                       (plist-get config 'command-args)))
                                 :connection-type 'pipe
                                 :coding 'no-conversion
                                 :sentinel 'dape--process-sentinel
@@ -2418,33 +2420,43 @@ Empty input will rerun last command.\n\n\n"
 (defvar dape-history nil
   "History variable for `dape'.")
 
-(defun dape--config-eval-value (value &optional skip-function)
+(defun dape--config-eval-value (value &optional skip-function for-adapter)
   "Evaluate dape config VALUE.
-If SKIP-FUNCTION and VALUE is an function it is not invoked."
+If SKIP-FUNCTION and VALUE is an function it is not invoked.
+If FOR-ADAPTER current value is for the debug adapter.  Other rules
+apply."
   (cond
    ((functionp value) (or (and skip-function value)
                           (funcall-interactively value)))
-   ((plistp value) (dape--config-eval-1 value skip-function))
+   ((plistp value) (dape--config-eval-1 value skip-function for-adapter))
    ((vectorp value) (cl-map 'vector
                             (lambda (v)
-                              (dape--config-eval-value v skip-function))
+                              (dape--config-eval-value v
+                                                       skip-function
+                                                       for-adapter))
                             value))
    ((and (symbolp value)
          (not (eq (symbol-value value) value)))
-    (dape--config-eval-value (symbol-value value) skip-function))
+    (dape--config-eval-value (symbol-value value)
+                             skip-function for-adapter))
    (t value)))
 
-(defun dape--config-eval-1 (config &optional skip-functions)
+(defun dape--config-eval-1 (config &optional skip-functions for-adapter)
   "Helper for `dape--config-eval'."
   (cl-loop for (key value) on config by 'cddr
            append (cond
-                   ((memq key '(modes)) (list key value))
+                   ((eq key 'modes) (list key value))
+                   ((and for-adapter (not (keywordp key)))
+                    (user-error "Unexpected key %S; lists of things needs be \
+arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
+                                key key key key))
                    (t (list key (dape--config-eval-value value
-                                                         skip-functions))))))
+                                                         skip-functions
+                                                         (or for-adapter
+                                                             (keywordp key))))))))
 
-(defun dape--config-eval (name options &optional skip-functions)
-  "Evaluate Dape config with NAME and OPTIONS.
-If SKIP-FUNCTIONS function values are not called during evaluation."
+(defun dape--config-eval (name options)
+  "Evaluate Dape config with NAME and OPTIONS."
   (let ((base-config (alist-get name dape-configs)))
     (unless base-config
       (user-error "Unable to find `%s' in `dape-configs', available configurations: %s"
@@ -2452,8 +2464,7 @@ If SKIP-FUNCTIONS function values are not called during evaluation."
                                   dape-configs ", ")))
     (dape--config-eval-1 (seq-reduce (apply-partially 'apply 'plist-put)
                                      (seq-partition options 2)
-                                     (copy-tree base-config))
-                         skip-functions)))
+                                     (copy-tree base-config)))))
 
 (defun dape--config-from-string (str)
   "Parse list of name and config from STR."
@@ -2468,7 +2479,7 @@ If SKIP-FUNCTIONS function values are not called during evaluation."
     (unless (string-empty-p str)
       (setq read-config (read (format "(%s)" str))))
     (unless (plistp read-config)
-      (user-error "Unexpected options format, see `dape-configs'"))
+      (user-error "Bad options format, see `dape-configs'"))
     (cl-loop for (key value) on read-config by 'cddr
              do (setq base-config (plist-put base-config key value)))
     (list name base-config)))
@@ -2496,7 +2507,7 @@ If SKIP-FUNCTIONS function values are not called during evaluation."
   (let ((modes (plist-get config 'modes)))
     (or (not modes)
         (apply 'provided-mode-derived-p
-               major-mode modes))))
+               major-mode (cl-map 'list 'identity modes)))))
 
 (defun dape--read-config ()
   "Read config name and options."
