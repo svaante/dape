@@ -1360,7 +1360,7 @@ Watched symbols are displayed in *dape-info* buffer.
   (dape--info-update-widget dape--watched-widget))
 
 ;;;###autoload
-(defun dape (name options)
+(defun dape (name options &optional skip-compile)
   "Start debugging session.
 
 Start a debugging session based on NAME in `dape-configs' alist.
@@ -1370,6 +1370,8 @@ See `dape-configs' for more information on CONFIG.
 When called as an interactive command, the first symbol like
 string is read as NAME and rest as element in CONFIG.
 
+Use SKIP-COMPILE to skip compilation option.
+
 Interactive example:
   launch :program \"bin\"
 
@@ -1377,27 +1379,14 @@ Executes launch `dape-configs' with :program as \"bin\"."
   (interactive (dape--read-config))
   (unless (plist-get options 'start-debugging)
     (dape-kill))
-  (let ((base-config (alist-get name dape-configs))
-        config)
-    (unless base-config
-      (user-error "Unable to find `%s' in `dape-configs'" name))
-    (setq config
-          (dape--config-eval
-           (seq-reduce (apply-partially 'apply 'plist-put)
-                       (seq-partition options 2)
-                       (copy-tree base-config))))
-    (when (called-interactively-p 'interactive)
-      (push (dape--config-to-string name
-                                    base-config
-                                    config)
-            dape--config-history))
+  (let ((config (dape--config-eval name options)))
     (unless (plist-get options 'start-debugging)
       (when-let ((buffer (get-buffer "*dape-debug*")))
         (with-current-buffer buffer
           (let ((inhibit-read-only t))
             (erase-buffer)))))
     (cond
-     ((plist-get config 'compile)
+     ((and (not skip-compile) (plist-get config 'compile))
       (dape--compile name config))
      ((and (plist-get config 'host) (plist-get config 'port))
       (dape--start-multi-session name config))
@@ -1414,7 +1403,7 @@ Removes itself on execution."
   (cond
    ((equal "finished\n" str)
     (run-hook-with-args 'dape-compile-compile-hooks buffer)
-    (dape dape--name (plist-put (copy-tree dape--config) 'compile nil)))
+    (dape dape--name dape--config 'skip-compile))
    (t
     (dape--repl-insert-text (format "* Compilation failed %s *\n" str)))))
 
@@ -1468,7 +1457,7 @@ Removes itself on execution."
 
 ;;; Breakpoints
 (defvar dape--original-margin nil
-  "Bookkeeping for buffer margin width")
+  "Bookkeeping for buffer margin width.")
 
 (defun dape--margin-cleanup (buffer)
   "Reset BUFFERs margin if it's unused."
@@ -1558,7 +1547,8 @@ If EXPRESSION place conditional breakpoint."
   (dape--update-breakpoints-in-buffer (current-buffer)))
 
 (defun dape--remove-breakpoint (overlay &optional skip-update)
-  "Remove OVERLAY breakpoint from buffer and session."
+  "Remove OVERLAY breakpoint from buffer and session.
+When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (setq dape--breakpoints (delq overlay dape--breakpoints))
   (unless skip-update
     (dape--update-breakpoints-in-buffer (overlay-buffer overlay)))
@@ -2434,7 +2424,7 @@ If SKIP-FUNCTION and VALUE is an function it is not invoked."
   (cond
    ((functionp value) (or (and skip-function value)
                           (funcall-interactively value)))
-   ((plistp value) (dape--config-eval value skip-function))
+   ((plistp value) (dape--config-eval-1 value skip-function))
    ((vectorp value) (cl-map 'vector
                             (lambda (v)
                               (dape--config-eval-value v skip-function))
@@ -2444,42 +2434,56 @@ If SKIP-FUNCTION and VALUE is an function it is not invoked."
     (dape--config-eval-value (symbol-value value) skip-function))
    (t value)))
 
-(defun dape--config-eval (config &optional skip-functions)
-  "Evaluate CONFIG.
-If SKIP-FUNCTIONS function values are not called during evaluation."
+(defun dape--config-eval-1 (config &optional skip-functions)
+  "Helper for `dape--config-eval'."
   (cl-loop for (key value) on config by 'cddr
            append (cond
                    ((memq key '(modes)) (list key value))
                    (t (list key (dape--config-eval-value value
                                                          skip-functions))))))
 
+(defun dape--config-eval (name options &optional skip-functions)
+  "Evaluate Dape config with NAME and OPTIONS.
+If SKIP-FUNCTIONS function values are not called during evaluation."
+  (let ((base-config (alist-get name dape-configs)))
+    (unless base-config
+      (user-error "Unable to find `%s' in `dape-configs', available configurations: %s"
+                  name (mapconcat (lambda (e) (symbol-name (car e)))
+                                  dape-configs ", ")))
+    (dape--config-eval-1 (seq-reduce (apply-partially 'apply 'plist-put)
+                                     (seq-partition options 2)
+                                     (copy-tree base-config))
+                         skip-functions)))
+
 (defun dape--config-from-string (str)
   "Parse list of name and config from STR."
   (let (name read-config base-config)
     (when (string-empty-p str)
-      (user-error "Expected config name"))
+      (user-error "Expected config name, available configurations: %s"
+                  (mapconcat (lambda (e) (symbol-name (car e)))
+                             dape-configs ", ")))
     (setq name (read str)
           base-config (copy-tree (alist-get name dape-configs))
           str (substring str (length (symbol-name name))))
     (unless (string-empty-p str)
       (setq read-config (read (format "(%s)" str))))
     (unless (plistp read-config)
-      (user-error "Unexpected config format, see `dape-configs'"))
+      (user-error "Unexpected options format, see `dape-configs'"))
     (cl-loop for (key value) on read-config by 'cddr
              do (setq base-config (plist-put base-config key value)))
     (list name base-config)))
 
-(defun dape--config-diff (pre-eval post-eval)
-  "Create a diff of PRE-EVAL and POST-EVAL configs."
-  (cl-loop for (key value) on post-eval by 'cddr
-           unless (equal (dape--config-eval-value (plist-get pre-eval key) t)
-                         value)
-           append (list key value)))
+(defun dape--config-diff (name post-eval)
+  "Create a diff of config NAME and POST-EVAL config."
+  (let ((pre-eval (alist-get name dape-configs)))
+    (cl-loop for (key value) on post-eval by 'cddr
+             unless (equal (dape--config-eval-value (plist-get pre-eval key) t)
+                           value)
+             append (list key value))))
 
-(defun dape--config-to-string (name pre-eval-config post-eval-config)
-  "Create string from NAME, PRE-EVAL-CONFIG and POST-EVAL-CONFIG."
-  (let ((config-diff (dape--config-diff pre-eval-config
-                                        post-eval-config)))
+(defun dape--config-to-string (name post-eval-config)
+  "Create string from NAME and POST-EVAL-CONFIG."
+  (let ((config-diff (dape--config-diff name post-eval-config)))
     (concat (format "%s" name)
             (and-let* ((config-diff) (config-str (prin1-to-string config-diff)))
               (format " %s"
@@ -2487,26 +2491,41 @@ If SKIP-FUNCTIONS function values are not called during evaluation."
                                  1
                                  (1- (length config-str))))))))
 
+(defun dape--config-mode-p (config)
+  "Is CONFIG enabled for current mode."
+  (let ((modes (plist-get config 'modes)))
+    (or (not modes)
+        (apply 'provided-mode-derived-p
+               major-mode modes))))
+
 (defun dape--read-config ()
   "Read config name and options."
   (if (null dape-configs)
       (customize-variable 'dape-configs)
     (let ((candidate
            (completing-read "Dape config: "
-                            (append
                              (mapcan
                               (lambda (name-config)
-                                (let* ((config (cdr name-config))
-                                       (modes (plist-get config 'modes)))
-                                  (when (apply 'provided-mode-derived-p major-mode modes)
+                                (let* ((config (cdr name-config)))
+                                  (when (dape--config-mode-p config)
                                     (list (car name-config)))))
-                              dape-configs)
-                             dape--config-history)
-                            nil nil nil 'dape-history)))
-      (if-let ((config
-                (alist-get (intern candidate) dape-configs)))
-          (list (intern candidate) config)
-        (dape--config-from-string candidate)))))
+                              (append dape--config-history dape-configs))
+                            nil nil nil 'dape-history))
+          name config)
+      (if-let ((base-config (alist-get (intern candidate) dape-configs)))
+          (setq name (intern candidate)
+                config base-config)
+        (pcase-let ((`(,p-name ,p-config)
+                     (dape--config-from-string candidate)))
+          (setq name p-name
+                config p-config)))
+      (let* ((evaled-config (dape--config-eval name config))
+             (string-repr (dape--config-to-string name evaled-config)))
+        ;; HACK Set evaled config as the first history element
+        (setq dape-history (cons string-repr dape-history))
+        (push (cons string-repr evaled-config) dape--config-history)
+        (list name evaled-config)))))
+
 
 ;;; Hover
 
@@ -2584,7 +2603,6 @@ See `eldoc-documentation-functions', for more infomation."
 (defvar dape-global-map
   (let ((map (make-sparse-keymap)))
     (define-key map "d" #'dape)
-    (define-key map "d" #'dape)
     (define-key map "p" #'dape-pause)
     (define-key map "c" #'dape-continue)
     (define-key map "n" #'dape-next)
@@ -2604,7 +2622,8 @@ See `eldoc-documentation-functions', for more infomation."
     (define-key map "q" #'dape-quit)
     map))
 
-(dolist (cmd '(dape-pause
+(dolist (cmd '(dape
+               dape-pause
                dape-continue
                dape-next
                dape-step-in
