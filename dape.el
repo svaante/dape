@@ -302,11 +302,11 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
                       (dape--thread-id-object)
                       (dape--callback
                        (when success
+                         (dape--update-state "running")
                          (dape--remove-stack-pointers)
                          (dolist (thread dape--threads)
                            (plist-put thread :status "running"))
-                         (dape--info-update-threads-widget)
-                         (dape--update-state "running")))))
+                         (dape--info-update-threads-widget)))))
     (message "No stopped thread.")))
 
 (defun dape--thread-id-object ()
@@ -348,12 +348,13 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
 (defun dape--object-to-marker (plist &optional buffer-open-fn)
   "Create marker from dap PLIST containing file and line information.
 If BUFFER-OPEN-FN is set, use that function to open a buffer from file path."
-  (when-let* ((path (thread-first plist
-                                  (plist-get :source)
-                                  (plist-get :path)))
-              (line (plist-get plist :line))
-              (buffer-open-fn (or buffer-open-fn 'find-file-noselect))
-              (buffer (funcall buffer-open-fn path)))
+  (and-let* ((path (thread-first plist
+                                 (plist-get :source)
+                                 (plist-get :path)))
+             ((file-exists-p path))
+             (line (plist-get plist :line))
+             (buffer-open-fn (or buffer-open-fn 'find-file-noselect))
+             (buffer (funcall buffer-open-fn path)))
     (with-current-buffer buffer
       (save-excursion
         (goto-char (point-min))
@@ -449,8 +450,13 @@ If EXTENDED end of line is after newline."
 
 ;; HACK Issue #1 for some reason \r is not inserted into the parse
 ;;      buffer by codelldb on windows. No trace in source code.
+
+;; Some adapters can't help them self, sending headers not in spec..
 (defconst dape--content-length-re
-  "Content-Length: \\([[:digit:]]+\\)\r?\n\r?\n"
+  "\\(?:.*: .*\r?\n\\)*\
+Content-Length: [[:digit:]]+\r?\n\
+\\(?:.*: .*\r?\n\\)*\
+\r?\n"
   "Matches debug adapter protocol header.")
 
 (defun dape--debug (type string &rest objects)
@@ -527,28 +533,44 @@ If NOWARN does not error on no active process."
 
 (defun dape--process-filter (process string)
   "Filter for dape processes."
-  (when (process-live-p process)
-    (when-let ((input-buffer (process-buffer process))
-               (buffer (current-buffer)))
-      (with-current-buffer input-buffer
-        (goto-char (point-max))
-        (insert string)
-        (goto-char (point-min))
-        (let (done)
-          (while (not done)
-            (if-let ((object
-                      (condition-case nil
-                          (when (search-forward-regexp dape--content-length-re
-                                                       nil
-                                                       t)
-                            (json-parse-buffer :object-type 'plist
-                                               :null-object nil
-                                               :false-object nil))
-                        (error (and (erase-buffer) nil)))))
-                (with-current-buffer buffer
-                  (dape--handle-object process object))
-              (setq done t))))
-        (delete-region (point-min) (point))))))
+  (when-let ((input-buffer (process-buffer process))
+             (buffer (current-buffer)))
+    (with-current-buffer input-buffer
+      (goto-char (point-max))
+      (insert string)
+      (goto-char (point-min))
+      (let (done parser-error)
+        (while (and (not done) (not parser-error))
+          (if-let* ((start (point))
+                    (object
+                     (condition-case nil
+                         (when (search-forward-regexp dape--content-length-re
+                                                      nil
+                                                      t)
+                           (unless (equal start (match-beginning 0))
+                             (dape--debug 'std-server
+                                          "%s"
+                                          (buffer-substring start (match-beginning 0)))
+                             (delete-region start (match-beginning 0)))
+                           (json-parse-buffer :object-type 'plist
+                                              :null-object nil
+                                              :false-object nil))
+                       (error
+                        (let ((json-str
+                               (buffer-substring (point) (point-max))))
+                          (setq parser-error t)
+                          (when (length> json-str 0)
+                            (dape--debug 'error
+                                         "Failed to parse json from `%s`"
+                                         json-str))
+                          nil)))))
+              (with-current-buffer buffer
+                (dape--handle-object process object))
+            (setq done t)))
+        (unless parser-error
+          ;; Parser error is probably because of incomplete json
+          ;; We just need more bytes, if that's not the case we are screwed
+          (delete-region (point-min) (point)))))))
 
 
 ;;; Outgoing requests
@@ -1094,6 +1116,7 @@ Starts a new process as per request of the debug adapter."
               (make-network-process :name (symbol-name name)
                                     :buffer buffer
                                     :host (plist-get config 'host)
+                                    :coding 'utf-8-emacs-unix
                                     :service (plist-get config 'port)
                                     :sentinel 'dape--process-sentinel
                                     :filter 'dape--process-filter
@@ -1120,7 +1143,7 @@ Starts a new process as per request of the debug adapter."
                                                (cl-map 'list 'identity
                                                        (plist-get config 'command-args)))
                                 :connection-type 'pipe
-                                :coding 'no-conversion
+                                :coding 'utf-8-emacs-unix
                                 :sentinel 'dape--process-sentinel
                                 :filter 'dape--process-filter
                                 :buffer buffer
@@ -2555,7 +2578,8 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
   "Hook function to produce doc strings for `eldoc'.
 On success calles CB with the doc string.
 See `eldoc-documentation-functions', for more infomation."
-  (when-let ((symbol (thing-at-point 'symbol)))
+  (and-let* (((plist-get dape--capabilities :supportsEvaluateForHovers))
+             (symbol (thing-at-point 'symbol)))
     (dape--evaluate-expression (dape--live-process)
                                (plist-get (dape--current-stack-frame) :id)
                                (substring-no-properties symbol)
