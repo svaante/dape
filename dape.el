@@ -1925,6 +1925,9 @@ Depth is decided by `dape--info-variables-fetch-depth'."
                                   'face 'font-lock-function-name-face)))
               (plist-get current-thread :stackFrames)))))
 
+(defconst dape--variable-page-size 50
+  "Number of children to display per \"page\" under variable widget.")
+
 (defun dape--variable-to-widget (tree variable)
   "Create variable widget from VARIABLE under TREE."
   (let ((variable-string (dape--variable-string variable)))
@@ -1945,6 +1948,7 @@ Depth is decided by `dape--info-variables-fetch-depth'."
        :key (plist-get variable :name)
        :default (equal (plist-get variable :presentationHint) "locals")
        :tag variable-string
+       :max-children dape--variable-page-size
        :expander-p
        (lambda (tree)
          (if (plist-get variable :variables)
@@ -1958,8 +1962,26 @@ Depth is decided by `dape--info-variables-fetch-depth'."
            nil))
        :expander
        (lambda (tree)
-         (mapcar (apply-partially 'dape--variable-to-widget tree)
-                 (plist-get variable :variables))))))))
+         (let ((variables (plist-get variable :variables))
+               (max-children (widget-get tree :max-children)))
+           (append
+            (mapcar (apply-partially 'dape--variable-to-widget tree)
+                    (take max-children variables))
+            (when (length> variables max-children)
+              (list (widget-convert 'push-button
+                                    :format "%[%t%]\n"
+                                    :action
+                                    (lambda (&rest _)
+                                      (widget-put tree
+                                                  :max-children
+                                                  (+ (widget-get tree :max-children)
+                                                     dape--variable-page-size))
+                                      ;; FIXME This should keep current point
+                                      (dape--info-update-widget tree))
+                                    :tag (propertize (format "Showing %d of %d"
+                                                             max-children
+                                                             (length variables))
+                                                     'face 'italic))))))))))))
 
 (defun dape--expand-scopes-p (tree)
   "Expander predicate for `dape--scopes-widget'."
@@ -1969,11 +1991,12 @@ Depth is decided by `dape--info-variables-fetch-depth'."
    ((plist-get (dape--current-stack-frame) :scopes)
     t)
    (t
-    (dape--scopes (dape--live-process)
-                  (dape--current-stack-frame)
-                  (dape--callback
-                   (when (plist-get (dape--current-stack-frame) :scopes)
-                     (dape--info-update-widget tree))))
+    (when-let ((process (dape--live-process t)))
+      (dape--scopes process
+                    (dape--current-stack-frame)
+                    (dape--callback
+                     (when (plist-get (dape--current-stack-frame) :scopes)
+                       (dape--info-update-widget tree)))))
     nil)))
 
 (defun dape--expand-scopes (tree)
@@ -2113,7 +2136,7 @@ Depending on line in *dape-info* buffer."
   (dape--info-press-widget-at-line
    (lambda (widget)
      (memq (widget-type widget)
-           '(file-link link toggle)))))
+           '(file-link link toggle push-button)))))
 
 (defun dape-info-tree-dwim ()
   "Toggle tree expansion in *dape-info* buffer."
