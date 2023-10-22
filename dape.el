@@ -1949,11 +1949,12 @@ Depth is decided by `dape--info-variables-fetch-depth'."
        (lambda (tree)
          (if (plist-get variable :variables)
              t
-           (dape--variables (dape--live-process)
-                            variable
-                            (dape--callback
-                             (when (plist-get variable :variables)
-                               (dape--info-update-widget tree))))
+           (when-let ((process (dape--live-process t)))
+             (dape--variables process
+                              variable
+                              (dape--callback
+                               (when (plist-get variable :variables)
+                                 (dape--info-update-widget tree)))))
            nil))
        :expander
        (lambda (tree)
@@ -1992,7 +1993,7 @@ Depth is decided by `dape--info-variables-fetch-depth'."
      (cl-reduce (lambda (cb plist)
                   (dape--callback
                    (dape--evaluate-expression
-                    (dape--live-process)
+                    (dape--live-process t)
                     (plist-get (dape--current-stack-frame) :id)
                     (plist-get plist :name)
                     "watch"
