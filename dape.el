@@ -307,7 +307,7 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
                          (dolist (thread dape--threads)
                            (plist-put thread :status "running"))
                          (dape--info-update-threads-widget)))))
-    (message "No stopped thread.")))
+    (message "No live debug adapter process")))
 
 (defun dape--thread-id-object ()
   "Helper to construct a thread id object."
@@ -440,7 +440,8 @@ If EXTENDED end of line is after newline."
            file
            (regexp-quote
             (expand-file-name
-             (plist-get dape--config :cwd))))
+             (or (plist-get dape--config :cwd)
+                 ""))))
           (when line
             (format ":%d"
                     line))))
@@ -2279,48 +2280,45 @@ interactively or if SELECT-BUFFER is non nil."
 (defun dape--repl-input-sender (dummy-process input)
   "Dape repl `comint-input-sender'."
   (let (cmd)
-    (if (not (dape--live-process t))
-        (comint-output-filter dummy-process
-                              "DAPE server not running\n")
-      (cond
-       ;; Run previous input
-       ((and (string-empty-p input)
-             (not (string-empty-p (car (ring-elements comint-input-ring)))))
-        (when-let ((last (car (ring-elements comint-input-ring))))
-          (dape--repl-input-sender dummy-process last)))
-       ;; Run command from `dape-named-commands'
-       ((setq cmd
-              (or (alist-get input dape-repl-commands nil nil 'equal)
-                  (and dape-repl-use-shorthand
-                       (cl-loop for (key . value) in dape-repl-commands
-                                when (equal (substring key 0 1) input)
-                                return value))))
-        (setq dape--repl-insert-text-guard t)
-        (comint-output-filter dummy-process "\n> ")
-        (funcall cmd)
-        (setq dape--repl-insert-text-guard nil))
-       ;; Evaluate expression
-       ((dape--stopped-threads)
-        ;; FIXME `dape--repl-insert-text-guard' is used here to not mess up ordering
-        ;;       when running commands that will itself trigger output request
-        (setq dape--repl-insert-text-guard t)
-        (dape--evaluate-expression (dape--live-process)
-                                   (plist-get (dape--current-stack-frame) :id)
-                                   (substring-no-properties input)
-                                   "repl"
-                                   (dape--callback
-                                    (comint-output-filter dummy-process
-                                                          (concat
-                                                           (if success
-                                                               (plist-get body :result)
-                                                             msg)
-                                                           "\n\n> "))
-          (setq dape--repl-insert-text-guard nil))))
-       (t
-        (comint-output-filter
-         dummy-process
-         (format "* Unable to send \"%s\" no stopped threads *\n> "
-                 input)))))))
+    (cond
+     ;; Run previous input
+     ((and (string-empty-p input)
+           (not (string-empty-p (car (ring-elements comint-input-ring)))))
+      (when-let ((last (car (ring-elements comint-input-ring))))
+        (dape--repl-input-sender dummy-process last)))
+     ;; Run command from `dape-named-commands'
+     ((setq cmd
+            (or (alist-get input dape-repl-commands nil nil 'equal)
+                (and dape-repl-use-shorthand
+                     (cl-loop for (key . value) in dape-repl-commands
+                              when (equal (substring key 0 1) input)
+                              return value))))
+      (setq dape--repl-insert-text-guard t)
+      (comint-output-filter dummy-process "\n> ")
+      (funcall cmd)
+      (setq dape--repl-insert-text-guard nil))
+     ;; Evaluate expression
+     ((dape--stopped-threads)
+      ;; FIXME `dape--repl-insert-text-guard' is used here to not mess up ordering
+      ;;       when running commands that will itself trigger output request
+      (setq dape--repl-insert-text-guard t)
+      (dape--evaluate-expression (dape--live-process)
+                                 (plist-get (dape--current-stack-frame) :id)
+                                 (substring-no-properties input)
+                                 "repl"
+                                 (dape--callback
+                                  (comint-output-filter dummy-process
+                                                        (concat
+                                                         (if success
+                                                             (plist-get body :result)
+                                                           msg)
+                                                         "\n\n> "))
+                                  (setq dape--repl-insert-text-guard nil))))
+     (t
+      (comint-output-filter
+       dummy-process
+       (format "* Unable to send \"%s\" no stopped threads *\n> "
+               input))))))
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
@@ -2347,15 +2345,14 @@ interactively or if SELECT-BUFFER is non nil."
      (cdr bounds)
      (completion-table-dynamic
       (lambda (_str)
-        (when-let ((frame-id (plist-get (dape--current-stack-frame) :id)))
-          (dape-request
-           (dape--live-process)
-           "completions"
-           (list :frameId frame-id
-                 :text str
-                 :column column
-                 :line 1)
-           (dape--callback
+        (when-let ((process (dape--live-process t))
+                   (frame-id (plist-get (dape--current-stack-frame) :id)))
+          (dape--with dape-request (process
+                                    "completions"
+                                    (list :frameId frame-id
+                                          :text str
+                                          :column column
+                                          :line 1))
             (setq collection
                   (append
                    collection
@@ -2398,18 +2395,17 @@ interactively or if SELECT-BUFFER is non nil."
                                  (propertize type
                                              'face 'font-lock-type-face)))))
                     (plist-get body :targets))))
-            (setq done t)))
+            (setq done t))
           (while-no-input
             (while (not done)
-              (accept-process-output nil 0 1)))
-          collection)))
+              (accept-process-output nil 0 1))))
+        collection))
      :annotation-function
      (lambda (str)
        (when-let ((annotation
                    (alist-get (substring-no-properties str) collection
                               nil nil 'equal)))
          annotation)))))
-
 
 (defvar dape--repl--prompt "> "
   "Dape repl prompt.")
