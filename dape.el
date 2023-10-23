@@ -142,6 +142,7 @@ The hook is run with one argument, the compilation buffer."
     ("out" . dape-step-out)
     ("restart" . dape-restart)
     ("kill" . dape-kill)
+    ("disconnect" . dape-disconnect-quit)
     ("quit" . dape-quit))
   "Dape commands available in REPL buffer."
   :type '(alist :key-type string
@@ -371,6 +372,7 @@ If PULSE pulse on after opening file."
   (when-let ((marker (dape--object-to-marker plist)))
     (let ((window
            (display-buffer (marker-buffer marker)
+                           ;; TODO Should probably be an custom
                            '(display-buffer-reuse-window
                              display-buffer-pop-up-window))))
       (unless no-select
@@ -405,6 +407,22 @@ DEFAULT specifies which file to return on empty input."
 (defun dape-find-file-buffer-default ()
   "Read filename at project root, defaulting to current buffer."
   (dape-find-file (buffer-file-name)))
+
+(defun dape-read-pid ()
+  "Read pid of active processes if possible."
+  (if-let ((pids (list-system-processes)))
+      (let ((collection
+             (mapcar (lambda (pid)
+                       (let ((args (alist-get 'args (process-attributes pid))))
+                         (cons (concat
+                                (format "%d" pid)
+                                (when args
+                                  (format ": %s" args)))
+                               pid)))
+                     pids)))
+        (alist-get (completing-read "Pid: " collection)
+                   collection nil nil 'equal))
+    (read-number "Pid: ")))
 
 (defun dape--overlay-region (&optional extended)
   "List of beg and end of current line.
@@ -445,6 +463,26 @@ If EXTENDED end of line is after newline."
           (when line
             (format ":%d"
                     line))))
+
+(defun dape--kill-processes ()
+  "Kill all Dape related process."
+  (ignore-errors
+    (and dape--process
+         (delete-process dape--process))
+    (and dape--server-process
+         (delete-process dape--server-process))
+    (and dape--parent-process
+         (delete-process dape--parent-process))))
+
+(defun dape--kill-buffers ()
+  "Kill all Dape related buffers."
+  (thread-last (buffer-list)
+               (seq-filter (lambda (buffer)
+                             (string-match-p "\\*dape-.+\\*" (buffer-name buffer))))
+               (seq-do (lambda (buffer)
+                         (when-let ((window (get-buffer-window buffer)))
+                           (delete-window window))
+                         (kill-buffer buffer)))))
 
 
 ;;; Process and parsing
@@ -490,6 +528,12 @@ If NOWARN does not error on no active process."
   "Sentinel for dape processes."
   (unless (process-live-p process)
     (dape--remove-stack-pointers)
+    (dape--variable-remove-overlays)
+    ;; Clean mode-line after 2 seconds
+    (run-with-timer 2 nil (lambda ()
+                            (unless (dape--live-process t)
+                              (setq dape--process nil)
+                              (force-mode-line-update t))))
     (dape--debug 'info "\nProcess %S exited with %d"
                  (process-command process)
                  (process-exit-status process))))
@@ -534,7 +578,8 @@ If NOWARN does not error on no active process."
 
 (defun dape--process-filter (process string)
   "Filter for dape processes."
-  (when-let ((input-buffer (process-buffer process))
+  (when-let (((process-live-p process))
+             (input-buffer (process-buffer process))
              (buffer (current-buffer)))
     (with-current-buffer input-buffer
       (goto-char (point-max))
@@ -552,7 +597,8 @@ If NOWARN does not error on no active process."
                              (dape--debug 'std-server
                                           "%s"
                                           (buffer-substring start (match-beginning 0)))
-                             (delete-region start (match-beginning 0)))
+                             (when (buffer-live-p input-buffer)
+                               (delete-region start (match-beginning 0))))
                            (json-parse-buffer :object-type 'plist
                                               :null-object nil
                                               :false-object nil))
@@ -571,7 +617,11 @@ If NOWARN does not error on no active process."
         (unless parser-error
           ;; Parser error is probably because of incomplete json
           ;; We just need more bytes, if that's not the case we are screwed
-          (delete-region (point-min) (point)))))))
+
+          ;; This seams like we are living a bit dangerous. If input buffer
+          ;; is killed we are going to erase some random buffer
+          (when (buffer-live-p input-buffer)
+            (delete-region (point-min) (point))))))))
 
 
 ;;; Outgoing requests
@@ -1024,10 +1074,10 @@ Starts a new process as per request of the debug adapter."
 
 (cl-defmethod dape-handle-event (_process (_event (eql continued)) body)
   "Handle continued events."
+  (dape--update-state "running")
   (dape--remove-stack-pointers)
   (unless dape--thread-id
-    (setq dape--thread-id (plist-get body :threadId)))
-  (dape--update-state "running"))
+    (setq dape--thread-id (plist-get body :threadId))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql output)) body)
   "Handle output events."
@@ -1052,8 +1102,8 @@ Starts a new process as per request of the debug adapter."
 (cl-defmethod dape-handle-event (_process (_event (eql terminated)) _body)
   "Handle terminated events."
   (dape--update-state "terminated")
-  (dape--repl-insert-text "* Program terminated *\n" 'italic)
-  (dape--remove-stack-pointers))
+  (dape--remove-stack-pointers)
+  (dape--repl-insert-text "* Program terminated *\n" 'italic))
 
 
 ;;; Startup/Setup
@@ -1196,24 +1246,7 @@ Starts a new process as per request of the debug adapter."
 (defun dape-kill ()
   "Kill debug session."
   (interactive)
-  (let* (done
-         (kill-processes
-          (lambda (&rest _)
-            (ignore-errors
-              (and dape--process
-                   (delete-process dape--process))
-              (and dape--server-process
-                   (delete-process dape--server-process))
-              (and dape--parent-process
-                   (delete-process dape--parent-process)))
-            (dape--remove-stack-pointers)
-            (dape--variable-remove-overlays)
-            ;; Clean mode-line after 2 seconds
-            (run-with-timer 2 nil (lambda ()
-                                    (unless (dape--live-process t)
-                                      (setq dape--process nil)
-                                      (force-mode-line-update t))))
-            (setq done t))))
+  (let (done)
     (cond
      ((and (dape--live-process t)
            (plist-get dape--capabilities
@@ -1221,14 +1254,16 @@ Starts a new process as per request of the debug adapter."
       (dape-request dape--process
                     "terminate"
                     nil
-                    kill-processes)
+                    (dape--callback
+                     (dape--kill-processes)
+                     (setq done t)))
       ;; Busy wait for response at least 2 seconds
       (cl-loop with max-iterations = 20
                for i from 1 to max-iterations
                until done
                do (accept-process-output nil 0.1)
                finally (unless done
-                         (funcall kill-processes)
+                         (dape--kill-processes)
                          (dape--debug 'error
                                       "Terminate request timed out"))))
      ((and (dape--live-process t)
@@ -1238,30 +1273,38 @@ Starts a new process as per request of the debug adapter."
                     "disconnect"
                     (list
                      :terminateDebuggee t)
-                    kill-processes)
+                    (dape--callback
+                     (dape--kill-processes)
+                     (setq done t)))
       ;; Busy wait for response at least 2 seconds
       (cl-loop with max-iterations = 20
                for i from 1 to max-iterations
                until done
                do (accept-process-output nil 0.1)
                finally (unless done
-                         (funcall kill-processes)
+                         (dape--kill-processes)
                          (dape--debug 'error
                                       "Disconnect request timed out"))))
      (t
-      (funcall kill-processes)))))
+      (dape--kill-processes)))))
+
+(defun dape-disconnect-quit ()
+  "Kill adapter but try to keep debuggee live.
+This will leave a decoupled debuggee process with no debugge
+ connection."
+  (interactive)
+  (dape-request (dape--live-process)
+                "disconnect"
+                (list :terminateDebuggee nil)
+                (dape--callback
+                 (dape--kill-processes)
+                 (dape--kill-buffers))))
 
 (defun dape-quit ()
   "Kill debug session and kill related dape buffers."
   (interactive)
   (dape-kill)
-  (thread-last (buffer-list)
-               (seq-filter (lambda (buffer)
-                             (string-match-p "\\*dape-.+\\*" (buffer-name buffer))))
-               (seq-do (lambda (buffer)
-                         (when-let ((window (get-buffer-window buffer)))
-                           (delete-window window))
-                         (kill-buffer buffer)))))
+  (dape--kill-buffers))
 
 (defun dape-toggle-breakpoint ()
   "Add or remove breakpoint at current line.
@@ -2685,6 +2728,7 @@ See `eldoc-documentation-functions', for more infomation."
     (define-key map "t" #'dape-select-thread)
     (define-key map "S" #'dape-select-stack)
     (define-key map "w" #'dape-watch-dwim)
+    (define-key map "D" #'dape-disconnect-quit)
     (define-key map "q" #'dape-quit)
     map))
 
