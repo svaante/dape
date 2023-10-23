@@ -307,7 +307,7 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
                          (dolist (thread dape--threads)
                            (plist-put thread :status "running"))
                          (dape--info-update-threads-widget)))))
-    (message "No live debug adapter process")))
+    (user-error "No stopped threads")))
 
 (defun dape--thread-id-object ()
   "Helper to construct a thread id object."
