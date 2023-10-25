@@ -113,7 +113,7 @@ The hook is run with one argument, the compilation buffer."
   "Show variable values inline."
   :type 'boolean)
 
-(defcustom dape-main-functions '("main")
+(defcustom dape-main-functions nil
   "Functions to set breakpoints at startup if no other breakpoints are set."
   :type '(repeat string))
 
