@@ -2338,7 +2338,7 @@ interactively or if SELECT-BUFFER is non nil."
                               return value))))
       (setq dape--repl-insert-text-guard t)
       (comint-output-filter dummy-process "\n> ")
-      (funcall cmd)
+      (call-interactively cmd)
       (setq dape--repl-insert-text-guard nil))
      ;; Evaluate expression
      ((dape--stopped-threads)
@@ -2604,7 +2604,11 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
   (let ((modes (plist-get config 'modes)))
     (or (not modes)
         (apply 'provided-mode-derived-p
-               major-mode (cl-map 'list 'identity modes)))))
+               major-mode (cl-map 'list 'identity modes))
+        (and (not (derived-mode-p 'prog-mode))
+             (cl-some (lambda (mode)
+                        (memql mode (plist-get dape--config 'modes)))
+                      modes)))))
 
 (defun dape--read-config ()
   "Read config name and options."
