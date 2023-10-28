@@ -1,4 +1,4 @@
-;;; dape.el -- Debug Adapter Protocol for Emacs -*- lexical-binding: t -*-
+;;; dape.el --- Debug Adapter Protocol for Emacs -*- lexical-binding: t -*-
 
 ;; Author: Daniel Pettersson
 ;; Created: 2023
