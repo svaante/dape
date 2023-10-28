@@ -104,18 +104,24 @@ Functions and symbols in configuration:
   "Prefix of all dape commands."
   :type 'key)
 
+(defcustom dape-display-source-buffer-action
+  '(display-buffer-reuse-window
+    display-buffer-same-window)
+  "`display-buffer' action used when displaying source buffer."
+  :type 'sexp)
+
 (defcustom dape-on-start-hooks '(dape-info dape-repl)
   "Hook to run on session start.
 The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
-(defcustom dape-inline-variables nil
-  "Show variable values inline."
-  :type 'boolean)
-
 (defcustom dape-main-functions nil
   "Functions to set breakpoints at startup if no other breakpoints are set."
   :type '(repeat string))
+
+(defcustom dape-read-memory-default-count 1024
+  "The default count for `dape-read-memory'."
+  :type 'natnum)
 
 (defcustom dape-info-buttons
   '(("next" . dape-next)
@@ -129,9 +135,21 @@ The hook is run with one argument, the compilation buffer."
   :type '(alist :key-type string
                 :value-type function))
 
-(defcustom dape-read-memory-default-count 1024
-  "The default count for `dape-read-memory'."
-  :type 'natnum)
+(defcustom dape-info-buffer-variable-format 'line
+  "How variables are formatted in *dape-info* buffer."
+  :type '(choice (const :tag "Truncate string at new line" line)
+                 (const :tag "No formatting" nil)))
+
+
+(defcustom dape-info-display-buffer-action
+  '((display-buffer-in-side-window)
+    . ((side . left)))
+  "`display-buffer' action used when displaying *dape-info* buffer."
+  :type 'sexp)
+
+(defcustom dape-repl-use-shorthand nil
+  "Dape `dape-repl-commands' can be invokend with first char of command."
+  :type 'boolean)
 
 (defcustom dape-repl-commands
   '(("debug" . dape)
@@ -148,6 +166,29 @@ The hook is run with one argument, the compilation buffer."
   :type '(alist :key-type string
                 :value-type function))
 
+(defcustom dape-repl-display-buffer-action
+  '((display-buffer-reuse-window
+      display-buffer-in-side-window)
+    . ((side . bottom)
+       (slot . -1)))
+  "`display-buffer' action used when displaying *dape-repl* buffer."
+  :type 'sexp)
+
+(defcustom dape-run-in-terminal-display-buffer-action
+  '((display-buffer-in-side-window) .
+    '((side . bottom)
+      (slot . 1)))
+  "`display-buffer' action used when displaying run in terminal buffer."
+  :type 'sexp)
+
+(defcustom dape-inline-variables nil
+  "Show variable values inline."
+  :type 'boolean)
+
+(defcustom dape-inline-variable-length 30
+  "Maximum length of inline variable overlays."
+  :type 'natnum)
+
 (defcustom dape-compile-fn #'compile
   "Function to run compile with."
   :type 'function)
@@ -161,25 +202,13 @@ The hook is run with one argument, the compilation buffer."
 The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
-(defcustom dape-repl-use-shorthand nil
-  "Dape `dape-repl-commands' can be invokend with first char of command."
-  :type 'boolean)
-
-(defcustom dape-inline-variable-length 30
-  "Maximum length of inline variable overlays."
-  :type 'natnum)
-
-(defcustom dape-info-buffer-variable-format 'line
-  "How variables are formatted in *dape-info* buffer."
-  :type '(choice (const :tag "Truncate string at new line" line)
-                 (const :tag "No formatting" nil)))
-
 (defcustom dape--debug-on '(io info error std-server)
   "Types of logs should be printed to *dape-debug*."
   :type '(set (const :tag "dap IO" io)
               (const :tag "info logging" info)
               (const :tag "error logging" error)
               (const :tag "dap tcp server stdout" std-server)))
+
 
 ;;; Face
 
@@ -372,9 +401,7 @@ If PULSE pulse on after opening file."
   (when-let ((marker (dape--object-to-marker plist)))
     (let ((window
            (display-buffer (marker-buffer marker)
-                           ;; TODO Should probably be an custom
-                           '(display-buffer-reuse-window
-                             display-buffer-pop-up-window))))
+                           dape-display-source-buffer-action)))
       (unless no-select
         (select-window window))
       (with-current-buffer (marker-buffer marker)
@@ -1000,9 +1027,7 @@ Starts a new process to run process to be debugged."
                           " ")
                          buffer
                          buffer)
-    (display-buffer buffer '((display-buffer-in-side-window) .
-                             '((side . bottom)
-                               (slot . 1))))))
+    (display-buffer buffer dape-run-in-terminal-display-buffer-action)))
 
 (cl-defmethod dape-handle-request (_process (_command (eql startDebugging)) arguments)
   "Handle startDebugging requests.
@@ -2279,8 +2304,7 @@ interactively or if SELECT-BUFFER is non nil."
                            :expander 'dape--expand-exceptions-widget))
       (widget-setup))
     (setq window (display-buffer buffer
-                                 '((display-buffer-in-side-window)
-                                   . ((side . left)))))
+                                 dape-info-display-buffer-action))
     (when select-buffer
       (select-window window)
       (goto-char (point-min)))))
@@ -2504,10 +2528,7 @@ Empty input will rerun last command.\n\n\n"
       (unless dape-repl-mode
         (dape-repl-mode))
       (setq window (display-buffer (current-buffer)
-                                   '((display-buffer-reuse-window
-                                      display-buffer-in-side-window)
-                                     . ((side . bottom)
-                                        (slot . -1)))))
+                                   dape-repl-display-buffer-action))
       (when (called-interactively-p 'interactive)
         (select-window window)))))
 
