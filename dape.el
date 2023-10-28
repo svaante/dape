@@ -147,7 +147,7 @@ The hook is run with one argument, the compilation buffer."
   "`display-buffer' action used when displaying *dape-info* buffer."
   :type 'sexp)
 
-(defcustom dape-repl-use-shorthand nil
+(defcustom dape-repl-use-shorthand t
   "Dape `dape-repl-commands' can be invokend with first char of command."
   :type 'boolean)
 

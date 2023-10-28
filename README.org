@@ -49,9 +49,6 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; By default dape uses gdb keybinding prefix
     ;; (setq dape-key-prefix "\C-x\C-a")
 
-    ;; Use n for next etc. in REPL
-    ;; (setq dape-repl-use-shorthand t)
-
     ;; Kill compile buffer on build success
     ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
 
