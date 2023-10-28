@@ -2604,10 +2604,15 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
 
 (defun dape--config-diff (name post-eval)
   "Create a diff of config NAME and POST-EVAL config."
-  (let ((pre-eval (alist-get name dape-configs)))
+  (let ((base-config (alist-get name dape-configs)))
     (cl-loop for (key value) on post-eval by 'cddr
-             unless (equal (dape--config-eval-value (plist-get pre-eval key) t)
-                           value)
+             unless (and
+                     ;; Does the key exist in `base-config'?
+                     (plist-member base-config key)
+                     ;; Has value changed?
+                     (equal (dape--config-eval-value (plist-get base-config key)
+                                                     t)
+                            value))
              append (list key value))))
 
 (defun dape--config-to-string (name post-eval-config)
