@@ -727,20 +727,16 @@ See `dape--callback' for expected function signature."
 (defun dape--launch-or-attach (process)
   "Send launch or attach request to PROCESS.
 Uses `dape--config' to derive type and to construct request."
-  (if-let ((request (plist-get dape--config :request)))
-      (dape-request process
-                    request
-                    (append
-                     (cl-loop for (key value) on dape--config by 'cddr
-                              when (keywordp key)
-                              append (list key value))
-                     (plist-get dape--config 'start-debugging))
-                    (dape--callback
-                     (when (plist-get dape--config 'start-debugging)
-                       (plist-put dape--config 'start-debugging nil))))
-    (user-error "Need to specify request in config `%S'"
-                dape--config)
-    (dape-kill)))
+  (dape-request process
+                (or (plist-get dape--config :request) "launch")
+                (append
+                 (cl-loop for (key value) on dape--config by 'cddr
+                          when (keywordp key)
+                          append (list key value))
+                 (plist-get dape--config 'start-debugging))
+                (dape--callback
+                 (when (plist-get dape--config 'start-debugging)
+                   (plist-put dape--config 'start-debugging nil)))))
 
 (defun dape--set-breakpoints (process buffer breakpoints &optional cb)
   "Set BREAKPOINTS in BUFFER by send setBreakpoints request to PROCESS.
@@ -1167,6 +1163,7 @@ Starts a new process as per request of the debug adapter."
   (let ((buffer (dape--get-buffer))
         (default-directory (or (plist-get config 'command-cwd)
                                default-directory))
+        (host (or (plist-get config 'host) "localhost"))
         (retries 30)
         process)
     (when (and (plist-get config 'command)
@@ -1191,7 +1188,7 @@ Starts a new process as per request of the debug adapter."
         (setq process
               (make-network-process :name (symbol-name name)
                                     :buffer buffer
-                                    :host (plist-get config 'host)
+                                    :host host
                                     :coding 'utf-8-emacs-unix
                                     :service (plist-get config 'port)
                                     :sentinel 'dape--process-sentinel
@@ -1201,10 +1198,10 @@ Starts a new process as per request of the debug adapter."
       (setq retries (1- retries)))
     (if (zerop retries)
         (user-error "Unable to connect to server %s:%d"
-                    (plist-get config 'host)
+                    host
                     (plist-get config 'port))
       (dape--debug 'info "Connection to server established %s:%s"
-                   (plist-get config 'host) (plist-get config 'port)))
+                   host (plist-get config 'port)))
     (dape--setup process name config)))
 
 (defun dape--start-single-session (name config)
@@ -1486,7 +1483,7 @@ Executes launch `dape-configs' with :program as \"bin\"."
     (cond
      ((and (not skip-compile) (plist-get config 'compile))
       (dape--compile name config))
-     ((and (plist-get config 'host) (plist-get config 'port))
+     ((plist-get config 'port)
       (dape--start-multi-session name config))
      (t
       (dape--start-single-session name config)))))
@@ -2606,13 +2603,14 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
   "Create a diff of config NAME and POST-EVAL config."
   (let ((base-config (alist-get name dape-configs)))
     (cl-loop for (key value) on post-eval by 'cddr
-             unless (and
-                     ;; Does the key exist in `base-config'?
-                     (plist-member base-config key)
-                     ;; Has value changed?
-                     (equal (dape--config-eval-value (plist-get base-config key)
-                                                     t)
-                            value))
+             unless (or (eq key 'modes) ;; Skip modes
+                        (and
+                         ;; Does the key exist in `base-config'?
+                         (plist-member base-config key)
+                         ;; Has value changed?
+                         (equal (dape--config-eval-value (plist-get base-config key)
+                                                         t)
+                                value)))
              append (list key value))))
 
 (defun dape--config-to-string (name post-eval-config)
