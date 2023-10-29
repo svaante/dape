@@ -245,8 +245,6 @@ The hook is run with one argument, the compilation buffer."
 
 ;;; Vars
 
-(defvar dape--name nil
-  "Current session `dape-config' identifier.")
 (defvar dape--config nil
   "Current session configuration plist.")
 (defvar dape--timers nil
@@ -312,13 +310,13 @@ The hook is run with one argument, the compilation buffer."
 ;;; Utils
 
 (defmacro dape--callback (&rest body)
-  "Ergonomics for `dape-request' callback."
+  "Create callback lambda for `dape-request' with BODY."
   `(lambda (&optional process body success msg)
      (ignore process body success msg)
      ,@body))
 
 (defmacro dape--with (request-fn args &rest body)
-  "Ergonomics for `dape-request'."
+  "Call `dape-request' like REQUEST-FN with ARGS and BODY."
   (declare (indent 2))
   `(,request-fn ,@args (dape--callback ,@body)))
 
@@ -552,7 +550,7 @@ If NOWARN does not error on no active process."
       (user-error "No debug process live"))))
 
 (defun dape--process-sentinel (process _msg)
-  "Sentinel for dape processes."
+  "Sentinel for Dape processes."
   (unless (process-live-p process)
     (dape--remove-stack-pointers)
     (dape--variable-remove-overlays)
@@ -604,7 +602,7 @@ If NOWARN does not error on no active process."
       (_ (dape--debug 'info "No handler for type %s" type)))))
 
 (defun dape--process-filter (process string)
-  "Filter for dape processes."
+  "Filter for Dape processes."
   (when-let (((process-live-p process))
              (input-buffer (process-buffer process))
              (buffer (current-buffer)))
@@ -1029,8 +1027,7 @@ Starts a new process to run process to be debugged."
   "Handle startDebugging requests.
 Starts a new process as per request of the debug adapter."
   (setq dape--parent-process dape--process)
-  (dape dape--name
-        (plist-put dape--config
+  (dape (plist-put dape--config
                    'start-debugging
                    (plist-get arguments :configuration))))
 
@@ -1129,11 +1126,10 @@ Starts a new process as per request of the debug adapter."
 
 ;;; Startup/Setup
 
-(defun dape--setup (process name config)
+(defun dape--setup (process config)
   "Helper for dape--start-* functions."
   (dape--remove-stack-pointers)
-  (setq dape--name name
-        dape--config config
+  (setq dape--config config
         dape--seq 0
         dape--seq-event 0
         dape--timers (make-hash-table)
@@ -1157,8 +1153,8 @@ Starts a new process as per request of the debug adapter."
         (erase-buffer)))
     buffer))
 
-(defun dape--start-multi-session (name config)
-  "Start multi session for NAME with CONFIG."
+(defun dape--start-multi-session (config)
+  "Start multi session for CONFIG."
   (dape--debug 'info "Starting new multi session")
   (let ((buffer (dape--get-buffer))
         (default-directory (or (plist-get config 'command-cwd)
@@ -1169,7 +1165,7 @@ Starts a new process as per request of the debug adapter."
     (when (and (plist-get config 'command)
                (not (plist-get config 'start-debugging)))
       (setq dape--server-process
-            (make-process :name "Dape server"
+            (make-process :name "Dape adapter"
                           :command (cons (plist-get config 'command)
                                          (cl-map 'list 'identity
                                                  (plist-get config 'command-args)))
@@ -1186,7 +1182,7 @@ Starts a new process as per request of the debug adapter."
                 (> retries 0))
       (ignore-errors
         (setq process
-              (make-network-process :name (symbol-name name)
+              (make-network-process :name "Dape adapter connection"
                                     :buffer buffer
                                     :host host
                                     :coding 'utf-8-emacs-unix
@@ -1202,16 +1198,16 @@ Starts a new process as per request of the debug adapter."
                     (plist-get config 'port))
       (dape--debug 'info "Connection to server established %s:%s"
                    host (plist-get config 'port)))
-    (dape--setup process name config)))
+    (dape--setup process config)))
 
-(defun dape--start-single-session (name config)
-  "Start single session for NAME with CONFIG."
+(defun dape--start-single-session (config)
+  "Start single session for CONFIG."
   (dape--debug 'info "Starting new single session")
   (let ((buffer (dape--get-buffer))
         (default-directory (or (plist-get config 'command-cwd)
                                default-directory))
         process)
-    (setq process (make-process :name (symbol-name name)
+    (setq process (make-process :name "Dape adapter"
                                 :command (cons (plist-get config 'command)
                                                (cl-map 'list 'identity
                                                        (plist-get config 'command-args)))
@@ -1222,7 +1218,7 @@ Starts a new process as per request of the debug adapter."
                                 :buffer buffer
                                 :noquery t))
     (dape--debug 'info "Process started %S" (process-command process))
-    (dape--setup process name config)))
+    (dape--setup process config)))
 
 
 ;;; Commands
@@ -1261,8 +1257,8 @@ Starts a new process as per request of the debug adapter."
     (setq dape--threads nil)
     (setq dape--thread-id nil)
     (dape-request dape--process "restart" nil))
-   ((and dape--name dape--config)
-    (dape dape--name dape--config))
+   ((and dape--config)
+    (dape dape--config))
    ((user-error "Unable to derive session to restart"))))
 
 (defun dape-kill ()
@@ -1455,38 +1451,35 @@ Watched symbols are displayed in *dape-info* buffer.
   (dape--info-update-widget dape--watched-widget))
 
 ;;;###autoload
-(defun dape (name options &optional skip-compile)
+(defun dape (config &optional skip-compile)
   "Start debugging session.
-
-Start a debugging session based on NAME in `dape-configs' alist.
-Entries in plist OPTIONS override config specified by NAME.
+Start a debugging session for CONFIG.
 See `dape-configs' for more information on CONFIG.
 
 When called as an interactive command, the first symbol like
-string is read as NAME and rest as element in CONFIG.
-
-Use SKIP-COMPILE to skip compilation option.
+is read as key in the `dape-configs' alist and rest as elements
+which override value plist in `dape-configs'.
 
 Interactive example:
   launch :program \"bin\"
 
-Executes launch `dape-configs' with :program as \"bin\"."
-  (interactive (dape--read-config))
-  (unless (plist-get options 'start-debugging)
-    (dape-kill))
-  (let ((config (dape--config-eval name options)))
-    (unless (plist-get options 'start-debugging)
-      (when-let ((buffer (get-buffer "*dape-debug*")))
-        (with-current-buffer buffer
-          (let ((inhibit-read-only t))
-            (erase-buffer)))))
-    (cond
-     ((and (not skip-compile) (plist-get config 'compile))
-      (dape--compile name config))
-     ((plist-get config 'port)
-      (dape--start-multi-session name config))
-     (t
-      (dape--start-single-session name config)))))
+Executes alist key `launch' in `dape-configs' with :program as \"bin\".
+
+Use SKIP-COMPILE to skip compilation."
+  (interactive (list (dape--read-config)))
+  (unless (plist-get config 'start-debugging)
+    (dape-kill)
+    (when-let ((buffer (get-buffer "*dape-debug*")))
+      (with-current-buffer buffer
+        (let ((inhibit-read-only t))
+          (erase-buffer)))))
+  (cond
+   ((and (not skip-compile) (plist-get config 'compile))
+    (dape--compile config))
+   ((plist-get config 'port)
+    (dape--start-multi-session config))
+   (t
+    (dape--start-single-session config))))
 
 
 ;;; Compile
@@ -1498,16 +1491,15 @@ Removes itself on execution."
   (cond
    ((equal "finished\n" str)
     (run-hook-with-args 'dape-compile-compile-hooks buffer)
-    (dape dape--name dape--config 'skip-compile))
+    (dape dape--config 'skip-compile))
    (t
     (dape--repl-insert-text (format "* Compilation failed %s *\n" str)))))
 
-(defun dape--compile (name config)
-  "Start compilation for NAME and CONFIG."
+(defun dape--compile (config)
+  "Start compilation for CONFIG."
   (let ((default-directory (plist-get config :cwd))
         (command (plist-get config 'compile)))
     (setq dape--config config)
-    (setq dape--name name)
     (add-hook 'compilation-finish-functions #'dape--compile-compilation-finish)
     (funcall dape-compile-fn command)))
 
@@ -2570,12 +2562,12 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
                                                          (or for-adapter
                                                              (keywordp key))))))))
 
-(defun dape--config-eval (name options)
-  "Evaluate Dape config with NAME and OPTIONS."
-  (let ((base-config (alist-get name dape-configs)))
+(defun dape--config-eval (key options)
+  "Evaluate Dape config with KEY and OPTIONS."
+  (let ((base-config (alist-get key dape-configs)))
     (unless base-config
       (user-error "Unable to find `%s' in `dape-configs', available configurations: %s"
-                  name (mapconcat (lambda (e) (symbol-name (car e)))
+                  key (mapconcat (lambda (e) (symbol-name (car e)))
                                   dape-configs ", ")))
     (dape--config-eval-1 (seq-reduce (apply-partially 'apply 'plist-put)
                                      (seq-partition options 2)
@@ -2599,9 +2591,9 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
              do (setq base-config (plist-put base-config key value)))
     (list name base-config)))
 
-(defun dape--config-diff (name post-eval)
-  "Create a diff of config NAME and POST-EVAL config."
-  (let ((base-config (alist-get name dape-configs)))
+(defun dape--config-diff (key post-eval)
+  "Create a diff of config KEY and POST-EVAL config."
+  (let ((base-config (alist-get key dape-configs)))
     (cl-loop for (key value) on post-eval by 'cddr
              unless (or (eq key 'modes) ;; Skip modes
                         (and
@@ -2613,10 +2605,10 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
                                 value)))
              append (list key value))))
 
-(defun dape--config-to-string (name post-eval-config)
-  "Create string from NAME and POST-EVAL-CONFIG."
-  (let ((config-diff (dape--config-diff name post-eval-config)))
-    (concat (format "%s" name)
+(defun dape--config-to-string (key post-eval-config)
+  "Create string from KEY and POST-EVAL-CONFIG."
+  (let ((config-diff (dape--config-diff key post-eval-config)))
+    (concat (format "%s" key)
             (and-let* ((config-diff) (config-str (prin1-to-string config-diff)))
               (format " %s"
                       (substring config-str
@@ -2635,14 +2627,14 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
                       modes)))))
 
 (defun dape--read-config ()
-  "Read config name and options."
+  "Read Dape config."
   (if (null dape-configs)
       (customize-variable 'dape-configs)
     (let ((candidate
-           (completing-read "Dape config: "
+           (completing-read "Run adapter: "
                              (mapcan
                               (lambda (name-config)
-                                (let* ((config (cdr name-config)))
+                                (let* ((config (cdr-safe name-config)))
                                   (when (dape--config-mode-p config)
                                     (list (car name-config)))))
                               (append dape--config-history dape-configs))
@@ -2660,7 +2652,7 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
         ;; HACK Set evaled config as the first history element
         (setq dape-history (cons string-repr dape-history))
         (push (cons string-repr evaled-config) dape--config-history)
-        (list name evaled-config)))))
+        evaled-config))))
 
 
 ;;; Hover
