@@ -303,9 +303,6 @@ The hook is run with one argument, the compilation buffer."
 (defvar dape--repl-insert-text-guard nil
   "Guard var for *dape-repl* buffer text updates.")
 
-(defvar dape--config-history nil
-  "History of used dape configs.  See `dape--read-config'.")
-
 
 ;;; Utils
 
@@ -2526,6 +2523,9 @@ Empty input will rerun last command.\n\n\n"
 
 (defvar dape-history nil
   "History variable for `dape'.")
+(defvar dape-session-history nil
+  "Current sessions `dape--read-config' history.
+Used to derive initial-contents in `dape--read-config'.")
 
 (defun dape--config-eval-value (value &optional skip-function for-adapter)
   "Evaluate dape config VALUE.
@@ -2537,8 +2537,8 @@ apply."
                           (funcall-interactively value)))
    ((plistp value) (dape--config-eval-1 value skip-function for-adapter))
    ((vectorp value) (cl-map 'vector
-                            (lambda (v)
-                              (dape--config-eval-value v
+                            (lambda (value)
+                              (dape--config-eval-value value
                                                        skip-function
                                                        for-adapter))
                             value))
@@ -2626,32 +2626,83 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
                         (memql mode (plist-get dape--config 'modes)))
                       modes)))))
 
+(defun dape--config-completion-at-point ()
+  "Function for `completion-at-point' fn for `dape--read-config'."
+  (pcase-let ((`(,key . ,args) (ignore-errors
+                                 (read (format "(%s)" (thing-at-point 'line)))))
+              (symbol-bounds (bounds-of-thing-at-point 'symbol))
+              (line-bounds (bounds-of-thing-at-point 'line))
+              (whitespace-bounds (bounds-of-thing-at-point 'whitespace)))
+    (cond
+     ;; Complete config key
+     ((or (not key)
+          (and (not args) symbol-bounds))
+      (let ((bounds (or line-bounds (cons (point) (point)))))
+      (list (car bounds) (cdr bounds)
+            (mapcar (lambda (name) (format "%s " name))
+                    dape--minibuffer-suggested-configs))))
+     ;; Complete config args
+     ((and (alist-get key dape-configs)
+           (or (and (not (plistp args))
+                    symbol-bounds)
+               (and (plistp args)
+                    whitespace-bounds)))
+      (let ((args (if symbol-bounds
+                      (nreverse (cdr (nreverse args)))
+                    args))
+            (bounds (or symbol-bounds (cons (point) (point))))
+            (base-config (append (alist-get key dape-configs)
+                                 (cons 'compile nil))))
+        (list (car bounds) (cdr bounds)
+              (cl-loop for (key value) on base-config by 'cddr
+                       unless (plist-member args key)
+                       when (or (eq key 'compile) (keywordp key))
+                       collect (format "%s " key))))))))
+
+(defvar dape--minibuffer-suggested-configs nil
+  "Suggested configurations in minibuffer.")
+
 (defun dape--read-config ()
-  "Read Dape config."
-  (if (null dape-configs)
-      (customize-variable 'dape-configs)
-    (let ((candidate
-           (completing-read "Run adapter: "
-                             (mapcan
-                              (lambda (name-config)
-                                (let* ((config (cdr-safe name-config)))
-                                  (when (dape--config-mode-p config)
-                                    (list (car name-config)))))
-                              (append dape--config-history dape-configs))
-                            nil nil nil 'dape-history))
-          name config)
-      (if-let ((base-config (alist-get (intern candidate) dape-configs)))
-          (setq name (intern candidate)
-                config base-config)
-        (pcase-let ((`(,p-name ,p-config)
-                     (dape--config-from-string candidate)))
-          (setq name p-name
-                config p-config)))
-      (let* ((evaled-config (dape--config-eval name config))
-             (string-repr (dape--config-to-string name evaled-config)))
-        ;; HACK Set evaled config as the first history element
-        (setq dape-history (cons string-repr dape-history))
-        (push (cons string-repr evaled-config) dape--config-history)
+  "Read config from minibuffer.
+Initial contents defaults to valid configuration if there is only one
+or last mode valid history item from this session.
+
+See `dape--config-mode-p' how \"valid\" is defined."
+  (let* ((suggested-configs
+          (cl-loop for (key . config) in dape-configs
+                   if (dape--config-mode-p config)
+                   collect key))
+         (initial-contents
+          (or
+           ;; Take first valid history item from session
+           (seq-find (lambda (str)
+                          (ignore-errors
+                            (memql (car (dape--config-from-string str))
+                                   suggested-configs)))
+                        dape-session-history)
+           ;; Take first suggested config if only one exist
+           (and (length= suggested-configs 1)
+                (symbol-name (car suggested-configs))))))
+    (minibuffer-with-setup-hook
+        (lambda ()
+          (setq-local dape--minibuffer-suggested-configs suggested-configs)
+          (set-syntax-table emacs-lisp-mode-syntax-table)
+          (add-hook 'completion-at-point-functions
+                    #'dape--config-completion-at-point nil t))
+      (pcase-let* ((str (read-from-minibuffer "Run adapter: "
+                                              initial-contents
+                                              read--expression-map nil
+                                              'dape-history
+                                              initial-contents))
+                   (`(,key ,config) (dape--config-from-string
+                                     (substring-no-properties str)))
+                   (evaled-config (dape--config-eval key config)))
+        (setq dape-session-history
+              (cons (dape--config-to-string key evaled-config)
+                    dape-session-history))
+        (setq dape-history
+              (cons (dape--config-to-string key evaled-config)
+                    dape-history))
         evaled-config))))
 
 
