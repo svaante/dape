@@ -1270,6 +1270,8 @@ Starts a new process as per request of the debug adapter."
 (defun dape-kill (&optional busy-wait)
   "Kill debug session."
   (interactive)
+  (dolist (timer (hash-table-values dape--timers))
+    (cancel-timer timer))
   (let (done)
     (cond
      ((and (dape--live-process t)
@@ -1291,13 +1293,13 @@ Starts a new process as per request of the debug adapter."
                            (dape--kill-processes)
                            (dape--debug 'error
                                         "Terminate request timed out")))))
-     ((and (dape--live-process t)
-           (plist-get dape--capabilities
-                      :supportTerminateDebuggee))
+     ((dape--live-process t)
       (dape-request dape--process
                     "disconnect"
-                    (list
-                     :terminateDebuggee t)
+                    `(:restart nil .
+                               ,(when (plist-get dape--capabilities
+                                                 :supportTerminateDebuggee)
+                                  (list :terminateDebuggee t)))
                     (dape--callback
                      (dape--kill-processes)
                      (setq done t)))
@@ -1329,7 +1331,7 @@ This will leave a decoupled debuggee process with no debugge
 (defun dape-quit ()
   "Kill debug session and kill related dape buffers."
   (interactive)
-  (dape-kill)
+  (dape-kill 'busy-wait)
   (dape--kill-buffers))
 
 (defun dape-toggle-breakpoint ()
