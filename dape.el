@@ -2493,7 +2493,9 @@ interactively or if SELECT-BUFFER is non nil."
   ;; Stolen from ielm
   ;; Start a dummy process just to please comint
   (unless (comint-check-proc (current-buffer))
-    (start-process "dape-repl" (current-buffer) nil)
+    (let ((process
+           (start-process "dape-repl" (current-buffer) nil)))
+      (add-hook 'kill-buffer-hook (lambda () (delete-process process)) nil t))
     (set-process-query-on-exit-flag (get-buffer-process (current-buffer))
                                     nil)
     (set-process-filter (get-buffer-process (current-buffer))
