@@ -1274,7 +1274,8 @@ Starts a new process as per request of the debug adapter."
    ((user-error "Unable to derive session to restart"))))
 
 (defun dape-kill (&optional cb)
-  "Kill debug session."
+  "Kill debug session.
+CB will be called after adapter termination."
   (interactive)
   (when (hash-table-p dape--timers)
     (dolist (timer (hash-table-values dape--timers))
@@ -1312,6 +1313,7 @@ Starts a new process as per request of the debug adapter."
 This will leave a decoupled debuggee process with no debugge
  connection."
   (interactive)
+  (dape--kill-buffers 'skip-process-buffers)
   (dape-request (dape--live-process)
                 "disconnect"
                 (list :terminateDebuggee nil)
@@ -1322,10 +1324,8 @@ This will leave a decoupled debuggee process with no debugge
 (defun dape-quit ()
   "Kill debug session and kill related dape buffers."
   (interactive)
-  (dape--kill-buffers t)
+  (dape--kill-buffers 'skip-process-buffers)
   (dape-kill (dape--callback
-              ;; We need to kill buffers in cb to prevent killing any adapter
-              ;; process before "disconnect" request has been handled.
               (dape--kill-buffers))))
 
 (defun dape-toggle-breakpoint ()
