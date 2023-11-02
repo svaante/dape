@@ -2308,6 +2308,9 @@ interactively or if SELECT-BUFFER is non nil."
 
 ;;; REPL buffer
 
+(defvar dape--repl-prompt "> "
+  "Dape repl prompt.")
+
 (defun dape--repl-insert-text (msg &optional face)
   "Insert MSG with FACE in *dape-repl* buffer."
   (if (not (get-buffer-window "*dape-repl*"))
@@ -2357,7 +2360,8 @@ interactively or if SELECT-BUFFER is non nil."
                               when (equal (substring key 0 1) input)
                               return value))))
       (setq dape--repl-insert-text-guard t)
-      (comint-output-filter dummy-process "\n> ")
+      (comint-output-filter dummy-process
+                            (concat "\n" dape--repl-prompt))
       (call-interactively cmd)
       (setq dape--repl-insert-text-guard nil))
      ;; Evaluate expression
@@ -2375,13 +2379,15 @@ interactively or if SELECT-BUFFER is non nil."
                                                          (if success
                                                              (plist-get body :result)
                                                            msg)
-                                                         "\n\n> "))
+                                                         "\n\n"
+                                                         dape--repl-prompt))
                                   (setq dape--repl-insert-text-guard nil))))
      (t
       (comint-output-filter
        dummy-process
-       (format "* Unable to send \"%s\" no stopped threads *\n> "
-               input))))))
+       (format "* Unable to send \"%s\" no stopped threads *\n%s"
+               input
+               dape--repl-prompt))))))
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
@@ -2470,8 +2476,6 @@ interactively or if SELECT-BUFFER is non nil."
                               nil nil 'equal)))
          annotation)))))
 
-(defvar dape--repl--prompt "> "
-  "Dape repl prompt.")
 (defvar dape-repl-mode nil)
 
 (define-derived-mode dape-repl-mode comint-mode "Dape REPL"
@@ -2483,7 +2487,7 @@ interactively or if SELECT-BUFFER is non nil."
   (setq-local dape-repl-mode t
               comint-prompt-read-only t
               comint-input-sender 'dape--repl-input-sender
-              comint-prompt-regexp (concat "^" (regexp-quote dape--repl--prompt))
+              comint-prompt-regexp (concat "^" (regexp-quote dape--repl-prompt))
               comint-process-echoes nil)
   (add-hook 'completion-at-point-functions #'dape--repl-completion-at-point nil t)
   ;; Stolen from ielm
@@ -2513,7 +2517,7 @@ Empty input will rerun last command.\n\n\n"
                'font-lock-face 'italic))
     (set-marker (process-mark (get-buffer-process (current-buffer))) (point))
     (comint-output-filter (get-buffer-process (current-buffer))
-                          dape--repl--prompt)))
+                          dape--repl-prompt)))
 
 (defun dape-repl ()
   "Create or select *dape-repl* buffer."
