@@ -281,6 +281,8 @@ The hook is run with one argument, the compilation buffer."
   "Debug adapter communications process.")
 (defvar dape--parent-process nil
   "Debug adapter parent process.  Used for by startDebugging adapters.")
+(defvar dape--restart-in-progress nil
+  "Used for prevent adapter killing when restart request is in flight.")
 
 (defvar dape--tree-widget-open-p (make-hash-table :test 'equal)
   "Hash table of open `dape--tree-widget' widgets.")
@@ -660,7 +662,8 @@ If NOWARN does not error on no active process."
                             (dape--debug 'error
                                          "Timeout for reached for seq %d"
                                          seq)
-                            (dape--update-state "timed out")
+                            (when (dape--live-process t)
+                              (dape--update-state "timed out"))
                             (remhash seq dape--timers)
                             (when-let ((cb (gethash seq dape--cb)))
                               (clrhash dape--tree-widget-open-p)
@@ -1118,7 +1121,9 @@ Starts a new process as per request of the debug adapter."
   "Handle terminated events."
   (dape--update-state "terminated")
   (dape--remove-stack-pointers)
-  (dape--repl-insert-text "* Program terminated *\n" 'italic))
+  (dape--repl-insert-text "* Program terminated *\n" 'italic)
+  (unless dape--restart-in-progress
+    (dape-kill)))
 
 
 ;;; Startup/Setup
@@ -1135,8 +1140,9 @@ Starts a new process as per request of the debug adapter."
         dape--capabilities nil
         dape--threads nil
         dape--stack-id nil
-        dape--process process)
-  (setq dape--widget-guard nil
+        dape--process process
+        dape--restart-in-progress nil
+        dape--widget-guard nil
         dape--repl-insert-text-guard nil)
   (dape--update-state "starting")
   (run-hook-with-args 'dape-on-start-hooks)
@@ -1253,12 +1259,15 @@ Starts a new process as per request of the debug adapter."
          (plist-get dape--capabilities :supportsRestartRequest))
     (setq dape--threads nil)
     (setq dape--thread-id nil)
-    (dape-request dape--process "restart" nil))
+    (setq dape--restart-in-progress t)
+    (dape-request dape--process "restart" nil
+                  (dape--callback
+                   (setq dape--restart-in-progress nil))))
    ((and dape--config)
     (dape dape--config))
    ((user-error "Unable to derive session to restart"))))
 
-(defun dape-kill ()
+(defun dape-kill (&optional busy-wait)
   "Kill debug session."
   (interactive)
   (let (done)
@@ -1272,15 +1281,16 @@ Starts a new process as per request of the debug adapter."
                     (dape--callback
                      (dape--kill-processes)
                      (setq done t)))
-      ;; Busy wait for response at least 2 seconds
-      (cl-loop with max-iterations = 20
-               for i from 1 to max-iterations
-               until done
-               do (accept-process-output nil 0.1)
-               finally (unless done
-                         (dape--kill-processes)
-                         (dape--debug 'error
-                                      "Terminate request timed out"))))
+      (when busy-wait
+        ;; Busy wait for response at least 2 seconds
+        (cl-loop with max-iterations = 20
+                 for i from 1 to max-iterations
+                 until done
+                 do (accept-process-output nil 0.1)
+                 finally (unless done
+                           (dape--kill-processes)
+                           (dape--debug 'error
+                                        "Terminate request timed out")))))
      ((and (dape--live-process t)
            (plist-get dape--capabilities
                       :supportTerminateDebuggee))
@@ -1291,15 +1301,16 @@ Starts a new process as per request of the debug adapter."
                     (dape--callback
                      (dape--kill-processes)
                      (setq done t)))
-      ;; Busy wait for response at least 2 seconds
-      (cl-loop with max-iterations = 20
-               for i from 1 to max-iterations
-               until done
-               do (accept-process-output nil 0.1)
-               finally (unless done
-                         (dape--kill-processes)
-                         (dape--debug 'error
-                                      "Disconnect request timed out"))))
+      (when busy-wait
+        ;; Busy wait for response at least 2 seconds
+        (cl-loop with max-iterations = 20
+                 for i from 1 to max-iterations
+                 until done
+                 do (accept-process-output nil 0.1)
+                 finally (unless done
+                           (dape--kill-processes)
+                           (dape--debug 'error
+                                        "Disconnect request timed out")))))
      (t
       (dape--kill-processes)))))
 
@@ -1465,7 +1476,7 @@ Executes alist key `launch' in `dape-configs' with :program as \"bin\".
 Use SKIP-COMPILE to skip compilation."
   (interactive (list (dape--read-config)))
   (unless (plist-get config 'start-debugging)
-    (dape-kill)
+    (dape-kill 'busy-wait)
     (when-let ((buffer (get-buffer "*dape-debug*")))
       (with-current-buffer buffer
         (let ((inhibit-read-only t))
@@ -2767,10 +2778,7 @@ See `eldoc-documentation-functions', for more infomation."
   "Format Dape mode line."
   (format "Dape:%s"
           (propertize
-           (or (and (dape--live-process t)
-                    (or dape--state
-                        "unknown"))
-               "not running")
+           (or dape--state "unknown")
            'face 'mode-line-emphasis)))
 
 (add-to-list 'mode-line-misc-info
@@ -2823,7 +2831,8 @@ See `eldoc-documentation-functions', for more infomation."
 ;;; Hooks
 
 ;; Cleanup process before bed time
-(add-hook 'kill-emacs-hook #'dape-kill)
+(add-hook 'kill-emacs-hook (defun dape-kill-busy-wait ()
+                             (dape-kill 'busy-wait)))
 
 (provide 'dape)
 
