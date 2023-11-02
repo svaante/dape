@@ -1257,6 +1257,9 @@ Starts a new process as per request of the debug adapter."
 (defun dape-restart ()
   "Restart last debug session started."
   (interactive)
+  (when (hash-table-p dape--timers)
+    (dolist (timer (hash-table-values dape--timers))
+      (cancel-timer timer)))
   (cond
    ((and (dape--live-process t)
          (plist-get dape--capabilities :supportsRestartRequest))
