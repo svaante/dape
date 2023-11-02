@@ -498,11 +498,14 @@ If EXTENDED end of line is after newline."
     (and dape--parent-process
          (delete-process dape--parent-process))))
 
-(defun dape--kill-buffers ()
-  "Kill all Dape related buffers."
+(defun dape--kill-buffers (&optional skip-process-buffers)
+  "Kill all Dape related buffers.
+On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
   (thread-last (buffer-list)
                (seq-filter (lambda (buffer)
-                             (string-match-p "\\*dape-.+\\*" (buffer-name buffer))))
+                             (unless (and skip-process-buffers
+                                          (get-buffer-process buffer))
+                               (string-match-p "\\*dape-.+\\*" (buffer-name buffer)))))
                (seq-do (lambda (buffer)
                          (when-let ((window (get-buffer-window buffer)))
                            (delete-window window))
@@ -1267,11 +1270,12 @@ Starts a new process as per request of the debug adapter."
     (dape dape--config))
    ((user-error "Unable to derive session to restart"))))
 
-(defun dape-kill (&optional busy-wait)
+(defun dape-kill (&optional cb)
   "Kill debug session."
   (interactive)
-  (dolist (timer (hash-table-values dape--timers))
-    (cancel-timer timer))
+  (when (hash-table-p dape--timers)
+    (dolist (timer (hash-table-values dape--timers))
+      (cancel-timer timer)))
   (let (done)
     (cond
      ((and (dape--live-process t)
@@ -1282,17 +1286,8 @@ Starts a new process as per request of the debug adapter."
                     nil
                     (dape--callback
                      (dape--kill-processes)
-                     (setq done t)))
-      (when busy-wait
-        ;; Busy wait for response at least 2 seconds
-        (cl-loop with max-iterations = 20
-                 for i from 1 to max-iterations
-                 until done
-                 do (accept-process-output nil 0.1)
-                 finally (unless done
-                           (dape--kill-processes)
-                           (dape--debug 'error
-                                        "Terminate request timed out")))))
+                     (when cb
+                       (funcall cb nil)))))
      ((dape--live-process t)
       (dape-request dape--process
                     "disconnect"
@@ -1302,19 +1297,12 @@ Starts a new process as per request of the debug adapter."
                                   (list :terminateDebuggee t)))
                     (dape--callback
                      (dape--kill-processes)
-                     (setq done t)))
-      (when busy-wait
-        ;; Busy wait for response at least 2 seconds
-        (cl-loop with max-iterations = 20
-                 for i from 1 to max-iterations
-                 until done
-                 do (accept-process-output nil 0.1)
-                 finally (unless done
-                           (dape--kill-processes)
-                           (dape--debug 'error
-                                        "Disconnect request timed out")))))
+                     (when cb
+                       (funcall cb nil)))))
      (t
-      (dape--kill-processes)))))
+      (dape--kill-processes)
+      (when cb
+        (funcall cb nil))))))
 
 (defun dape-disconnect-quit ()
   "Kill adapter but try to keep debuggee live.
@@ -1331,8 +1319,11 @@ This will leave a decoupled debuggee process with no debugge
 (defun dape-quit ()
   "Kill debug session and kill related dape buffers."
   (interactive)
-  (dape-kill 'busy-wait)
-  (dape--kill-buffers))
+  (dape--kill-buffers t)
+  (dape-kill (dape--callback
+              ;; We need to kill buffers in cb to prevent killing any adapter
+              ;; process before "disconnect" request has been handled.
+              (dape--kill-buffers))))
 
 (defun dape-toggle-breakpoint ()
   "Add or remove breakpoint at current line.
@@ -1477,19 +1468,23 @@ Executes alist key `launch' in `dape-configs' with :program as \"bin\".
 
 Use SKIP-COMPILE to skip compilation."
   (interactive (list (dape--read-config)))
-  (unless (plist-get config 'start-debugging)
-    (dape-kill 'busy-wait)
-    (when-let ((buffer (get-buffer "*dape-debug*")))
-      (with-current-buffer buffer
-        (let ((inhibit-read-only t))
-          (erase-buffer)))))
-  (cond
-   ((and (not skip-compile) (plist-get config 'compile))
-    (dape--compile config))
-   ((plist-get config 'port)
-    (dape--start-multi-session config))
-   (t
-    (dape--start-single-session config))))
+  (let ((fn
+         (dape--callback
+          (unless (plist-get config 'start-debugging)
+            (when-let ((buffer (get-buffer "*dape-debug*")))
+              (with-current-buffer buffer
+                (let ((inhibit-read-only t))
+                  (erase-buffer)))))
+          (cond
+           ((and (not skip-compile) (plist-get config 'compile))
+            (dape--compile config))
+           ((plist-get config 'port)
+            (dape--start-multi-session config))
+           (t
+            (dape--start-single-session config))))))
+    (if (plist-get config 'start-debugging)
+        (funcall fn)
+      (dape-kill fn))))
 
 
 ;;; Compile
@@ -2833,8 +2828,19 @@ See `eldoc-documentation-functions', for more infomation."
 ;;; Hooks
 
 ;; Cleanup process before bed time
-(add-hook 'kill-emacs-hook (defun dape-kill-busy-wait ()
-                             (dape-kill 'busy-wait)))
+(add-hook 'kill-emacs-hook
+          (defun dape-kill-busy-wait ()
+            (let (done)
+              (dape-kill
+               (dape--callback
+                (setq done t)))
+              ;; Busy wait for response at least 2 seconds
+              (cl-loop with max-iterations = 20
+                       for i from 1 to max-iterations
+                       until done
+                       do (accept-process-output nil 0.1)
+                       finally (unless done
+                                 (dape--kill-processes))))))
 
 (provide 'dape)
 
