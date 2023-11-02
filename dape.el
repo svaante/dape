@@ -1280,33 +1280,32 @@ CB will be called after adapter termination."
   (when (hash-table-p dape--timers)
     (dolist (timer (hash-table-values dape--timers))
       (cancel-timer timer)))
-  (let (done)
-    (cond
-     ((and (dape--live-process t)
-           (plist-get dape--capabilities
-                      :supportsTerminateRequest))
-      (dape-request dape--process
-                    "terminate"
-                    nil
-                    (dape--callback
-                     (dape--kill-processes)
-                     (when cb
-                       (funcall cb nil)))))
-     ((dape--live-process t)
-      (dape-request dape--process
-                    "disconnect"
-                    `(:restart nil .
-                               ,(when (plist-get dape--capabilities
-                                                 :supportTerminateDebuggee)
-                                  (list :terminateDebuggee t)))
-                    (dape--callback
-                     (dape--kill-processes)
-                     (when cb
-                       (funcall cb nil)))))
-     (t
-      (dape--kill-processes)
-      (when cb
-        (funcall cb nil))))))
+  (cond
+   ((and (dape--live-process t)
+         (plist-get dape--capabilities
+                    :supportsTerminateRequest))
+    (dape-request dape--process
+                  "terminate"
+                  nil
+                  (dape--callback
+                   (dape--kill-processes)
+                   (when cb
+                     (funcall cb nil)))))
+   ((dape--live-process t)
+    (dape-request dape--process
+                  "disconnect"
+                  `(:restart nil .
+                             ,(when (plist-get dape--capabilities
+                                               :supportTerminateDebuggee)
+                                (list :terminateDebuggee t)))
+                  (dape--callback
+                   (dape--kill-processes)
+                   (when cb
+                     (funcall cb nil)))))
+   (t
+    (dape--kill-processes)
+    (when cb
+      (funcall cb nil)))))
 
 (defun dape-disconnect-quit ()
   "Kill adapter but try to keep debuggee live.
@@ -2537,6 +2536,8 @@ Empty input will rerun last command.\n\n\n"
 (defvar dape-session-history nil
   "Current sessions `dape--read-config' history.
 Used to derive initial-contents in `dape--read-config'.")
+(defvar dape--minibuffer-suggested-configs nil
+  "Suggested configurations in minibuffer.")
 
 (defun dape--config-eval-value (value &optional skip-function for-adapter)
   "Evaluate dape config VALUE.
@@ -2665,13 +2666,10 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
             (base-config (append (alist-get key dape-configs)
                                  (cons 'compile nil))))
         (list (car bounds) (cdr bounds)
-              (cl-loop for (key value) on base-config by 'cddr
+              (cl-loop for (key _) on base-config by 'cddr
                        unless (plist-member args key)
                        when (or (eq key 'compile) (keywordp key))
                        collect (format "%s " key))))))))
-
-(defvar dape--minibuffer-suggested-configs nil
-  "Suggested configurations in minibuffer.")
 
 (defun dape--read-config ()
   "Read config from minibuffer.
