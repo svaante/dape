@@ -991,8 +991,9 @@ is usefully if only to load data for another thread."
         (dape--with dape--variables-recursive (process
                                                (dape--current-stack-frame)
                                                nil
-                                               (lambda (path _object)
-                                                 (length< path 1)))
+                                               (lambda (path object)
+                                                 (and (not (plist-get object :expensive))
+                                                      (length< path 1))))
           (when dape-inline-variables
             (dape--update-inline-variables))
           (dape--update-widgets))))))
