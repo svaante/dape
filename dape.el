@@ -140,7 +140,6 @@ The hook is run with one argument, the compilation buffer."
   :type '(choice (const :tag "Truncate string at new line" line)
                  (const :tag "No formatting" nil)))
 
-
 (defcustom dape-info-display-buffer-action
   '((display-buffer-in-side-window)
     . ((side . left)))
@@ -520,7 +519,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
 ;; Some adapters can't help them self, sending headers not in spec..
 (defconst dape--content-length-re
   "\\(?:.*: .*\r?\n\\)*\
-Content-Length: [[:digit:]]+\r?\n\
+Content-Length: \\([[:digit:]]+\\)\r?\n\
 \\(?:.*: .*\r?\n\\)*\
 \r?\n"
   "Matches debug adapter protocol header.")
@@ -612,43 +611,43 @@ If NOWARN does not error on no active process."
       (goto-char (point-max))
       (insert string)
       (goto-char (point-min))
-      (let (done parser-error)
-        (while (and (not done) (not parser-error))
-          (if-let* ((start (point))
-                    (object
-                     (condition-case nil
-                         (when (search-forward-regexp dape--content-length-re
-                                                      nil
-                                                      t)
-                           (unless (equal start (match-beginning 0))
-                             (dape--debug 'std-server
-                                          "%s"
-                                          (buffer-substring start (match-beginning 0)))
-                             (when (buffer-live-p input-buffer)
-                               (delete-region start (match-beginning 0))))
+      (let (done start)
+        (while (and (not done)
+                    (setq start (point))
+                    (search-forward-regexp dape--content-length-re
+                                           nil t))
+          ;; Server garbage?
+          (unless (equal start (match-beginning 0))
+            (let ((std-out (buffer-substring (point-min) (match-beginning 0))))
+              (dape--debug 'std-server "%s" std-out)))
+          (let ((content-length (string-to-number (match-string 1))))
+            (if-let* ((expected-end
+                       (byte-to-position
+                        (+ content-length (position-bytes (point)))))
+                      (object
+                       (condition-case nil
                            (json-parse-buffer :object-type 'plist
                                               :null-object nil
-                                              :false-object nil))
-                       (error
-                        (let ((json-str
-                               (buffer-substring (point) (point-max))))
-                          (setq parser-error t)
-                          (when (length> json-str 0)
-                            (dape--debug 'error
-                                         "Failed to parse json from `%s`"
-                                         json-str))
-                          nil)))))
-              (with-current-buffer buffer
-                (dape--handle-object process object))
-            (setq done t)))
-        (unless parser-error
-          ;; Parser error is probably because of incomplete json
-          ;; We just need more bytes, if that's not the case we are screwed
-
-          ;; This seams like we are living a bit dangerous. If input buffer
-          ;; is killed we are going to erase some random buffer
-          (when (buffer-live-p input-buffer)
-            (delete-region (point-min) (point))))))))
+                                              :false-object nil)
+                         (error
+                          (and
+                           (let ((json-str (buffer-substring (point) expected-end)))
+                             (dape--debug 'error
+                                          "Failed to parse json from `%s`"
+                                          json-str))
+                           nil)))))
+                  (with-current-buffer buffer
+                    (dape--handle-object process object))
+              ;; Do we have some garbage input?
+              (if (search-forward-regexp "Content-Length: [[:digit:]]+\r?\n"
+                                         nil t)
+                  (goto-char (match-beginning 0))
+                (goto-char start)
+                (setq done t))))))
+      ;; This seams like we are living a bit dangerous. If input buffer
+      ;; is killed we are going to erase some random buffer
+      (when (buffer-live-p input-buffer)
+        (delete-region (point-min) (point))))))
 
 
 ;;; Outgoing requests
