@@ -1806,25 +1806,36 @@ Search is bounded to BEG and END."
 
 ;;; Info buffer
 
+(defun dape--tree-widget-icon-create (icon)
+  "Create dape--tree-widget ICON."
+  ;; HACK Simplified version of icon create
+  (widget-default-create icon)
+  (insert-char ?  1))
+
 (define-widget 'dape--tree-widget-open 'tree-widget-open-icon
   "Icon for an expanded dape--tree-widget node."
+  :create 'dape--tree-widget-icon-create
   :tag "-")
 
 (define-widget 'dape--tree-widget-close 'tree-widget-close-icon
   "Icon for a collapsed dape--tree-widget node."
+  :create 'dape--tree-widget-icon-create
   :tag "+")
 
 (define-widget 'dape--tree-widget-empty 'tree-widget-empty-icon
   "Icon for an expanded dape--tree-widget node with no child."
+  :create 'dape--tree-widget-icon-create
   :tag "X")
 
 (define-widget 'dape--tree-widget-leaf 'tree-widget-leaf-icon
   "Icon for a dape--tree-widget node with no child."
+  :create 'dape--tree-widget-icon-create
   :tag "•")
 
 (define-widget 'dape--tree-widget-space 'item
   "Icon for all dape--tree-widget guides."
-  :format " ")
+  :create 'dape--tree-widget-icon-create
+  :format "")
 
 (defun dape--tree-widget-action (tree &optional event)
   "Handle the :action of TREE with EVENT.
@@ -1854,9 +1865,17 @@ Stores :open state in `dape--tree-widget-open-p'."
                        (widget-get tree :default)))
   (tree-widget-convert-widget tree))
 
+(defun dape--tree-widget-value-create (tree)
+  "Create dape TREE widget."
+  ;; HACK substitute-command-keys has a noticable performance hit
+  (cl-letf (((symbol-function 'substitute-command-keys)
+             (lambda (string &rest _) string)))
+    (tree-widget-value-create tree)))
+
 (define-widget 'dape--tree-widget 'tree-widget
   "Widget based on tree-widget but with :open cache."
   :convert-widget 'dape--tree-widget-convert-widget
+  :value-create   'dape--tree-widget-value-create
   :default        nil
   :key            nil
   :path           nil
