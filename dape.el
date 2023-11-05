@@ -527,21 +527,20 @@ Content-Length: \\([[:digit:]]+\\)\r?\n\
 \r?\n"
   "Matches debug adapter protocol header.")
 
-(defun dape--debug (type string &rest objects)
+(defmacro dape--debug (type string &rest objects)
   "Prints STRING of TYPE to *dape-debug*.
 See `format' for STRING and OBJECTS usage.
 See `dape-debug-on' for TYPE information."
-  (when (memq type dape--debug-on)
-    (with-current-buffer (get-buffer-create "*dape-debug*")
-      (setq buffer-read-only t)
-      (goto-char (point-max))
-      (let ((inhibit-read-only t))
-        (insert (concat (propertize (format "[%s]"
-                                            (symbol-name type))
-                                    'face 'match)
-                        " "
-                        (apply 'format string objects))
-               "\n")))))
+  `(when (memq ,type dape--debug-on)
+     (let ((objects (list ,@objects)))
+       (with-current-buffer (get-buffer-create "*dape-debug*")
+         (setq buffer-read-only t)
+         (goto-char (point-max))
+         (let ((inhibit-read-only t))
+           (insert (concat (propertize (format "[%s]" (symbol-name ,type)) 'face 'match)
+                           " "
+                           (apply 'format ,string objects))
+                   "\n"))))))
 
 (defun dape--live-process (&optional nowarn)
   "Get current live process.
