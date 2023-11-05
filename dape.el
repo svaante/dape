@@ -521,8 +521,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
 
 ;; Some adapters can't help them self, sending headers not in spec..
 (defconst dape--content-length-re
-  "\\(?:.*: .*\r?\n\\)*\
-Content-Length: \\([[:digit:]]+\\)\r?\n\
+  "Content-Length: \\([[:digit:]]+\\)\r?\n\
 \\(?:.*: .*\r?\n\\)*\
 \r?\n"
   "Matches debug adapter protocol header.")
@@ -613,15 +612,16 @@ If NOWARN does not error on no active process."
       (goto-char (point-max))
       (insert string)
       (goto-char (point-min))
-      (let (done start)
-        (while (and (not done)
-                    (setq start (point))
+      (let (expecting-more-bytes start)
+        (while (and (setq start (point))
+                    (search-forward "Content-Length: " nil t)
+                    (goto-char (match-beginning 0))
                     (search-forward-regexp dape--content-length-re
-                                           nil t))
-          ;; Server garbage?
+                                           (+ (point) 1000) t))
+          ;; Server non dap output?
           (unless (equal start (match-beginning 0))
-            (let ((std-out (buffer-substring (point-min) (match-beginning 0))))
-              (dape--debug 'std-server "%s" std-out)))
+            (dape--debug 'std-server "%s"
+                         (buffer-substring start (match-beginning 0))))
           (let ((content-length (string-to-number (match-string 1))))
             (if-let* ((expected-end
                        (byte-to-position
@@ -633,19 +633,17 @@ If NOWARN does not error on no active process."
                                               :false-object nil)
                          (error
                           (and
-                           (let ((json-str (buffer-substring (point) expected-end)))
-                             (dape--debug 'error
-                                          "Failed to parse json from `%s`"
-                                          json-str))
+                           (dape--debug 'error
+                                        "Failed to parse json from `%s`"
+                                        (buffer-substring (point) expected-end))
                            nil)))))
-                  (with-current-buffer buffer
-                    (dape--handle-object process object))
-              ;; Do we have some garbage input?
-              (if (search-forward-regexp "Content-Length: [[:digit:]]+\r?\n"
-                                         nil t)
-                  (goto-char (match-beginning 0))
-                (goto-char start)
-                (setq done t))))))
+                (with-current-buffer buffer
+                  (setq expecting-more-bytes nil)
+                  (dape--handle-object process object))
+              (dape--debug 'info "Need more bytes")
+              (setq expecting-more-bytes t))))
+        (when expecting-more-bytes
+          (goto-char (point-min))))
       ;; This seams like we are living a bit dangerous. If input buffer
       ;; is killed we are going to erase some random buffer
       (when (buffer-live-p input-buffer)
