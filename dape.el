@@ -489,6 +489,9 @@ If EXTENDED end of line is after newline."
 
 (defun dape--kill-processes ()
   "Kill all Dape related process."
+  (when (hash-table-p dape--timers)
+    (dolist (timer (hash-table-values dape--timers))
+      (cancel-timer timer)))
   (ignore-errors
     (and dape--process
          (delete-process dape--process))
