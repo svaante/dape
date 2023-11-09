@@ -1086,8 +1086,9 @@ Starts a new process as per request of the debug adapter."
                      (plist-get body :allThreadsStopped)
                      (dape--callback
                       (dape--update process)))
-  (when-let ((desc (plist-get body :description)))
-    (dape--repl-insert-text (concat desc "\n")
+  (when-let ((text (list (plist-get body :text)
+                         (plist-get body :description))))
+    (dape--repl-insert-text (concat (mapconcat 'identity text "\n") "\n")
                             (if (equal "exception"
                                        (plist-get body :reason))
                                 'error
