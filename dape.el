@@ -727,16 +727,19 @@ See `dape--callback' for expected function signature."
 (defun dape--launch-or-attach (process)
   "Send launch or attach request to PROCESS.
 Uses `dape--config' to derive type and to construct request."
-  (dape-request process
-                (or (plist-get dape--config :request) "launch")
-                (append
-                 (cl-loop for (key value) on dape--config by 'cddr
-                          when (keywordp key)
-                          append (list key value))
-                 (plist-get dape--config 'start-debugging))
-                (dape--callback
-                 (when (plist-get dape--config 'start-debugging)
-                   (plist-put dape--config 'start-debugging nil)))))
+  (let ((start-debugging (plist-get dape--config 'start-debugging)))
+    (dape-request process
+                  (or (plist-get dape--config :request) "launch")
+                  (append
+                   (cl-loop for (key value) on dape--config by 'cddr
+                            when (keywordp key)
+                            append (list key value))
+                   start-debugging)
+                  ;; nil start-debugging only if started as a part of
+                  ;; a start-debugging request
+                  (when start-debugging
+                    (dape--callback
+                     (plist-put dape--config 'start-debugging nil))))))
 
 (defun dape--set-breakpoints (process buffer breakpoints &optional cb)
   "Set BREAKPOINTS in BUFFER by send setBreakpoints request to PROCESS.
@@ -1044,6 +1047,10 @@ Starts a new process to run process to be debugged."
 Starts a new process as per request of the debug adapter."
   (dape--response process (symbol-name command) seq t)
   (setq dape--parent-process dape--process)
+  ;; js-vscode leaves launch request un-answered
+  (when (hash-table-p dape--timers)
+    (dolist (timer (hash-table-values dape--timers))
+      (cancel-timer timer)))
   (dape (plist-put dape--config
                    'start-debugging
                    (plist-get arguments :configuration))))
