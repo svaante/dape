@@ -2729,7 +2729,7 @@ See `dape--config-mode-p' how \"valid\" is defined."
                           (ignore-errors
                             (memql (car (dape--config-from-string str))
                                    suggested-configs)))
-                        dape-session-history)
+                        (car dape-session-history))
            ;; Take first suggested config if only one exist
            (and (length= suggested-configs 1)
                 (symbol-name (car suggested-configs))))))
