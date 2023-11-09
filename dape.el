@@ -584,10 +584,10 @@ If NOWARN does not error on no active process."
                     (plist-get object :message))
            (remhash seq dape--cb))))
       (request
-        (run-with-timer 0 nil 'dape-handle-request
-                        process
-                        (intern (plist-get object :command))
-                        (plist-get object :arguments)))
+        (dape-handle-request process
+                             (intern (plist-get object :command))
+                             (plist-get object :seq)
+                             (plist-get object :arguments)))
       (event
        (let ((seq (plist-get object :seq)))
          (cond
@@ -674,9 +674,9 @@ If NOWARN does not error on no active process."
                            process)
            dape--timers))
 
-(defun dape-send-object (process seq object)
+(defun dape-send-object (process &optional seq object)
   "Helper for `dape-request' to send SEQ request with OBJECT to PROCESS."
-  (let* ((object (plist-put object :seq seq))
+  (let* ((object (if seq (plist-put object :seq seq) object))
          (json (json-serialize object :false-object nil))
          (string (format "Content-Length: %d\r\n\r\n%s" (length json) json)))
     (dape--debug 'io "Sending:\n%S" object)
@@ -1000,13 +1000,25 @@ is usefully if only to load data for another thread."
 
 ;;; Incoming requests
 
-(cl-defgeneric dape-handle-request (_process command arguments)
+(defun dape--response (process command seq success &optional body)
+  "Send request response for COMMAND for SEQ with SUCCESS and BODY.
+Adapter is identified with PROCESS."
+  (dape-send-object process
+                    nil
+                    (append (list :type "response"
+                                  :request_seq seq
+                                  :success success
+                                  :command command)
+                            (when body
+                              (list :body body)))))
+
+(cl-defgeneric dape-handle-request (_process command _seq arguments)
   "Sink for all unsupported requests."
   (dape--debug 'info "Unhandled request '%S' with arguments %S"
                command
                arguments))
 
-(cl-defmethod dape-handle-request (process (_command (eql runInTerminal)) arguments)
+(cl-defmethod dape-handle-request (process (command (eql runInTerminal)) seq arguments)
   "Handle runInTerminal requests.
 Starts a new process to run process to be debugged."
   (let* ((cwd (plist-get process :cwd))
@@ -1024,11 +1036,13 @@ Starts a new process to run process to be debugged."
                           " ")
                          buffer
                          buffer)
-    (display-buffer buffer dape-run-in-terminal-display-buffer-action)))
+    (display-buffer buffer dape-run-in-terminal-display-buffer-action))
+  (dape--response process (symbol-name command) seq t))
 
-(cl-defmethod dape-handle-request (_process (_command (eql startDebugging)) arguments)
+(cl-defmethod dape-handle-request (process (command (eql startDebugging)) seq arguments)
   "Handle startDebugging requests.
 Starts a new process as per request of the debug adapter."
+  (dape--response process (symbol-name command) seq t)
   (setq dape--parent-process dape--process)
   (dape (plist-put dape--config
                    'start-debugging
