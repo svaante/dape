@@ -567,7 +567,7 @@ If NOWARN does not error on no active process."
 
 (defun dape--handle-object (process object)
   "Handle a incoming parsed OBJECT from PROCESS."
-  (dape--debug 'io "Received:\n%s" object)
+  (dape--debug 'io "Received:\n%S" object)
   (when-let* ((type-string (plist-get object :type))
               (type (intern type-string)))
     (cl-case type
@@ -679,7 +679,7 @@ If NOWARN does not error on no active process."
   (let* ((object (plist-put object :seq seq))
          (json (json-serialize object :false-object nil))
          (string (format "Content-Length: %d\r\n\r\n%s" (length json) json)))
-    (dape--debug 'io "Sending:\n%s" object)
+    (dape--debug 'io "Sending:\n%S" object)
     (process-send-string process string)))
 
 (defun dape-request (process command arguments &optional cb)
