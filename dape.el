@@ -2757,9 +2757,13 @@ See `dape--config-mode-p' how \"valid\" is defined."
                     #'dape--config-completion-at-point nil t))
       (pcase-let* ((str (read-from-minibuffer "Run adapter: "
                                               initial-contents
-                                              read--expression-map nil
-                                              'dape-history
-                                              initial-contents))
+                                              (let ((map (make-sparse-keymap)))
+                                                (set-keymap-parent map minibuffer-local-map)
+                                                (define-key map "C-M-i" #'completion-at-point)
+                                                (define-key map "TAB" #'completion-at-point)
+                                                (define-key map "\t" #'completion-at-point)
+                                                map)
+                                              nil 'dape-history initial-contents))
                    (`(,key ,config) (dape--config-from-string
                                      (substring-no-properties str)))
                    (evaled-config (dape--config-eval key config)))
