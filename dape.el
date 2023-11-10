@@ -590,6 +590,9 @@ If NOWARN does not error on no active process."
                              (plist-get object :arguments)))
       (event
        (let ((seq (plist-get object :seq)))
+         ;; netcoredbg sends seq as string for some reason
+         (when (stringp seq)
+           (setq seq (string-to-number seq)))
          (cond
           ;; FIXME This is only here for `godot' which keeps sending duplicate.
           ((or (> seq dape--seq-event)
@@ -1068,6 +1071,12 @@ Starts a new process as per request of the debug adapter."
   (dape--with dape--configure-exceptions (process)
     (dape--with dape--configure-breakpoints (process)
       (dape--configuration-done process))))
+
+(cl-defmethod dape-handle-event (process (_event (eql capabilities)) body)
+  "Handle capabilities events."
+  (setq dape--capabilities (plist-get body :capabilities))
+  (dape--debug 'info "Capabailities recived")
+  (dape--configure-exceptions process (dape--callback nil)))
 
 (cl-defmethod dape-handle-event (_process (_event (eql process)) body)
   "Handle process events."
