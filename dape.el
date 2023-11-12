@@ -98,7 +98,7 @@ Functions and symbols in configuration:
                         ((const :tag "Port of debug adapter" port) natnum)
                         ((const :tag "Compile cmd" compile) string)
                         ((const :tag "Adapter type" :type) string)
-                        ((const :tag "Request type launch/attatch" :request) string)))))
+                        ((const :tag "Request type launch/attach" :request) string)))))
 
 (defcustom dape-key-prefix "\C-x\C-a"
   "Prefix of all dape commands."
