@@ -959,9 +959,10 @@ CONTEXT which the result is going to be displayed in.
 See `dape--callback' for expected CB signature."
   (dape-request process
                 "evaluate"
-                (list :frameId frame-id
-                      :expression expression
-                      :context context)
+                (append (when (dape--stopped-threads)
+                          (list :frameId frame-id))
+                        (list :expression expression
+                              :context context))
                 cb))
 
 (defun dape--scopes (process stack-frame cb)
@@ -2416,7 +2417,7 @@ interactively or if SELECT-BUFFER is non nil."
       (call-interactively cmd)
       (setq dape--repl-insert-text-guard nil))
      ;; Evaluate expression
-     ((dape--stopped-threads)
+     (t
       ;; FIXME `dape--repl-insert-text-guard' is used here to not mess up ordering
       ;;       when running commands that will itself trigger output request
       (setq dape--repl-insert-text-guard t)
@@ -2432,13 +2433,7 @@ interactively or if SELECT-BUFFER is non nil."
                                                            msg)
                                                          "\n\n"
                                                          dape--repl-prompt))
-                                  (setq dape--repl-insert-text-guard nil))))
-     (t
-      (comint-output-filter
-       dummy-process
-       (format "* Unable to send \"%s\" no stopped threads *\n%s"
-               input
-               dape--repl-prompt))))))
+                                  (setq dape--repl-insert-text-guard nil)))))))
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
@@ -2469,10 +2464,13 @@ interactively or if SELECT-BUFFER is non nil."
                    (frame-id (plist-get (dape--current-stack-frame) :id)))
           (dape--with dape-request (process
                                     "completions"
-                                    (list :frameId frame-id
-                                          :text str
-                                          :column column
-                                          :line 1))
+                                    (append
+                                     (when (dape--stopped-threads)
+                                       (list :frameId frame-id))
+                                     (list
+                                      :text str
+                                      :column column
+                                      :line 1)))
             (setq collection
                   (append
                    collection
