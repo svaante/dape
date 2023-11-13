@@ -2460,13 +2460,13 @@ interactively or if SELECT-BUFFER is non nil."
      (cdr bounds)
      (completion-table-dynamic
       (lambda (_str)
-        (when-let ((process (dape--live-process t))
-                   (frame-id (plist-get (dape--current-stack-frame) :id)))
+        (when-let ((process (dape--live-process t)))
           (dape--with dape-request (process
                                     "completions"
                                     (append
                                      (when (dape--stopped-threads)
-                                       (list :frameId frame-id))
+                                       (list :frameId
+                                             (plist-get (dape--current-stack-frame) :id)))
                                      (list
                                       :text str
                                       :column column
