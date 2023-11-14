@@ -1512,6 +1512,8 @@ Use SKIP-COMPILE to skip compilation."
               (with-current-buffer buffer
                 (let ((inhibit-read-only t))
                   (erase-buffer)))))
+          (when-let ((fn (plist-get config 'fn)))
+            (setq config (funcall fn (copy-tree config))))
           (cond
            ((and (not skip-compile) (plist-get config 'compile))
             (dape--compile config))
@@ -2767,9 +2769,6 @@ See `dape--config-mode-p' how \"valid\" is defined."
                                               nil 'dape-history initial-contents))
                    (`(,key ,config) (dape--config-from-string
                                      (substring-no-properties str)))
-                   (config (if-let ((fn (plist-get config 'fn)))
-                               (funcall fn config)
-                             config))
                    (evaled-config (dape--config-eval key config)))
         (setq dape-session-history
               (cons (dape--config-to-string key evaled-config)
