@@ -60,6 +60,8 @@ configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
 
 Symbol Keys (Used by Dape):
+- fn: Function takes config and returns config, used to apply changes
+      to config at runtime.
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
 - command-cwd: Working directory for the command.
@@ -2619,7 +2621,7 @@ apply."
   "Helper for `dape--config-eval'."
   (cl-loop for (key value) on config by 'cddr
            append (cond
-                   ((eq key 'modes) (list key value))
+                   ((memql key '(modes fn)) (list key value))
                    ((and for-adapter (not (keywordp key)))
                     (user-error "Unexpected key %S; lists of things needs be \
 arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
@@ -2662,7 +2664,7 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
   "Create a diff of config KEY and POST-EVAL config."
   (let ((base-config (alist-get key dape-configs)))
     (cl-loop for (key value) on post-eval by 'cddr
-             unless (or (eq key 'modes) ;; Skip modes
+             unless (or (memql key '(modes fn)) ;; Skip modes
                         (and
                          ;; Does the key exist in `base-config'?
                          (plist-member base-config key)
@@ -2764,6 +2766,9 @@ See `dape--config-mode-p' how \"valid\" is defined."
                                               nil 'dape-history initial-contents))
                    (`(,key ,config) (dape--config-from-string
                                      (substring-no-properties str)))
+                   (config (if-let ((fn (plist-get config 'fn)))
+                               (funcall fn config)
+                             config))
                    (evaled-config (dape--config-eval key config)))
         (setq dape-session-history
               (cons (dape--config-to-string key evaled-config)
