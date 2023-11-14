@@ -1991,7 +1991,8 @@ Depth is decided by `dape--info-variables-fetch-depth'."
                                        "%[%t%]")
                                      (format " [%s]"
                                              (propertize
-                                              (plist-get thread :status)
+                                              (or (plist-get thread :status)
+                                                  "unknown")
                                               'face 'bold))
                                      "\n")
                             :action (lambda (widget &rest _)
