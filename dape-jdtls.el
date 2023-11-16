@@ -44,21 +44,22 @@
 
 (defun dape-jdtls-config-fn (config)
   (with-current-buffer (find-file (plist-get config :program))
-    (let* ((default-directory (project-root (project-current)))
-           (server (eglot-current-server))
-           (entrypoints (dape-jdtls--get-entrypoints server))
-	   (selected-entrypoint (dape-jdtls-select-entry-point entrypoints config))
-	   (classpaths (dape-jdtls--get-classpaths server selected-entrypoint))
-	   (debug-port (dape-jdtls--get-debug-port server)))
-      (append (list
-	       'port debug-port
-               :mainClass (plist-get selected-entrypoint :mainClass)
-	       :projectName (plist-get selected-entrypoint :projectName)
-	       :classPaths classpaths
-	       :type "java"
-	       :console "dape"
-	       :request "launch")
-	      config))))
+    (let ((server (eglot-current-server)))
+      (if server
+	  (let* ((entrypoints (dape-jdtls--get-entrypoints server))
+		 (selected-entrypoint (dape-jdtls-select-entry-point entrypoints config))
+		 (classpaths (dape-jdtls--get-classpaths server selected-entrypoint))
+		 (debug-port (dape-jdtls--get-debug-port server)))
+	    (append (list
+		     'port debug-port
+		     :mainClass (plist-get selected-entrypoint :mainClass)
+		     :projectName (plist-get selected-entrypoint :projectName)
+		     :classPaths classpaths
+		     :type "java"
+		     :console "dape"
+		     :request "launch")
+		    config))
+	(user-error "No LSP server appears to be running, abort")))))
 
 (defun dape-jdtls--get-entrypoints (server)
   (eglot-execute-command server "vscode.java.resolveMainClass"
