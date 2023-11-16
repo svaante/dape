@@ -70,8 +70,8 @@
 
 (defun dape-jdtls--get-classpaths (server entrypoint)
   (elt (eglot-execute-command server "vscode.java.resolveClasspath"
-			      (vector (plist-get selected-entrypoint :mainClass)
-				      (plist-get selected-entrypoint :projectName)))
+			      (vector (plist-get entrypoint :mainClass)
+				      (plist-get entrypoint :projectName)))
        1))
 
 (defun dape-jdtls--get-debug-port (server)
