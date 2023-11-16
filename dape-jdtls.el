@@ -59,11 +59,14 @@
 		     :console "dape"
 		     :request "launch")
 		    config))
-	(user-error "No LSP server appears to be running, abort")))))
+	(user-error "Abort, no Eglot LSP server appears to be active for buffer %s" (buffer-name))))))
 
 (defun dape-jdtls--get-entrypoints (server)
-  (eglot-execute-command server "vscode.java.resolveMainClass"
-			 (project-name (project-current))))
+  (let ((entrypoints (eglot-execute-command server "vscode.java.resolveMainClass"
+					    (project-name (project-current)))))
+    (when (length= entrypoints 0)
+      (error "Abort, no main classes found in project %s" (eglot-project-nickname server)))
+    entrypoints))
 
 (defun dape-jdtls--get-classpaths (server entrypoint)
   (elt (eglot-execute-command server "vscode.java.resolveClasspath"
