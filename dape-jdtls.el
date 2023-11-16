@@ -43,19 +43,15 @@
   :group 'dape-jdtls)
 
 (defun dape-jdtls-config-fn (config)
-  (with-current-buffer
-      (dape-jdtls-ensure-launch-buffer config)
+  (with-current-buffer (find-file (plist-get config :program))
     (let* ((default-directory (project-root (project-current)))
            (server (eglot-current-server))
            (entrypoints (dape-jdtls--get-entrypoints server))
 	   (selected-entrypoint (dape-jdtls-select-entry-point entrypoints config))
-	   (project-name )
-	   (main-class )
 	   (classpaths (dape-jdtls--get-classpaths server selected-entrypoint))
 	   (debug-port (dape-jdtls--get-debug-port server)))
       (append (list
 	       'port debug-port
-	       'launch-file (buffer-file-name (current-buffer))
                :mainClass (plist-get selected-entrypoint :mainClass)
 	       :projectName (plist-get selected-entrypoint :projectName)
 	       :classPaths classpaths
@@ -76,11 +72,6 @@
 
 (defun dape-jdtls--get-debug-port (server)
   (eglot-execute-command server "vscode.java.startDebugSession" nil))
-
-(defun dape-jdtls-ensure-launch-buffer (config)
-  (if (plist-get config 'launch-file)
-	  (find-file-noselect (plist-get config 'launch-file))
-	(current-buffer)))
 
 (defun dape-jdtls-select-entry-point (entryPoints config)
   (let* ((separator "/")
