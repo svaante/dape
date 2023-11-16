@@ -207,22 +207,24 @@ Configure debug adapter port under "Editor" -> "Editor Settings" -> "Debug Adapt
 The 'dape-jdtls' extension offers a working configuration with basic
 debugging functionality. Only main classes/methods can be used as
 entrypoints for now.
+*** Requirements
+**** JDK version 17+
+Install with JAVA_HOME set and binaries on PATH.
 
-Requirements:
-- JDK version 17+, installed with JAVA_HOME set and binaries on PATH.
+**** Eclipse JDT Language Server
+Installed with binaries on PATH.
+Get from https://github.com/eclipse-jdtls/eclipse.jdt.ls
+(MacOs) $ brew install jdtls
 
-- Eclipse JDT Language Server, installed with binaries on PATH.
-  Install from https://github.com/eclipse-jdtls/eclipse.jdt.ls
-  (MacOs) $ brew install jdtls
+**** Java Debug Server for Visual Studio Code
+Customize 'dape-jdtls-java-debug-plugin-jar' to point to the plugin jar.
+Get from https://github.com/microsoft/java-debug
 
-- Java Debug Server for Visual Studio Code
-  Customize 'dape-jdtls-java-debug-plugin-jar' to point to the plugin jar.
-  Install from https://github.com/microsoft/java-debug
+**** VS Code Test Runner for Java (can be skipped while integration is WIP)
+Customize 'dape-jdtls-java-test-plugin-jar' to point to the plugin jar.
+Get from https://github.com/microsoft/vscode-java-test
 
-- VS Code Test Runner for Java (can be skipped while integration is WIP)
-  Customize 'dape-jdtls-java-test-plugin-jar' to point to the plugin jar.
-  Install from https://github.com/microsoft/vscode-java-test
-
+*** Configuration
 #+begin_src emacs-lisp
   (use-package dape-jdtls
     :after dape
