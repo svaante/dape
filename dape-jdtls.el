@@ -1,4 +1,4 @@
-;;; package --- Configuration and convenience for Dape + JDTLS.
+;;; package --- Integration of Dape & JDTLS  -*- lexical-binding: t -*-
 
 ;; Authors: Magiel Bruntink and Daniel Pettersson
 ;; Created: 2023
