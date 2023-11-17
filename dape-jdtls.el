@@ -23,7 +23,26 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;;; 
+
+;; Requirements:
+
+;; JDK version 17+, installed with JAVA_HOME set and binaries on PATH.
+
+;; Eclipse JDT Language Server, installed with binaries on PATH.
+;; Install from https://github.com/eclipse-jdtls/eclipse.jdt.ls
+;; (MacOs) $ brew install jdtls
+
+;; Java Debug Server for Visual Studio Code
+;; Customize 'dape-jdtls-java-debug-plugin-jar' to point to the plugin jar.
+;; Install from https://github.com/microsoft/java-debug
+
+;; Options for the Java Debug Server are documented here:
+;; https://github.com/microsoft/vscode-java-debug#options
+
+;; VS Code Test Runner for Java
+;; Customize 'dape-jdtls-java-test-plugin-jar' to point to the plugin jar.
+;; Install from https://github.com/microsoft/vscode-java-test
+
 
 ;;; Code:
 
