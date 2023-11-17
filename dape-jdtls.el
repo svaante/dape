@@ -43,34 +43,41 @@
   :group 'dape-jdtls)
 
 
-(defun dape-jdtls-generate-config (config)
-  (let ((program (dape-jdtls--get-program config)))
+(defun dape-jdtls-complete-config (config)
+  (let ((program (dape-jdtls--complete-program config)))
     (with-current-buffer (find-file program)
       (let ((server (eglot-current-server)))
-	(if server
-	    (let* ((entrypoint (dape-jdtls--get-entrypoint server config))
-                   (classpath (dape-jdtls--get-classpath server entrypoint))
-		   (debug-port (dape-jdtls--get-debug-port server)))
-	      (plist-put config :projectName (plist-get entrypoint :projectName))
-	      (plist-put config :mainClass (plist-get entrypoint :mainClass))
-	      (plist-put config :program program)
-	      (plist-put config :classPaths classpath)
-	      (plist-put config 'port debug-port)
-              (plist-put config :type "java")
-	      (plist-put config :console "dape"))
-	  (user-error "Abort, no Eglot LSP server appears to be active for buffer %s" (buffer-name)))))))
+	(if (not server)
+	    (user-error "Abort, no Eglot LSP server appears to be active for buffer %s" (buffer-name))
+	  (let* ((entrypoint (dape-jdtls--complete-entrypoint server config)))
+	    (seq-uniq
+	     (append config
+		     (list :projectName (plist-get entrypoint :projectName)
+			   :mainClass (plist-get entrypoint :mainClass)
+			   :program program
+			   :classPaths (dape-jdtls--complete-classpath server entrypoint config)
+			   'modes (dape-jdtls--complete-modes config)
+			   'port (dape-jdtls--complete-debug-port server config)
+			   :request "launch"
+			   :type "java"
+			   :console "dape")))))))))
 
-(defun dape-jdtls--get-program (config)
+(defun dape-jdtls--complete-program (config)
   (let ((program (plist-get config :program)))
     (if program program
       (dape-find-file-buffer-default))))
 
-(defun dape-jdtls--get-entrypoint (server config)  
-  (let ((entrypoints (eglot-execute-command server "vscode.java.resolveMainClass"
-					    (project-name (project-current)))))
-    (when (length= entrypoints 0)
-      (error "Abort, no main classes found in project %s" (eglot-project-nickname server)))
-    (dape-jdtls--select-entrypoint entrypoints config)))
+(defun dape-jdtls--complete-entrypoint (server config)
+  (let ((project (plist-get config :projectName))
+	(main-class (plist-get config :mainClass)))
+    (if (and project main-class)
+	(list :projectName project :mainClass main-class)
+      (let ((entrypoints (eglot-execute-command server "vscode.java.resolveMainClass"
+						(if project project
+						  (project-name (project-current))))))
+	(when (length= entrypoints 0)
+	  (error "Abort, no main classes found in project %s" (eglot-project-nickname server)))
+	(dape-jdtls--select-entrypoint entrypoints config)))))
 
 (defun dape-jdtls--select-entrypoint (entrypoints config)
   (let* ((separator "/")
@@ -82,16 +89,24 @@
 	 (selected (completing-read "Select entrypoint: " candidates nil t
 				    (unless (s-equals? user-input separator) user-input)))
 	 (selected-split (s-split separator selected)))
-    (list :projectName (nth 0 selected-split)
-	  :mainClass (nth 1 selected-split))))
+    (list :projectName (nth 0 selected-split) :mainClass (nth 1 selected-split))))
 
-(defun dape-jdtls--get-classpath (server entrypoint)
-  (elt (eglot-execute-command server "vscode.java.resolveClasspath"
+(defun dape-jdtls--complete-classpath (server entrypoint config)
+  (let ((classpath (plist-get config :classPaths)))
+    (if classpath classpath)
+    (elt (eglot-execute-command server "vscode.java.resolveClasspath"
 			      (vector (plist-get entrypoint :mainClass)
 				      (plist-get entrypoint :projectName)))
-       1))
+       1)))
 
-(defun dape-jdtls--get-debug-port (server)
-  (eglot-execute-command server "vscode.java.startDebugSession" nil))
+(defun dape-jdtls--complete-debug-port (server config)
+  (let ((debug-port (plist-get config 'port)))
+    (if debug-port debug-port
+        (eglot-execute-command server "vscode.java.startDebugSession" nil))))
+
+(defun dape-jdtls--complete-modes (config)
+  (let ((modes (plist-get config 'modes)))
+    (if modes modes
+      '(java-mode java-ts-mode))))
 
 (provide 'dape-jdtls)
