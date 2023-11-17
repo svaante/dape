@@ -237,7 +237,7 @@ Get from https://github.com/microsoft/vscode-java-test
     (add-to-list 'dape-configs
                  `(jdtls
                    modes (java-mode java-ts-mode)
-                   fn dape-jdtls-config-fn
+                   fn dape-jdtls-complete-config
                    :args ""
                    :stopOnEntry t))
 
