@@ -42,33 +42,50 @@
   :type '(string)
   :group 'dape-jdtls)
 
-(defun dape-jdtls-config-fn (config)
-  (with-current-buffer (find-file (plist-get config :program))
-    (let ((server (eglot-current-server)))
-      (if server
-	  (let* ((entrypoints (dape-jdtls--get-entrypoints server))
-		 (selected-entrypoint (dape-jdtls-select-entry-point entrypoints config))
-		 (classpaths (dape-jdtls--get-classpaths server selected-entrypoint))
-		 (debug-port (dape-jdtls--get-debug-port server)))
-	    (append (list
-		     'port debug-port
-		     :mainClass (plist-get selected-entrypoint :mainClass)
-		     :projectName (plist-get selected-entrypoint :projectName)
-		     :classPaths classpaths
-		     :type "java"
-		     :console "dape"
-		     :request "launch")
-		    config))
-	(user-error "Abort, no Eglot LSP server appears to be active for buffer %s" (buffer-name))))))
 
-(defun dape-jdtls--get-entrypoints (server)
+(defun dape-jdtls-generate-config (config)
+  (let ((program (dape-jdtls--get-program config)))
+    (with-current-buffer (find-file program)
+      (let ((server (eglot-current-server)))
+	(if server
+	    (let* ((entrypoint (dape-jdtls--get-entrypoint server config))
+                   (classpath (dape-jdtls--get-classpath server entrypoint))
+		   (debug-port (dape-jdtls--get-debug-port server)))
+	      (plist-put config :projectName (plist-get entrypoint :projectName))
+	      (plist-put config :mainClass (plist-get entrypoint :mainClass))
+	      (plist-put config :program program)
+	      (plist-put config :classPaths classpath)
+	      (plist-put config 'port debug-port)
+              (plist-put config :type "java")
+	      (plist-put config :console "dape"))
+	  (user-error "Abort, no Eglot LSP server appears to be active for buffer %s" (buffer-name)))))))
+
+(defun dape-jdtls--get-program (config)
+  (let ((program (plist-get config :program)))
+    (if program program
+      (dape-find-file-buffer-default))))
+
+(defun dape-jdtls--get-entrypoint (server config)  
   (let ((entrypoints (eglot-execute-command server "vscode.java.resolveMainClass"
 					    (project-name (project-current)))))
     (when (length= entrypoints 0)
       (error "Abort, no main classes found in project %s" (eglot-project-nickname server)))
-    entrypoints))
+    (dape-jdtls--select-entrypoint entrypoints config)))
 
-(defun dape-jdtls--get-classpaths (server entrypoint)
+(defun dape-jdtls--select-entrypoint (entrypoints config)
+  (let* ((separator "/")
+	 (candidates (mapcar (lambda (entrypoint)
+			       (s-concat (plist-get entrypoint :projectName) separator
+                                         (plist-get entrypoint :mainClass)))
+			     (append entrypoints '())))
+	 (user-input (s-concat (plist-get config :projectName) separator (plist-get config :mainClass)))
+	 (selected (completing-read "Select entrypoint: " candidates nil t
+				    (unless (s-equals? user-input separator) user-input)))
+	 (selected-split (s-split separator selected)))
+    (list :projectName (nth 0 selected-split)
+	  :mainClass (nth 1 selected-split))))
+
+(defun dape-jdtls--get-classpath (server entrypoint)
   (elt (eglot-execute-command server "vscode.java.resolveClasspath"
 			      (vector (plist-get entrypoint :mainClass)
 				      (plist-get entrypoint :projectName)))
@@ -76,18 +93,5 @@
 
 (defun dape-jdtls--get-debug-port (server)
   (eglot-execute-command server "vscode.java.startDebugSession" nil))
-
-(defun dape-jdtls-select-entry-point (entry-points config)
-  (let* ((separator "/")
-	 (candidates (mapcar (lambda (entry-point)
-			       (s-concat (plist-get entry-point :projectName) separator
-                                         (plist-get entry-point :mainClass)))
-			     (append entry-points'())))
-	 (user-input (s-concat (plist-get config :projectName) separator (plist-get config :mainClass)))
-	 (selected (completing-read "Select entrypoint: " candidates nil t
-				    (unless (s-equals? user-input separator) user-input)))
-	 (selected-split (s-split separator selected)))
-    (list :projectName (nth 0 selected-split)
-	  :mainClass (nth 1 selected-split))))
 
 (provide 'dape-jdtls)
