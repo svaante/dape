@@ -77,14 +77,13 @@
 (defun dape-jdtls--get-debug-port (server)
   (eglot-execute-command server "vscode.java.startDebugSession" nil))
 
-(defun dape-jdtls-select-entry-point (entryPoints config)
+(defun dape-jdtls-select-entry-point (entry-points config)
   (let* ((separator "/")
-	 (candidates (mapcar (lambda (entryPoint)
-			       (s-concat (plist-get entryPoint :projectName) separator
-                                         (plist-get entryPoint :mainClass)))
-			     (append entryPoints '())))
-	 (user-input (s-concat (plist-get config :projectName) separator
-			       (plist-get config :mainClass)))
+	 (candidates (mapcar (lambda (entry-point)
+			       (s-concat (plist-get entry-point :projectName) separator
+                                         (plist-get entry-point :mainClass)))
+			     (append entry-points'())))
+	 (user-input (s-concat (plist-get config :projectName) separator (plist-get config :mainClass)))
 	 (selected (completing-read "Select entrypoint: " candidates nil t
 				    (unless (s-equals? user-input separator) user-input)))
 	 (selected-split (s-split separator selected)))
