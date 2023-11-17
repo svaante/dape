@@ -79,7 +79,7 @@
 			   'port (dape-jdtls--complete-debug-port server config)
 			   :request "launch"
 			   :type "java"
-			   :console "dape")))))))))
+			   :console "internalConsole")))))))))
 
 (defun dape-jdtls--complete-program (config)
   (let ((program (plist-get config :program)))
