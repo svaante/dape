@@ -84,11 +84,10 @@
 			   :mainClass (plist-get entrypoint :mainClass)
 			   :program program
 			   :classPaths (dape-jdtls--complete-classpath server entrypoint config)
-			   'modes (dape-jdtls--complete-modes config)
-			   'port (dape-jdtls--complete-debug-port server config)
 			   :request "launch"
 			   :type "java"
-			   :console "internalConsole")))))))))
+			   :console "internalConsole"
+			   'port (dape-jdtls--complete-port server))))))))))
 
 (defun dape-jdtls--complete-program (config)
   (let ((program (plist-get config :program)))
@@ -120,21 +119,12 @@
     (list :projectName (nth 0 selected-split) :mainClass (nth 1 selected-split))))
 
 (defun dape-jdtls--complete-classpath (server entrypoint config)
-  (let ((classpath (plist-get config :classPaths)))
-    (if classpath classpath)
-    (elt (eglot-execute-command server "vscode.java.resolveClasspath"
+  (elt (eglot-execute-command server "vscode.java.resolveClasspath"
 			      (vector (plist-get entrypoint :mainClass)
 				      (plist-get entrypoint :projectName)))
-       1)))
+       1))
 
-(defun dape-jdtls--complete-debug-port (server config)
-  (let ((debug-port (plist-get config 'port)))
-    (if debug-port debug-port
-        (eglot-execute-command server "vscode.java.startDebugSession" nil))))
-
-(defun dape-jdtls--complete-modes (config)
-  (let ((modes (plist-get config 'modes)))
-    (if modes modes
-      '(java-mode java-ts-mode))))
+(defun dape-jdtls--complete-port (server)
+  (eglot-execute-command server "vscode.java.startDebugSession" nil))
 
 (provide 'dape-jdtls)
