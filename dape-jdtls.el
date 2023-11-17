@@ -29,20 +29,29 @@
 ;; JDK version 17+, installed with JAVA_HOME set and binaries on PATH.
 
 ;; Eclipse JDT Language Server, installed with binaries on PATH.
-;; Install from https://github.com/eclipse-jdtls/eclipse.jdt.ls
+;; Get from https://github.com/eclipse-jdtls/eclipse.jdt.ls
 ;; (MacOs) $ brew install jdtls
 
 ;; Java Debug Server for Visual Studio Code
 ;; Customize 'dape-jdtls-java-debug-plugin-jar' to point to the plugin jar.
-;; Install from https://github.com/microsoft/java-debug
+;; Get from https://github.com/microsoft/java-debug
 
 ;; Options for the Java Debug Server are documented here:
 ;; https://github.com/microsoft/vscode-java-debug#options
 
-;; VS Code Test Runner for Java
+;; VS Code Test Runner for Java (here for reference, not yet needed)
 ;; Customize 'dape-jdtls-java-test-plugin-jar' to point to the plugin jar.
-;; Install from https://github.com/microsoft/vscode-java-test
+;; Get from https://github.com/microsoft/vscode-java-test
 
+;; Support:
+
+;; At the moment only "launch" configurations are supported - which
+;; allows a user to debug a program through a main class.
+
+;; Not supported;
+
+;; - Attaching a debugger to a running Java application ("attach").
+;; - Running or debugging specific (at point) unit tests.
 
 ;;; Code:
 
