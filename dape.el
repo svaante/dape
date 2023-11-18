@@ -53,7 +53,150 @@
   :prefix "dape-"
   :group 'applications)
 
-(defcustom dape-configs nil
+(defcustom dape-adapter-dir
+  (file-name-as-directory (concat user-emacs-directory "debug-adapters"))
+  "Directory to store downloaded adapters in."
+  :type 'string)
+
+(defcustom dape-configs
+  `(,@(let ((codelldb
+             `(ensure dape-ensure-command
+               command ,(file-name-concat dape-adapter-dir
+                                          "codelldb"
+                                          "extension"
+                                          "adapter"
+                                          "codelldb")
+               port :autoport
+               fn dape-config-autoport
+               :type "lldb"
+               :request "launch"
+               :cwd dape-cwd-fn
+               :program dape-find-file
+               :args [])))
+        `((codelldb-cc
+           modes (c-mode c-ts-mode c++-mode c++-ts-mode)
+           command-args ("--port" :autoport)
+           ,@codelldb)
+          (codelldb-rust
+           modes (rust-mode rust-ts-mode)
+           command-args ("--port" :autoport
+                         "--settings" "{\"sourceLanguages\":[\"rust\"]}")
+           ,@codelldb)))
+    (cpptools
+     modes (c-mode c-ts-mode c++-mode c++-ts-mode)
+     ensure dape-ensure-command
+     command ,(file-name-concat dape-adapter-dir
+                                "cpptools"
+                                "extension"
+                                "debugAdapters"
+                                "bin"
+                                "OpenDebugAD7")
+     :type "cppdbg"
+     :request "launch"
+     :cwd dape-cwd-fn
+     :program dape-find-file
+     :MIMode ,(seq-find 'executable-find '("lldb" "gdb")))
+    (debugpy
+     modes (python-mode python-ts-mode)
+     ensure (lambda (config)
+              (let ((python
+                     (dape--config-eval-value (plist-get config 'command))))
+                (unless (zerop
+                         (call-process-shell-command
+                          (format "%s -c \"import debugpy.adapter\"" python)))
+                  (user-error "%s module debugpy is not installed" python))))
+     command "python3"
+     command-args ("-m" "debugpy.adapter")
+     :request "launch"
+     :type "executable"
+     :cwd dape-cwd-fn
+     :program dape-find-file-buffer-default
+     :justMyCode nil
+     :showReturnValue t)
+    (dlv
+     modes (go-mode go-ts-mode)
+     ensure dape-ensure-command
+     fn dape-config-autoport
+     command "dlv"
+     command-args ("dap" "--listen" "127.0.0.1::autoport")
+     command-cwd dape-cwd-fn
+     port :autoport
+     :request "launch"
+     :type "debug"
+     :cwd dape-cwd-fn
+     :program dape-cwd-fn)
+    (flutter
+     ensure dape-ensure-command
+     modes (dart-mode)
+     command "flutter"
+     command-args ("debug_adapter")
+     command-cwd dape-cwd-fn
+     :type "dart"
+     :cwd dape-cwd-fn
+     :program dape-find-file-buffer-default
+     :toolArgs ,(lambda () (vector "-d" (read-string "Device id: "))))
+    (godot
+     modes (gdscript-mode)
+     port 6006
+     :request "launch"
+     :type "server"
+     :cwd dape-cwd-fn)
+    ,@(let ((js-debug
+             `(modes (js-mode js-ts-mode)
+               ensure ,(lambda (config)
+                         (dape-ensure-command config)
+                         (let* ((command-cwd
+                                 (dape--config-eval-value (plist-get config 'command-cwd)))
+                                (command
+                                 (file-name-concat command-cwd
+                                                   (dape--config-eval-value (car (plist-get config 'command-args))))))
+                           (unless (file-exists-p command-cwd)
+                             (user-error "Directory %s does not exist" command-cwd))
+                           (unless (file-exists-p command)
+                             (user-error "Command %s does not exist" command))))
+               command "node"
+               command-cwd ,(file-name-concat dape-adapter-dir
+                                              "js-debug")
+               command-args (,(file-name-concat "src" "dapDebugServer.js")
+                             :autoport)
+               port :autoport
+               fn dape-config-autoport)))
+        `((js-debug-node
+           ,@js-debug
+           :type "pwa-node"
+           :cwd dape-cwd-fn
+           :program dape-find-file-buffer-default
+           :outputCapture "console"
+           :sourceMapRenames t
+           :pauseForSourceMap nil
+           :autoAttachChildProcesses t
+           :console "internalConsole"
+           :killBehavior "forceful")
+          (js-debug-chrome
+           ,@js-debug
+           :type "pwa-chrome"
+           :trace t
+           :url ,(lambda ()
+                   (read-string "Url: "
+                                "http://localhost:3000"))
+           :webRoot dape-cwd-fn
+           :outputCapture "console")))
+    (lldb-vscode
+     modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode)
+     ensure dape-ensure-command
+     command "lldb-vscode"
+     :type "lldb-vscode"
+     :cwd dape-cwd-fn
+     :program dape-find-file)
+    (netcoredbg
+     modes (csharp-mode csharp-ts-mode)
+     ensure dape-ensure-command
+     command "netcoredbg"
+     command-args ["--interpreter=vscode"]
+     :request "launch"
+     :cwd dape-cwd-fn
+     :program dape-find-file
+     :stopAtEntry t))
   "This variable holds the Dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
@@ -62,6 +205,7 @@ where keys can be symbols or keywords.
 Symbol Keys (Used by Dape):
 - fn: Function takes config and returns config, used to apply changes
       to config at runtime.
+- ensure: Function to ensure that adapter is available.
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
 - command-cwd: Working directory for the command.
@@ -425,7 +569,7 @@ DEFAULT specifies which file to return on empty input."
     (expand-file-name
      (read-file-name (if default
                          (format "Program (default %s): " default)
-                       "Program : ")
+                       "Program: ")
                      default-directory
                      default t))))
 
@@ -448,6 +592,43 @@ DEFAULT specifies which file to return on empty input."
         (alist-get (completing-read "Pid: " collection)
                    collection nil nil 'equal))
     (read-number "Pid: ")))
+
+(defun dape-config-autoport (config)
+  "Replace occurences of `:autoport' in CONFIG `command-args' and `port'.
+Will replace symbol and string occurences of \"autoport\"."
+  ;; Stolen from `Eglot'
+  (let* ((port-probe (make-network-process :name "dape-port-probe-dummy"
+                                           :server t
+                                           :host "localhost"
+                                           :service 0))
+         (port-number (unwind-protect
+                          (process-contact port-probe :service)
+                        (delete-process port-probe)))
+         (port (if (eq (plist-get config 'port) :autoport)
+                   port-number
+                 (plist-get config 'port)))
+         (command-args (seq-map (lambda (item)
+                                  (cond
+                                   ((eq item :autoport)
+                                    (number-to-string port-number))
+                                   ((stringp item)
+                                    (string-replace ":autoport"
+                                                    (number-to-string port-number)
+                                                    item))))
+                                (plist-get config 'command-args))))
+    (let ((config
+           (thread-first config
+                         (plist-put 'port port)
+                         (plist-put 'command-args command-args))))
+      config)))
+
+(defun dape-ensure-command (config)
+  "Ensure that `command' from CONFIG exist system."
+  (let ((command
+         (dape--config-eval-value (plist-get config 'command))))
+    (unless (or (file-executable-p command)
+                (executable-find command))
+      (user-error "Unable to locate %S" command))))
 
 (defun dape--overlay-region (&optional extended)
   "List of beg and end of current line.
@@ -1514,6 +1695,8 @@ Use SKIP-COMPILE to skip compilation."
                   (erase-buffer)))))
           (when-let ((fn (plist-get config 'fn)))
             (setq config (funcall fn (copy-tree config))))
+          (when-let ((ensure (plist-get config 'ensure)))
+            (funcall ensure (copy-tree config)))
           (cond
            ((and (not skip-compile) (plist-get config 'compile))
             (dape--compile config))
@@ -2624,7 +2807,7 @@ apply."
   "Helper for `dape--config-eval'."
   (cl-loop for (key value) on config by 'cddr
            append (cond
-                   ((memql key '(modes fn)) (list key value))
+                   ((memql key '(modes fn ensure)) (list key value))
                    ((and for-adapter (not (keywordp key)))
                     (user-error "Unexpected key %S; lists of things needs be \
 arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
@@ -2667,7 +2850,7 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
   "Create a diff of config KEY and POST-EVAL config."
   (let ((base-config (alist-get key dape-configs)))
     (cl-loop for (key value) on post-eval by 'cddr
-             unless (or (memql key '(modes fn)) ;; Skip modes
+             unless (or (memql key '(modes fn ensure)) ;; Skip meta params
                         (and
                          ;; Does the key exist in `base-config'?
                          (plist-member base-config key)
@@ -2739,7 +2922,13 @@ or last mode valid history item from this session.
 See `dape--config-mode-p' how \"valid\" is defined."
   (let* ((suggested-configs
           (cl-loop for (key . config) in dape-configs
-                   if (dape--config-mode-p config)
+                   when (and (dape--config-mode-p config)
+                             (condition-case nil
+                                 (or (funcall (or (plist-get config 'ensure)
+                                                   'identity)
+                                               config)
+                                     t)
+                               (user-error nil)))
                    collect key))
          (initial-contents
           (or
