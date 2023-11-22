@@ -145,15 +145,12 @@
              `(modes (js-mode js-ts-mode)
                ensure ,(lambda (config)
                          (dape-ensure-command config)
-                         (let* ((command-cwd
-                                 (dape--config-eval-value (plist-get config 'command-cwd)))
-                                (command
-                                 (file-name-concat command-cwd
-                                                   (dape--config-eval-value (car (plist-get config 'command-args))))))
-                           (unless (file-exists-p command-cwd)
-                             (user-error "Directory %s does not exist" command-cwd))
-                           (unless (file-exists-p command)
-                             (user-error "Command %s does not exist" command))))
+                         (let ((js-debug-file
+                                (file-name-concat
+                                 (dape--config-eval-value (plist-get config 'command-cwd))
+                                 (dape--config-eval-value (car (plist-get config 'command-args))))))
+                           (unless (file-exists-p js-debug-file)
+                             (user-error "File %S does not exist" js-debug-file))))
                command "node"
                command-cwd ,(file-name-concat dape-adapter-dir
                                               "js-debug")
