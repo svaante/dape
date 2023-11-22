@@ -921,11 +921,15 @@ Uses `dape--config' to derive type and to construct request."
                             when (keywordp key)
                             append (list key value))
                    start-debugging)
-                  ;; nil start-debugging only if started as a part of
-                  ;; a start-debugging request
-                  (when start-debugging
-                    (dape--callback
-                     (plist-put dape--config 'start-debugging nil))))))
+                  (dape--callback
+                   ;; nil start-debugging only if started as a part of
+                   ;; a start-debugging request
+                   (when start-debugging
+                     (plist-put dape--config 'start-debugging nil))
+                   (unless success
+                     (dape--repl-insert-text (concat msg "\n")
+                                             'dape-repl-exit-code-fail)
+                     (dape-kill))))))
 
 (defun dape--set-breakpoints (process buffer breakpoints &optional cb)
   "Set BREAKPOINTS in BUFFER by send setBreakpoints request to PROCESS.
