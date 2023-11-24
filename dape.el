@@ -657,15 +657,9 @@ If EXTENDED end of line is after newline."
 
 (defun dape--format-file-line (file line)
   "Formats FILE and LINE to string."
-  (concat (string-trim-left
-           file
-           (regexp-quote
-            (expand-file-name
-             (or (plist-get dape--config :cwd)
-                 ""))))
+  (concat (file-relative-name file (plist-get dape--config :cwd))
           (when line
-            (format ":%d"
-                    line))))
+            (format ":%d" line))))
 
 (defun dape--kill-processes ()
   "Kill all Dape related process."
