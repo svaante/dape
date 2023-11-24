@@ -3022,10 +3022,11 @@ See `eldoc-documentation-functions', for more infomation."
 
 (defun dape--mode-line-format ()
   "Format Dape mode line."
-  (format "Dape:%s"
+  (concat (propertize "Dape" 'face 'font-lock-constant-face)
+          ":"
           (propertize
            (or dape--state "unknown")
-           'face 'mode-line-emphasis)))
+           'face 'font-lock-doc-face)))
 
 (add-to-list 'mode-line-misc-info
              `(dape--process
