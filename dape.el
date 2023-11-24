@@ -1538,16 +1538,16 @@ This will leave a decoupled debuggee process with no debugge
   (dape-kill (dape--callback
               (dape--kill-buffers))))
 
-(defun dape-toggle-breakpoint ()
+(defun dape-breakpoint-toggle ()
   "Add or remove breakpoint at current line.
 Will remove log or expression breakpoint at line added with
-`dape-log-breakpoint' and/or `dape-expression-breakpoint'."
+`dape-breakpoint-log' and/or `dape-breakpoint-expression'."
   (interactive)
   (if (dape--breakpoints-at-point '(dape-log-message dape-expr-message))
       (dape-remove-breakpoint-at-point '(dape-log-message dape-expr-message))
     (dape--place-breakpoint)))
 
-(defun dape-log-breakpoint (log-message)
+(defun dape-breakpoint-log (log-message)
   "Add log breakpoint at line.
 Argument LOG-MESSAGE contains string to print to *dape-repl*.
 Expressions within `{}` are interpolated."
@@ -1566,7 +1566,7 @@ Expressions within `{}` are interpolated."
   (unless (string-empty-p log-message)
     (dape--place-breakpoint log-message)))
 
-(defun dape-expression-breakpoint (expr-message)
+(defun dape-breakpoint-expression (expr-message)
   "Add expression breakpoint at current line.
 When EXPR-MESSAGE is evaluated as true threads will pause at current line."
   (interactive
@@ -1592,7 +1592,7 @@ SKIP-TYPES is a list of overlay properties to skip removal of."
   (dolist (breakpoint (dape--breakpoints-at-point skip-types))
     (dape--remove-breakpoint breakpoint)))
 
-(defun dape-remove-all-breakpoints ()
+(defun dape-breakpoint-remove-all ()
   "Remove all breakpoints."
   (interactive)
   (let ((buffers-breakpoints (seq-group-by 'overlay-buffer
@@ -3046,10 +3046,10 @@ See `eldoc-documentation-functions', for more infomation."
     (define-key map "i" #'dape-info)
     (define-key map "R" #'dape-repl)
     (define-key map "m" #'dape-read-memory)
-    (define-key map "l" #'dape-log-breakpoint)
-    (define-key map "e" #'dape-expression-breakpoint)
-    (define-key map "b" #'dape-toggle-breakpoint)
-    (define-key map "B" #'dape-remove-all-breakpoints)
+    (define-key map "l" #'dape-breakpoint-log)
+    (define-key map "e" #'dape-breakpoint-expression)
+    (define-key map "b" #'dape-breakpoint-toggle)
+    (define-key map "B" #'dape-breakpoint-remove-all)
     (define-key map "t" #'dape-select-thread)
     (define-key map "S" #'dape-select-stack)
     (define-key map "w" #'dape-watch-dwim)
@@ -3064,10 +3064,10 @@ See `eldoc-documentation-functions', for more infomation."
                dape-step-in
                dape-step-out
                dape-restart
-               dape-log-breakpoint
-               dape-expression-breakpoint
-               dape-toggle-breakpoint
-               dape-remove-all-breakpoints
+               dape-breakpoint-log
+               dape-breakpoint-expression
+               dape-breakpoint-toggle
+               dape-breakpoint-remove-all
                dape-watch-dwim))
   (put cmd 'repeat-map 'dape-global-map))
 
