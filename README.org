@@ -23,10 +23,9 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + Debug adapter configuration ergonomics
 + No dependencies
 
-[[https://raw.githubusercontent.com/svaante/dape/resources/screenshot.png]]
-
-[[https://raw.githubusercontent.com/svaante/dape/resources/screenshot_gud.png]]
-With `(setq dape-buffer-window-arrangment 'gud)`
+[[https://raw.githubusercontent.com/svaante/dape/resources/c-left.png]]
+And with ~(setq dape-buffer-window-arrangment 'gud)~.
+[[https://raw.githubusercontent.com/svaante/dape/resources/js-gud.png]]
 
 Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-vivendi-tritanopia]].
 
