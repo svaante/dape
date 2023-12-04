@@ -1870,7 +1870,8 @@ Removes itself on execution."
   (when-let ((buffer (overlay-buffer overlay)))
     (let (before-string)
       (cond
-       ((and (not (eql fringe-mode 0)) (window-system))
+       ((and (window-system) ;; running in term
+             (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
         (setq before-string
               (propertize " " 'display
                           `(left-fringe ,bitmap ,face))))
