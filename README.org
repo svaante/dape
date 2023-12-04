@@ -23,11 +23,10 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + Debug adapter configuration ergonomics
 + No dependencies
 
-[[https://raw.githubusercontent.com/svaante/dape/resources/c-left.png]]
-And with ~(setq dape-buffer-window-arrangment 'gud)~.
-[[https://raw.githubusercontent.com/svaante/dape/resources/js-gud.png]]
-
-Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-vivendi-tritanopia]].
+[[https://raw.githubusercontent.com/svaante/dape/resources/c-light-left.png]]
+And with ~(setq dape-buffer-window-arrangment 'gud)~ + ~corfu~ as ~completion-in-region-function~.
+[[https://raw.githubusercontent.com/svaante/dape/resources/js-light-gud.png]]
+Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-operandi-tinted]].
 
 * Configuration
 Currently =Dape= does not come with any debug adapter configuration.
