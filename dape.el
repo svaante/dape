@@ -1848,8 +1848,30 @@ Removes itself on execution."
 
 
 ;;; Breakpoints
-;; TODO Breakpoints look bad and should feel bad
-;;      Should be able to be controlled by mouse
+
+(defun dape-mouse-breakpoint-toggle (event)
+  "Toggle breakpoint at EVENT."
+  (interactive "e")
+  (save-selected-window
+    (let ((start (event-start event)))
+      (select-window (posn-window start))
+      (save-excursion
+        (goto-char (posn-point start))
+        (dape-breakpoint-toggle)))))
+
+(defvar dape-breakpoint-global-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [left-fringe mouse-1] 'dape-mouse-breakpoint-toggle)
+    (define-key map [left-margin mouse-1] 'dape-mouse-breakpoint-toggle)
+    map)
+  "Keymap for `dape-breakpoint-global-mode'.")
+
+;; TODO Whould be nice if it was enabled
+(define-minor-mode dape-breakpoint-global-mode
+  "Adds fringe and margin breakpoint controls."
+  :global t
+  :lighter "dape")
+
 (defvar dape--original-margin nil
   "Bookkeeping for buffer margin width.")
 
