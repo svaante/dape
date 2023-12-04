@@ -250,7 +250,7 @@ Functions and symbols in configuration:
 
 (defcustom dape-key-prefix "\C-x\C-a"
   "Prefix of all dape commands."
-  :type 'key)
+  :type 'key-sequence)
 
 (defcustom dape-display-source-buffer-action
   '(display-buffer-reuse-window
