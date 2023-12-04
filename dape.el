@@ -1185,22 +1185,26 @@ See `dape--callback' for expected CB signature."
   "Set VARIABLE VALUE with REF by request to PROCESS.
 REF should refer to VARIABLE container.
 See `dape--callback' for expected CB signature."
-  (if (and (plist-get dape--capabilities :supportsSetExpression)
-           (not (numberp ref)))
+  (cond
+   ((and (plist-get dape--capabilities :supportsSetExpression)
+         (or (plist-get variable :evaluateName)
+             (not (numberp ref))))
       (dape-request process
                     "setExpression"
                     (list :frameId (plist-get (dape--current-stack-frame) :id)
                           :expression (or (plist-get variable :evaluateName)
                                           (plist-get variable :name))
                           :value value)
-                    cb)
+                    cb))
+   ((numberp ref)
     (dape-request process
                   "setVariable"
                   (list
                    :variablesReference ref
                    :name (plist-get variable :name)
                    :value value)
-                  cb)))
+                  cb))
+   ((error "Adapter does not support setting variable from watch."))))
 
 (defun dape--scopes (process stack-frame cb)
   "Send scopes request to PROCESS for STACK-FRAME plist.
@@ -2769,10 +2773,14 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
        dape--info-ref
        dape--info-variable
        (read-string
-        (format "Set %s value: " (plist-get dape--info-variable :name))
+        (format "Set value of %s `%s' = "
+                (plist-get dape--info-variable :type)
+                (plist-get dape--info-variable :name))
         (or (plist-get dape--info-variable :value)
             (plist-get dape--info-variable :result))))
-    (dape--update process)))
+    (cond
+     (success (dape--update process))
+     (t (dape--repl-insert-text (format "%s\n" msg))))))
 
 (dape--info-buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
