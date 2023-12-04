@@ -1,9 +1,11 @@
 ;;; dape.el --- Debug Adapter Protocol for Emacs -*- lexical-binding: t -*-
 
+;; Copyright (C) 2023  Free Software Foundation, Inc.
+
 ;; Author: Daniel Pettersson
 ;; Created: 2023
 ;; License: GPL-3.0-or-later
-;; Version: 0.1
+;; Version: 0.2
 ;; Homepage: https://github.com/svaante/dape
 ;; Package-Requires: ((emacs "29.1"))
 
