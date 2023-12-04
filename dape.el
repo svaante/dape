@@ -1546,7 +1546,7 @@ Starts a new process as per request of the debug adapter."
                    (setq dape--restart-in-progress nil))))
    ((and dape--config)
     (dape dape--config))
-   ((user-error "Unable to derive session to restart"))))
+   ((user-error "Unable to derive session to restart, run `dape'"))))
 
 (defun dape-kill (&optional cb)
   "Kill debug session.
