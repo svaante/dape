@@ -1548,31 +1548,36 @@ Starts a new process as per request of the debug adapter."
     (dape dape--config))
    ((user-error "Unable to derive session to restart, run `dape'"))))
 
-(defun dape-kill (&optional cb)
+(defun dape-kill (&optional cb with-disconnect)
   "Kill debug session.
-CB will be called after adapter termination."
+CB will be called after adapter termination.
+With WITH-DISCONNECT use disconnect instead of terminate
+used internally as a fallback to terminate."
   (interactive)
   (when (hash-table-p dape--timers)
     (dolist (timer (hash-table-values dape--timers))
       (cancel-timer timer)))
   (cond
-   ((and (dape--live-process t)
+   ((and (not with-disconnect)
+         (dape--live-process t)
          (plist-get dape--capabilities
                     :supportsTerminateRequest))
     (dape-request dape--process
                   "terminate"
                   nil
                   (dape--callback
-                   (dape--kill-processes)
-                   (when cb
-                     (funcall cb nil)))))
+                   (if (not success)
+                       (dape-kill cb 'with-disconnect)
+                     (dape--kill-processes)
+                     (when cb
+                       (funcall cb nil))))))
    ((dape--live-process t)
     (dape-request dape--process
                   "disconnect"
                   `(:restart nil .
-                             ,(when (plist-get dape--capabilities
-                                               :supportTerminateDebuggee)
-                                (list :terminateDebuggee t)))
+                    ,(when (plist-get dape--capabilities
+                                      :supportTerminateDebuggee)
+                       (list :terminateDebuggee t)))
                   (dape--callback
                    (dape--kill-processes)
                    (when cb
