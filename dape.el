@@ -384,7 +384,7 @@ The hook is run with one argument, the compilation buffer."
   "Face used to display conditional breakpoints.")
 
 (defface dape-breakpoint-face
-  '((t :inherit (bold default)))
+  '((t :inherit (font-lock-keyword-face)))
   "Face used to display breakpoint overlays.")
 
 (defface dape-stack-trace
@@ -1861,18 +1861,26 @@ Removes itself on execution."
         (when-let ((window (get-buffer-window buffer)))
           (set-window-buffer window buffer))))))
 
-(defun dape--overlay-margin (overlay string)
-  "Insert STRING into margin by OVERLAY with FACE."
+(defun dape--overlay-icon (overlay string bitmap face)
+  "Put STRING or BITMAP on OVERLAY with FACE."
   (when-let ((buffer (overlay-buffer overlay)))
-    (with-current-buffer buffer
-      (unless dape--original-margin
-        (setq-local dape--original-margin left-margin-width)
-        (setq left-margin-width 2)
-        (when-let ((window (get-buffer-window)))
-          (set-window-buffer window buffer))))
-    (overlay-put overlay 'before-string
-                 (propertize " "
-                             'display `((margin left-margin) ,string)))))
+    (let (before-string)
+      (cond
+       ((and (not (eql fringe-mode 0)) (window-system))
+        (setq before-string
+              (propertize " " 'display
+                          `(left-fringe ,bitmap ,face))))
+       (t
+        (with-current-buffer buffer
+          (unless dape--original-margin
+            (setq-local dape--original-margin left-margin-width)
+            (setq left-margin-width 2)
+            (when-let ((window (get-buffer-window)))
+              (set-window-buffer window buffer))))
+        (setq before-string
+              (propertize " " 'display `((margin left-margin)
+                                         ,(propertize string 'face face))))))
+      (overlay-put overlay 'before-string before-string))))
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
   "Make sure that Dape OVERLAY region covers line."
@@ -1926,8 +1934,10 @@ If EXPRESSION place conditional breakpoint."
                                               (format "Break: %s" expression)
                                               'face 'dape-expression-face))))
      (t
-      (dape--overlay-margin breakpoint
-                            (propertize "B" 'face 'dape-breakpoint-face))))
+      (dape--overlay-icon breakpoint
+                          "B"
+                          'breakpoint
+                          'dape-breakpoint-face)))
     (overlay-put breakpoint 'modification-hooks '(dape--breakpoint-freeze))
     (push breakpoint dape--breakpoints))
   (dape--update-breakpoints-in-buffer (current-buffer))
