@@ -1702,7 +1702,7 @@ SKIP-TYPES is a list of overlay properties to skip removal of."
   (setq dape--stack-id stack-id)
   (dape--update (dape--live-process) t))
 
-(defun dape-watch-dwim (expression)
+(defun dape-watch-dwim (expression &optional skip-add skip-remove)
   "Add or remove watch for EXPRESSION.
 Watched symbols are displayed in *dape-info* buffer.
 *dape-info* buffer is displayed by executing the `dape-info' command."
@@ -1722,10 +1722,14 @@ Watched symbols are displayed in *dape-info* buffer.
                           (equal (plist-get plist :name)
                                  expression))
                         dape--watched)))
-      (setq dape--watched
-            (cl-remove plist dape--watched))
-    (push (list :name expression)
-          dape--watched))
+      (unless skip-remove
+        (setq dape--watched
+              (cl-remove plist dape--watched)))
+    (unless skip-add
+      (push (list :name expression)
+            dape--watched)
+      ;; FIXME don't want to have a depency on info ui in core commands
+      (dape--display-buffer (dape--info-buffer 'dape-info-watch-mode))))
   (run-hooks 'dape-update-ui-hooks))
 
 (defun dape-evaluate-expression (expression)
@@ -2761,7 +2765,9 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 (dape--info-buffer-command dape-info-scope-watch-dwim (dape--info-variable)
   "Watch variable or remove from watch at line in dape info buffer."
   (dape-watch-dwim (or (plist-get dape--info-variable :evaluateName)
-                       (plist-get dape--info-variable :name)))
+                       (plist-get dape--info-variable :name))
+                   (eq major-mode 'dape-info-watch-mode)
+                   (eq major-mode 'dape-info-scope-mode))
   (gdb-set-window-buffer (dape--info-buffer 'dape-info-watch-mode) t))
 
 (dape--info-buffer-map dape-info-variable-name-map dape-info-scope-watch-dwim)
