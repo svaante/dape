@@ -1365,10 +1365,9 @@ Starts a new process as per request of the debug adapter."
                                 (list (plist-get body :text)
                                       (plist-get body :description)))))
     (dape--repl-message (mapconcat 'identity texts "\n")
-                        (if (equal "exception"
+                        (when (equal "exception"
                                    (plist-get body :reason))
-                            'error
-                          'italic))))
+                            'error))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql continued)) body)
   "Handle continued events."
@@ -1385,7 +1384,7 @@ Starts a new process as per request of the debug adapter."
     ("stderr"
      (dape--repl-message (plist-get body :output) 'error))
     ((or "console" "output")
-     (dape--repl-message (plist-get body :output) 'italic))))
+     (dape--repl-message (plist-get body :output)))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql exited)) body)
   "Handle exited events."
@@ -2036,8 +2035,10 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
 (defun dape--repl-message (msg &optional face)
   "Insert MSG with FACE in *dape-repl* buffer.
 Handles newline."
-  (setq msg (concat "\n" (string-trim msg)))
-  (unless (eq msg "\n")
+  (when (and (stringp msg) (not (string-empty-p msg)))
+    (when (eql (aref msg (1- (length msg))) ?\n)
+      (setq msg (substring msg 0 (1- (length msg)))))
+    (setq msg (concat "\n" msg))
     (if (not (get-buffer-window "*dape-repl*"))
         (when (stringp msg)
           (message (format "%s" (string-trim msg))
@@ -2061,6 +2062,9 @@ Handles newline."
                 ;;      Could not get comint-output-filter to work by moving
                 ;;      process marker. Comint removes forgets last prompt
                 ;;      and everything goes to shit.
+                (when-let ((process (get-buffer-process buffer)))
+                  (set-marker (process-mark process)
+                              (point-max)))
                 (let ((comint-last-output-start start))
                   (run-hook-with-args 'comint-output-filter-functions msg)))))))))))
 
@@ -2096,12 +2100,12 @@ Handles newline."
       (call-interactively cmd))
      ;; Evaluate expression
      (t
+      (dape--repl-insert-prompt)
       (dape--evaluate-expression (dape--live-process)
                                  (plist-get (dape--current-stack-frame) :id)
                                  (substring-no-properties input)
                                  "repl"
                                  (dape--callback
-                                  (dape--repl-insert-prompt)
                                   (dape--repl-message (concat
                                                        (if success
                                                            (plist-get body :result)
