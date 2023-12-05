@@ -3,9 +3,10 @@
 ;; Copyright (C) 2023  Free Software Foundation, Inc.
 
 ;; Author: Daniel Pettersson
+;; Maintainer: Daniel Pettersson <daniel@dpettersson.net>
 ;; Created: 2023
 ;; License: GPL-3.0-or-later
-;; Version: 0.2
+;; Version: 0.2.1
 ;; Homepage: https://github.com/svaante/dape
 ;; Package-Requires: ((emacs "29.1"))
 
