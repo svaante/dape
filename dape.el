@@ -957,8 +957,7 @@ Uses `dape--config' to derive type and to construct request."
                    (when start-debugging
                      (plist-put dape--config 'start-debugging nil))
                    (unless success
-                     (dape--repl-insert-text (concat msg "\n")
-                                             'dape-repl-exit-code-fail)
+                     (dape--repl-message msg 'dape-repl-exit-code-fail)
                      (dape-kill))))))
 
 (defun dape--set-breakpoints (process buffer breakpoints &optional cb)
@@ -1329,9 +1328,9 @@ Starts a new process as per request of the debug adapter."
                               (or (plist-get body :startMethod)
                                   "start"))))
     (dape--update-state start-method)
-    (dape--repl-insert-text (format "Process %s %s\n"
-                                    start-method
-                                    (plist-get body :name)))))
+    (dape--repl-message (format "Process %s %s"
+                                start-method
+                                (plist-get body :name)))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql thread)) body)
   "Handle thread events."
@@ -1364,11 +1363,11 @@ Starts a new process as per request of the debug adapter."
   (when-let ((texts (seq-filter 'stringp
                                 (list (plist-get body :text)
                                       (plist-get body :description)))))
-    (dape--repl-insert-text (concat (mapconcat 'identity texts "\n") "\n")
-                            (if (equal "exception"
-                                       (plist-get body :reason))
-                                'error
-                              'italic))))
+    (dape--repl-message (mapconcat 'identity texts "\n")
+                        (if (equal "exception"
+                                   (plist-get body :reason))
+                            'error
+                          'italic))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql continued)) body)
   "Handle continued events."
@@ -1381,27 +1380,27 @@ Starts a new process as per request of the debug adapter."
   "Handle output events."
   (pcase (plist-get body :category)
     ("stdout"
-     (dape--repl-insert-text (plist-get body :output)))
+     (dape--repl-message (plist-get body :output)))
     ("stderr"
-     (dape--repl-insert-text (plist-get body :output) 'error))
+     (dape--repl-message (plist-get body :output) 'error))
     ((or "console" "output")
-     (dape--repl-insert-text (plist-get body :output) 'italic))))
+     (dape--repl-message (plist-get body :output) 'italic))))
 
 (cl-defmethod dape-handle-event (_process (_event (eql exited)) body)
   "Handle exited events."
   (dape--update-state "exited")
   (dape--remove-stack-pointers)
-  (dape--repl-insert-text (format "* Exit code: %d *\n"
-                                  (plist-get body :exitCode))
-                          (if (zerop (plist-get body :exitCode))
-                              'dape-repl-exit-code-exit
-                            'dape-repl-exit-code-fail)))
+  (dape--repl-message (format "* Exit code: %d *"
+                              (plist-get body :exitCode))
+                      (if (zerop (plist-get body :exitCode))
+                          'dape-repl-exit-code-exit
+                        'dape-repl-exit-code-fail)))
 
 (cl-defmethod dape-handle-event (_process (_event (eql terminated)) _body)
   "Handle terminated events."
   (dape--update-state "terminated")
   (dape--remove-stack-pointers)
-  (dape--repl-insert-text "* Program terminated *\n" 'italic)
+  (dape--repl-message "* Program terminated *" 'italic)
   (unless dape--restart-in-progress
     (dape-kill)))
 
@@ -1805,7 +1804,7 @@ Removes itself on execution."
     (run-hook-with-args 'dape-compile-compile-hooks buffer)
     (dape dape--config 'skip-compile))
    (t
-    (dape--repl-insert-text (format "* Compilation failed %s *\n" str)))))
+    (dape--repl-message (format "* Compilation failed %s *" str)))))
 
 (defun dape--compile (config)
   "Start compilation for CONFIG."
@@ -2033,37 +2032,47 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
 (defvar dape--repl-prompt "> "
   "Dape repl prompt.")
 
-(defun dape--repl-insert-text (msg &optional face)
-  "Insert MSG with FACE in *dape-repl* buffer."
-  (if (not (get-buffer-window "*dape-repl*"))
-      (when (stringp msg)
-        (message (format "%s"
-                         (string-trim msg "\\\n" "\\\n"))
-                 'face face))
-    (cond
-     (dape--repl-insert-text-guard
-      (run-with-timer 0.1 nil 'dape--repl-insert-text msg))
-     (t
-      (setq dape--repl-insert-text-guard t)
-      (when-let ((buffer (get-buffer "*dape-repl*")))
-        (with-current-buffer buffer
-          (save-excursion
-            (condition-case err
-                (progn
-                  (goto-char (point-max))
-                  (comint-previous-prompt 0)
-                  (forward-line -1)
-                  (end-of-line)
-                  (when-let (line (thing-at-point 'line))
-                    (when (eq (aref line 0) ?>)
-                      (let ((inhibit-read-only t))
-                        (insert "\n"))))
-                  (let ((inhibit-read-only t))
-                    (insert (propertize msg 'font-lock-face face))))
-              (error
-               (setq dape--repl-insert-text-guard nil)
-               (signal (car err) (cdr err)))))))
-      (setq dape--repl-insert-text-guard nil)))))
+(defun dape--repl-message (msg &optional face)
+  "Insert MSG with FACE in *dape-repl* buffer.
+Handles newline."
+  (setq msg (concat "\n" (string-trim msg)))
+  (unless (eq msg "\n")
+    (if (not (get-buffer-window "*dape-repl*"))
+        (when (stringp msg)
+          (message (format "%s" (string-trim msg))
+                   'face face))
+      (cond
+       (dape--repl-insert-text-guard
+        (run-with-timer 0.1 nil 'dape--repl-message msg))
+       (t
+        (let ((dape--repl-insert-text-guard t))
+          (when-let ((buffer (get-buffer "*dape-repl*")))
+            (with-current-buffer buffer
+              (let (start)
+                (if comint-last-prompt
+                    (goto-char (1- (marker-position (car comint-last-prompt))))
+                  (goto-char (point-max)))
+                (setq start (point-marker))
+                (let ((inhibit-read-only t))
+                  (insert (propertize msg 'font-lock-face face)))
+                (goto-char (point-max))
+                ;; HACK Run hooks as if comint-output-filter was executed
+                ;;      Could not get comint-output-filter to work by moving
+                ;;      process marker. Comint removes forgets last prompt
+                ;;      and everything goes to shit.
+                (let ((comint-last-output-start start))
+                  (run-hook-with-args 'comint-output-filter-functions msg)))))))))))
+
+(defun dape--repl-insert-prompt ()
+  "Insert `dape--repl-insert-prompt' into repl."
+  (cond
+   (dape--repl-insert-text-guard
+    (run-with-timer 0.01 nil 'dape--repl-insert-prompt))
+   (t
+    (let ((dape--repl-insert-text-guard t))
+      (when-let* ((buffer (get-buffer "*dape-repl*"))
+                  (dummy-process (get-buffer-process buffer)))
+        (comint-output-filter dummy-process dape--repl-prompt))))))
 
 (defun dape--repl-input-sender (dummy-process input)
   "Dape repl `comint-input-sender'."
@@ -2073,6 +2082,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
      ((and (string-empty-p input)
            (not (string-empty-p (car (ring-elements comint-input-ring)))))
       (when-let ((last (car (ring-elements comint-input-ring))))
+        (message "Using last command %s" last)
         (dape--repl-input-sender dummy-process last)))
      ;; Run command from `dape-named-commands'
      ((setq cmd
@@ -2081,33 +2091,24 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                      (cl-loop for (key . value) in dape-repl-commands
                               when (equal (substring key 0 1) input)
                               return value))))
-      (setq dape--repl-insert-text-guard t)
-      (comint-output-filter dummy-process
-                            (concat "\n" dape--repl-prompt))
-      (call-interactively cmd)
-      (setq dape--repl-insert-text-guard nil))
+      (dape--repl-insert-prompt)
+      (call-interactively cmd))
      ;; Evaluate expression
      (t
-      ;; FIXME `dape--repl-insert-text-guard' is used here to not mess up ordering
-      ;;       when running commands that will itself trigger output request
-      (setq dape--repl-insert-text-guard t)
       (dape--evaluate-expression (dape--live-process)
                                  (plist-get (dape--current-stack-frame) :id)
                                  (substring-no-properties input)
                                  "repl"
                                  (dape--callback
-                                  (comint-output-filter dummy-process
-                                                        (concat
-                                                         (if success
-                                                             (plist-get body :result)
-                                                           msg)
-                                                         "\n\n"
-                                                         dape--repl-prompt))
-                                  (setq dape--repl-insert-text-guard nil)))))))
+                                  (dape--repl-insert-prompt)
+                                  (dape--repl-message (concat
+                                                       (if success
+                                                           (plist-get body :result)
+                                                         msg)))))))))
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
-  ;; FIXME repl completion needs some work
+  ;; FIXME repl completion needs some work :completionTriggerCharacters
   (let* ((bounds (save-excursion
                    (cons (and (skip-chars-backward "^\s")
                               (point))
@@ -2205,6 +2206,9 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (user-error "`dape-repl-mode' all ready enabled"))
   (setq-local dape-repl-mode t
               comint-prompt-read-only t
+              comint-scroll-to-bottom-on-input t
+              ;; HACK ? Always keep prompt at the bottom of the window
+              scroll-conservatively 101
               comint-input-sender 'dape--repl-input-sender
               comint-prompt-regexp (concat "^" (regexp-quote dape--repl-prompt))
               comint-process-echoes nil)
@@ -2816,7 +2820,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
             (plist-get dape--info-variable :result))))
     (cond
      (success (dape--update process))
-     (t (dape--repl-insert-text (format "%s\n" msg))))))
+     (t (dape--repl-message msg)))))
 
 (dape--info-buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
