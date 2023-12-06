@@ -3,7 +3,7 @@
 #+property: header-args    :results silent
 #+language: en
 
-Dape is an debug adapter client for Emacs.
+#+html: <a href="https://elpa.gnu.org/packages/dape.html"><img alt="GNU ELPA" src="https://elpa.gnu.org/packages/dape.svg"/></a>
 
 Use ~dape-configs~ to set up your debug adapter configurations.
 To initiate debugging sessions, use the command ~dape~.
@@ -33,8 +33,6 @@ Currently =Dape= does not come with any debug adapter configuration.
 
 #+begin_src emacs-lisp
   (use-package dape
-    ;; Currently only on github
-    :straight (dape :type git :host github :repo "svaante/dape")
     ;; To use window configuration like gud (gdb-mi)
     ;; :init
     ;; (setq dape-buffer-window-arrangment 'gud)
