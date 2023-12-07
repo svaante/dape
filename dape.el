@@ -2118,93 +2118,96 @@ Handles newline."
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
-  ;; FIXME repl completion needs some work :completionTriggerCharacters
-  (let* ((bounds (save-excursion
-                   (cons (and (skip-chars-backward "^\s")
-                              (point))
-                         (and (skip-chars-forward "^\s")
-                              (point)))))
-         (column (1+ (- (cdr bounds) (car bounds))))
-         (str (buffer-substring-no-properties
-               (car bounds)
-               (cdr bounds)))
-         (collection
-          (mapcar (lambda (cmd)
-                    (cons (car cmd)
-                          (format " %s"
-                                  (propertize (symbol-name (cdr cmd))
-                                              'face 'font-lock-builtin-face))))
-                  dape-repl-commands))
-         done)
-    (list
-     (car bounds)
-     (cdr bounds)
-     (completion-table-dynamic
-      (lambda (_str)
-        (when-let ((process (dape--live-process t)))
-          (dape--with dape-request (process
-                                    "completions"
-                                    (append
-                                     (when (dape--stopped-threads)
-                                       (list :frameId
-                                             (plist-get (dape--current-stack-frame) :id)))
-                                     (list
-                                      :text str
-                                      :column column
-                                      :line 1)))
-            (setq collection
-                  (append
-                   collection
-                   (mapcar
-                    (lambda (target)
-                      (cons
-                       (cond
-                        ((plist-get target :text)
-                         (plist-get target :text))
-                        ((and (plist-get target :label)
-                              (plist-get target :start))
-                         (let ((label (plist-get target :label))
-                               (start (plist-get target :start)))
-                           (concat (substring str 0 start)
-                                   label
-                                   (substring str
-                                              (thread-first
-                                                target
-                                                (plist-get :length)
-                                                (+ 1 start)
-                                                (min (length str)))))))
-                        ((and (plist-get target :label)
-                              (memq (aref str (1- (length str))) '(?. ?/ ?:)))
-                         (concat str (plist-get target :label)))
-                        ((and (plist-get target :label)
-                              (length> (plist-get target :label)
-                                       (length str)))
-                         (plist-get target :label))
-                        ((and (plist-get target :label)
-                              (length> (plist-get target :label)
-                                       (length str)))
-                         (cl-loop with label = (plist-get target :label)
-                                  for i downfrom (1- (length label)) downto 1
-                                  when (equal (substring str (- (length str) i))
-                                              (substring label 0 i))
-                                  return (concat str (substring label i))
-                                  finally return label)))
-                       (when-let ((type (plist-get target :type)))
-                         (format " %s"
-                                 (propertize type
-                                             'face 'font-lock-type-face)))))
-                    (plist-get body :targets))))
-            (setq done t))
-          (while-no-input
-            (while (not done)
-              (accept-process-output nil 0 1))))
-        collection))
-     :annotation-function
-     (lambda (str)
-       (when-let ((annotation
-                   (alist-get (substring-no-properties str) collection
-                              nil nil 'equal)))
-         annotation)))))
+  (when (or (symbol-at-point)
+            (member (buffer-substring-no-properties (1- (point)) (point))
+                    (or (plist-get dape--capabilities :completionTriggerCharacters)
+                        '("."))))
+    (let* ((bounds (save-excursion
+                     (cons (and (skip-chars-backward "^\s")
+                                (point))
+                           (and (skip-chars-forward "^\s")
+                                (point)))))
+           (column (1+ (- (cdr bounds) (car bounds))))
+           (str (buffer-substring-no-properties
+                 (car bounds)
+                 (cdr bounds)))
+           (collection
+            (mapcar (lambda (cmd)
+                      (cons (car cmd)
+                            (format " %s"
+                                    (propertize (symbol-name (cdr cmd))
+                                                'face 'font-lock-builtin-face))))
+                    dape-repl-commands))
+           done)
+      (list
+       (car bounds)
+       (cdr bounds)
+       (completion-table-dynamic
+        (lambda (_str)
+          (when-let ((process (dape--live-process t)))
+            (dape--with dape-request (process
+                                      "completions"
+                                      (append
+                                       (when (dape--stopped-threads)
+                                         (list :frameId
+                                               (plist-get (dape--current-stack-frame) :id)))
+                                       (list
+                                        :text str
+                                        :column column
+                                        :line 1)))
+              (setq collection
+                    (append
+                     collection
+                     (mapcar
+                      (lambda (target)
+                        (cons
+                         (cond
+                          ((plist-get target :text)
+                           (plist-get target :text))
+                          ((and (plist-get target :label)
+                                (plist-get target :start))
+                           (let ((label (plist-get target :label))
+                                 (start (plist-get target :start)))
+                             (concat (substring str 0 start)
+                                     label
+                                     (substring str
+                                                (thread-first
+                                                  target
+                                                  (plist-get :length)
+                                                  (+ 1 start)
+                                                  (min (length str)))))))
+                          ((and (plist-get target :label)
+                                (memq (aref str (1- (length str))) '(?. ?/ ?:)))
+                           (concat str (plist-get target :label)))
+                          ((and (plist-get target :label)
+                                (length> (plist-get target :label)
+                                         (length str)))
+                           (plist-get target :label))
+                          ((and (plist-get target :label)
+                                (length> (plist-get target :label)
+                                         (length str)))
+                           (cl-loop with label = (plist-get target :label)
+                                    for i downfrom (1- (length label)) downto 1
+                                    when (equal (substring str (- (length str) i))
+                                                (substring label 0 i))
+                                    return (concat str (substring label i))
+                                    finally return label)))
+                         (when-let ((type (plist-get target :type)))
+                           (format " %s"
+                                   (propertize type
+                                               'face 'font-lock-type-face)))))
+                      (plist-get body :targets))))
+              (setq done t))
+            (while-no-input
+              (while (not done)
+                (accept-process-output nil 0 1))))
+          collection))
+       :annotation-function
+       (lambda (str)
+         (when-let ((annotation
+                     (alist-get (substring-no-properties str) collection
+                                nil nil 'equal)))
+           annotation))))))
 
 (defvar dape-repl-mode nil)
 
