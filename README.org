@@ -44,6 +44,10 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; (remove-hook 'dape-on-start-hooks 'dape-info)
     ;; (remove-hook 'dape-on-start-hooks 'dape-repl)
 
+    ;; To display info and/or repl buffers on stopped
+    ;; (add-hook 'dape-on-stopped-hooks 'dape-info)
+    ;; (add-hook 'dape-on-stopped-hooks 'dape-repl)
+
     ;; By default dape uses gdb keybinding prefix
     ;; (setq dape-key-prefix "\C-x\C-a")
 

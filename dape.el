@@ -199,7 +199,7 @@
      :request "launch"
      :cwd dape-cwd-fn
      :program dape-find-file
-     :stopAtEntry t))
+     :stopAtEntry nil))
   "This variable holds the Dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
@@ -268,6 +268,10 @@ Functions and symbols in configuration:
 
 (defcustom dape-on-start-hooks '(dape-repl dape-info)
   "Hook to run on session start."
+  :type 'hook)
+
+(defcustom dape-on-stopped-hooks '()
+  "Hook to run on session stopped."
   :type 'hook)
 
 (defcustom dape-update-ui-hooks '(dape-info-update)
@@ -1367,7 +1371,8 @@ Starts a new process as per request of the debug adapter."
     (dape--repl-message (mapconcat 'identity texts "\n")
                         (when (equal "exception"
                                    (plist-get body :reason))
-                            'error))))
+                          'error)))
+  (run-hooks 'dape-on-stopped-hooks))
 
 (cl-defmethod dape-handle-event (_process (_event (eql continued)) body)
   "Handle continued events."
