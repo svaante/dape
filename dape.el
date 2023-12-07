@@ -774,6 +774,11 @@ If NOWARN does not error on no active process."
 (defun dape--process-sentinel (process _msg)
   "Sentinel for Dape processes."
   (unless (process-live-p process)
+    ;; Flush stdout contents
+    (when-let* ((buffer (process-buffer process))
+                ((buffer-live-p buffer)))
+      (with-current-buffer buffer
+        (dape--debug 'io "Flushing io buffer:\n%s" (buffer-string))))
     (dape--remove-stack-pointers)
     ;; Clean mode-line after 2 seconds
     (run-with-timer 2 nil (lambda ()
