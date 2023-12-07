@@ -1437,7 +1437,7 @@ Starts a new process as per request of the debug adapter."
 
 (defun dape--start-multi-session (config)
   "Start multi session for CONFIG."
-  (dape--debug 'info "Starting new multi session")
+  (dape--debug 'info "Starting new multi session with config:\n%S" config)
   (let ((buffer (dape--get-buffer))
         (default-directory (or (plist-get config 'command-cwd)
                                default-directory))
@@ -1484,7 +1484,7 @@ Starts a new process as per request of the debug adapter."
 
 (defun dape--start-single-session (config)
   "Start single session for CONFIG."
-  (dape--debug 'info "Starting new single session")
+  (dape--debug 'info "Starting new single session with config:\n%S" config)
   (let ((buffer (dape--get-buffer))
         (default-directory (or (plist-get config 'command-cwd)
                                default-directory))
