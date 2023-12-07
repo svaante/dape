@@ -40,10 +40,8 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; Info buffers to the right
     ;; (setq dape-buffer-window-arrangment 'right)
 
-    ;; To remove info buffers
-    ;; (remove-hook 'dape-update-ui-hooks 'dape-info-update)
-
-    ;; To remove repl buffer on startup
+    ;; To not display info and/or buffers on startup
+    ;; (remove-hook 'dape-on-start-hooks 'dape-info)
     ;; (remove-hook 'dape-on-start-hooks 'dape-repl)
 
     ;; By default dape uses gdb keybinding prefix

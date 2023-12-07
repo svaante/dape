@@ -266,7 +266,7 @@ Functions and symbols in configuration:
                  (const :tag "Left side" left)
                  (const :tag "Right side" right)))
 
-(defcustom dape-on-start-hooks '(dape-repl)
+(defcustom dape-on-start-hooks '(dape-repl dape-info)
   "Hook to run on session start."
   :type 'hook)
 
@@ -2422,8 +2422,9 @@ with ARGS."
             ('dape-info-scope-mode (format "Scope <%s>" identifier))
             (_ (error "Unable to create mode from %s with %s" mode identifier)))))
 
-(defun dape--info-buffer (mode &optional identifier)
-  "Get or create info buffer with MODE and IDENTIFIER."
+(defun dape--info-buffer (mode &optional identifier skip-update)
+  "Get or create info buffer with MODE and IDENTIFIER.
+If SKIP-UPDATE is non nil skip updating buffer contents."
   (let ((buffer
          (or (dape--info-get-live-buffer mode identifier)
              (get-buffer-create (dape--info-buffer-name mode identifier)))))
@@ -2432,7 +2433,8 @@ with ARGS."
         (funcall mode)
         (setq dape--info-buffer-identifier identifier)
         (push buffer dape--info-buffers)))
-    (dape--info-buffer-update buffer)
+    (unless skip-update
+      (dape--info-buffer-update buffer))
     buffer))
 
 (defmacro dape--info-buffer-command (name properties doc &rest body)
@@ -2470,55 +2472,35 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
 
 (defun dape-info-update ()
   "Update and display `dape-info-*' buffers."
-  (pcase (dape--live-process t)
-    ('nil
-     (let ((buffers-to-update
-            (seq-filter (lambda (buffer)
-                          (and (get-buffer-window buffer)
-                               (with-current-buffer buffer
-                                 ;; TODO Should update watch buffer
-                                 (or ;; (dape--info-buffer-p 'dape-info-watch-mode)
-                                     (dape--info-buffer-p 'dape-info-breakpoints-mode)))))
-                        (dape--info-buffer-list))))
-       (dolist (buffer buffers-to-update)
-         (dape--info-buffer-update buffer))))
-    (_
-     ;; Open and update breakpoints and threads buffer
-     (if-let ((opened-group-1-buffers
-               (seq-filter (lambda (buffer)
-                             (and (get-buffer-window buffer)
-                                  (with-current-buffer buffer
-                                    (or (dape--info-buffer-p 'dape-info-breakpoints-mode)
-                                        (dape--info-buffer-p 'dape-info-threads-mode)))))
-                           (dape--info-buffer-list))))
-         (dolist (buffer opened-group-1-buffers)
-           (dape--info-buffer-update buffer))
-       (dape--display-buffer
-        (dape--info-buffer 'dape-info-breakpoints-mode)))
-     ;; Open and update stack buffer
-     (dape--display-buffer
-      (dape--info-buffer 'dape-info-stack-mode))
-     ;; Open and update stack buffer
-     (if-let ((opened-group-2-buffers
-               (seq-filter (lambda (buffer)
-                             (and (get-buffer-window buffer)
-                                  (with-current-buffer buffer
-                                    (or (dape--info-buffer-p 'dape-info-scope-mode)
-                                        (dape--info-buffer-p 'dape-info-watch-mode)))))
-                           (dape--info-buffer-list))))
-         (dolist (buffer opened-group-2-buffers)
-           (dape--info-buffer-update buffer))
-       (dape--display-buffer
-        (dape--info-buffer 'dape-info-scope-mode 0))))))
+  (dolist (buffer (dape--info-buffer-list))
+    (dape--info-buffer-update buffer)))
+
 
 (defun dape-info ()
-  "Update and display *dape-info* buffers or close buffers."
+  "Update and display *dape-info* buffers."
   (interactive)
-  (if-let ((buffers
-            (seq-filter 'get-buffer-window (dape--info-buffer-list))))
-      (dolist (buffer buffers)
-        (kill-buffer buffer))
-    (dape-info-update)))
+  ;; Open breakpoints if not group-1 buffer displayed
+  (unless (seq-find (lambda (buffer)
+                      (and (get-buffer-window buffer)
+                           (with-current-buffer buffer
+                               (or (dape--info-buffer-p 'dape-info-breakpoints-mode)
+                                   (dape--info-buffer-p 'dape-info-threads-mode)))))
+                    (dape--info-buffer-list))
+    (dape--display-buffer
+     (dape--info-buffer 'dape-info-breakpoints-mode 'skip-update)))
+  ;; Open and update stack buffer
+  (dape--display-buffer
+   (dape--info-buffer 'dape-info-stack-mode 'skip-update))
+  ;; Open stack 0 if not group-2 buffer displayed
+  (unless (seq-find (lambda (buffer)
+                      (and (get-buffer-window buffer)
+                           (with-current-buffer buffer
+                             (or (dape--info-buffer-p 'dape-info-scope-mode)
+                                 (dape--info-buffer-p 'dape-info-watch-mode)))))
+                    (dape--info-buffer-list))
+    (dape--display-buffer
+     (dape--info-buffer 'dape-info-scope-mode 0 'skip-update)))
+  (dape-info-update))
 
 
 ;;; Info breakpoints buffer
@@ -2936,6 +2918,10 @@ CB is expected to be `dape--info-scope-update'."
   (when-let* ((process (dape--live-process t))
               (frame (dape--current-stack-frame))
               (scopes (plist-get frame :scopes))
+              ;; FIXME if scope is out of range here scope list could
+              ;;       have shrunk since last update and current
+              ;;       scope buffer should be killed and replaced if
+              ;;       if visible
               (scope (nth dape--info-buffer-identifier scopes)))
     (dape--with dape--variables (process scope)
       (dape--with dape--variables-recursive
