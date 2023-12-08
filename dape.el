@@ -1297,7 +1297,8 @@ Starts a new process to run process to be debugged."
                          buffer
                          buffer)
     (dape--display-buffer buffer))
-  (dape--response process (symbol-name command) seq t))
+  ;; For debugpy crashes if we send an response...
+  )
 
 (cl-defmethod dape-handle-request (process (command (eql startDebugging)) seq arguments)
   "Handle startDebugging requests.
