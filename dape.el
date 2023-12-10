@@ -1563,6 +1563,9 @@ Starts a new process as per request of the debug adapter."
 (defun dape-pause ()
   "Pause execution."
   (interactive)
+  (when (equal dape--state "stopped")
+    ;; cpptools crashes on pausing an paused thread
+    (user-error "Thread already is stopped"))
   (dape-request (dape--live-process) "pause" (dape--thread-id-object)))
 
 (defun dape-restart ()
