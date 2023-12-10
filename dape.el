@@ -1,4 +1,4 @@
-e;;; dape.el --- Debug Adapter Protocol for Emacs -*- lexical-binding: t -*-
+;;; dape.el --- Debug Adapter Protocol for Emacs -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2023  Free Software Foundation, Inc.
 
@@ -226,40 +226,37 @@ e;;; dape.el --- Debug Adapter Protocol for Emacs -*- lexical-binding: t -*-
      ;; bundle exec rake test
      -c (lambda () (read-string "Invoke command: ")))
     (jdtls
-      modes (java-mode java-ts-mode)
-
-      fn (lambda (config)
-	   (pcase-let* ((target (plist-get config 'target))
-			(default-directory (project-root (project-current)))
-			(server (with-current-buffer (find-file target)
-				  (eglot-current-server)))
-			(`(,project-name ,main-class)
-			 (split-string (plist-get config 'entrypoint) ":"))
-			(`[,module-paths ,class-paths]
-			 (eglot-execute-command server "vscode.java.resolveClasspath"
-						(vector main-class project-name))))
-	     (thread-first config
-			   (plist-put :mainClass main-class)
-			   (plist-put :projectName project-name)
-			   (plist-put :modulePaths module-paths)
-			   (plist-put :classPaths class-paths))))
-
-      port (lambda () (eglot-execute-command (eglot-current-server)
-					     "vscode.java.startDebugSession" nil))
-      entrypoint (lambda ()
-		   (completing-read
-		    "Main class: "
-		    (cl-map 'list
-			    (lambda (candidate)
-			      (concat (plist-get candidate :projectName) ":"
-				      (plist-get candidate :mainClass)))
-			    (eglot-execute-command (eglot-current-server)
-						   "vscode.java.resolveMainClass"
-						   (project-name (project-current))))
-		    nil t))
-
-      target (lambda () (file-relative-name (buffer-file-name)
-					    (project-root (project-current))))
+     modes (java-mode java-ts-mode)
+     fn (lambda (config)
+	  (pcase-let* ((target (plist-get config 'target))
+		       (default-directory (project-root (project-current)))
+		       (server (with-current-buffer (find-file target)
+				 (eglot-current-server)))
+		       (`(,project-name ,main-class)
+			(split-string (plist-get config 'entrypoint) ":"))
+		       (`[,module-paths ,class-paths]
+			(eglot-execute-command server "vscode.java.resolveClasspath"
+					       (vector main-class project-name))))
+	    (thread-first config
+			  (plist-put :mainClass main-class)
+			  (plist-put :projectName project-name)
+			  (plist-put :modulePaths module-paths)
+			  (plist-put :classPaths class-paths))))
+     port (lambda () (eglot-execute-command (eglot-current-server)
+					    "vscode.java.startDebugSession" nil))
+     entrypoint (lambda ()
+		  (completing-read
+		   "Main class: "
+		   (cl-map 'list
+			   (lambda (candidate)
+			     (concat (plist-get candidate :projectName) ":"
+				     (plist-get candidate :mainClass)))
+			   (eglot-execute-command (eglot-current-server)
+						  "vscode.java.resolveMainClass"
+						  (project-name (project-current))))
+		   nil t))
+     target (lambda () (file-relative-name (buffer-file-name)
+					   (project-root (project-current))))
       :args ""
       :stopOnEntry nil
       :type "java"
