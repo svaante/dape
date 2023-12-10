@@ -2220,16 +2220,17 @@ Handles newline."
        (completion-table-dynamic
         (lambda (_str)
           (when-let ((process (dape--live-process t)))
-            (dape--with dape-request (process
-                                      "completions"
-                                      (append
-                                       (when (dape--stopped-threads)
-                                         (list :frameId
-                                               (plist-get (dape--current-stack-frame) :id)))
-                                       (list
-                                        :text str
-                                        :column column
-                                        :line 1)))
+            (dape--with dape-request
+                (process
+                 "completions"
+                 (append
+                  (when (dape--stopped-threads)
+                    (list :frameId
+                          (plist-get (dape--current-stack-frame) :id)))
+                  (list
+                   :text str
+                   :column column
+                   :line 1)))
               (setq collection
                     (append
                      collection
