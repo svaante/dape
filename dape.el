@@ -249,6 +249,12 @@ Functions and symbols in configuration:
                         ((const :tag "Adapter type" :type) string)
                         ((const :tag "Request type launch/attach" :request) string)))))
 
+;; TODO Add more defaults, don't know which adapters support
+;;      sourceReference
+(defcustom dape-mime-mode '(("text/x-lldb.disassembly" . asm-mode))
+  "On source request of mime type key open buffer with mode value."
+  :type '(alist :key-type string :value-type function))
+
 (defcustom dape-key-prefix "\C-x\C-a"
   "Prefix of all dape commands."
   :type 'key-sequence)
@@ -433,8 +439,8 @@ The hook is run with one argument, the compilation buffer."
   "Session capabilities plist.")
 (defvar dape--threads nil
   "Session plist of thread data.")
-(defvar dape--stack-pointers nil
-  "List of session stack pointer overlays.")
+(defvar dape--source-buffers nil
+  "Plist of sources reference to buffer.")
 (defvar dape--breakpoints nil
   "List of session breakpoint overlays.")
 (defvar dape--variable-overlays nil
@@ -451,6 +457,9 @@ The hook is run with one argument, the compilation buffer."
   "Debug adapter parent process.  Used for by startDebugging adapters.")
 (defvar dape--restart-in-progress nil
   "Used for prevent adapter killing when restart request is in flight.")
+
+(defvar-local dape--source nil
+  "Store source plist in fetched source buffer.")
 
 (defvar dape--repl-insert-text-guard nil
   "Guard var for *dape-repl* buffer text updates.")
@@ -511,9 +520,10 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
                          (plist-get :stackFrames)))
          (stack-frames-with-source
           (seq-filter (lambda (stack-frame)
-                        (thread-first stack-frame
-                                      (plist-get :source)
-                                      (plist-get :path)))
+                        (let* ((source (plist-get stack-frame :source))
+                               (path (plist-get source :path))
+                               (source-reference (or (plist-get source :sourceReference) 0)))
+                          (or path (not (zerop source-reference)))))
                       stack-frames)))
     (or (seq-find (lambda (stack-frame)
                     (eq (plist-get stack-frame :id)
@@ -522,16 +532,22 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
         (car stack-frames-with-source)
         (car stack-frames))))
 
-(defun dape--object-to-marker (plist &optional buffer-open-fn)
-  "Create marker from dap PLIST containing file and line information.
-If BUFFER-OPEN-FN is set, use that function to open a buffer from file path."
-  (and-let* ((path (thread-first plist
-                                 (plist-get :source)
-                                 (plist-get :path)))
-             ((file-exists-p path))
+(defun dape--object-to-marker (plist)
+  "Create marker from dap PLIST containing source information.
+Note requires `dape--source-ensure' if source is by reference."
+  (when-let ((source (plist-get plist :source))
              (line (plist-get plist :line))
-             (buffer-open-fn (or buffer-open-fn 'find-file-noselect))
-             (buffer (funcall buffer-open-fn path)))
+             (buffer
+              (or (when-let* ((source-reference
+                               (plist-get source :sourceReference))
+                              (buffer (plist-get dape--source-buffers
+                                                 source-reference))
+                              ((buffer-live-p buffer)))
+                    buffer)
+                  (when-let* ((path (plist-get source :path))
+                              ((file-exists-p path))
+                              (buffer (find-file-noselect path t)))
+                    buffer))))
     (with-current-buffer buffer
       (save-excursion
         (goto-char (point-min))
@@ -545,10 +561,11 @@ If BUFFER-OPEN-FN is set, use that function to open a buffer from file path."
   "Goto file and line of dap PLIST containing file and line information.
 If NO-SELECT does not select buffer.
 If PULSE pulse on after opening file."
-  (when-let ((marker (dape--object-to-marker plist)))
-    (let ((window
-           (display-buffer (marker-buffer marker)
-                           dape-display-source-buffer-action)))
+  (dape--with dape--source-ensure ((dape--live-process t) plist)
+    (when-let* ((marker (dape--object-to-marker plist))
+                (window
+                 (display-buffer (marker-buffer marker)
+                                 dape-display-source-buffer-action)))
       (unless no-select
         (select-window window))
       (with-current-buffer (marker-buffer marker)
@@ -977,15 +994,17 @@ See `dape--callback' for expected CB signature."
   (let ((lines (mapcar (lambda (breakpoint)
                          (with-current-buffer (overlay-buffer breakpoint)
                            (line-number-at-pos (overlay-start breakpoint))))
-                       breakpoints)))
+                       breakpoints))
+        (source (with-current-buffer buffer
+                  (or dape--source
+                      (list
+                       :name (file-name-nondirectory
+                              (buffer-file-name buffer))
+                       :path (buffer-file-name buffer))))))
     (dape-request process
                   "setBreakpoints"
                   (list
-                   :source
-                   (list
-                    :name (file-name-nondirectory
-                           (buffer-file-name buffer))
-                    :path (buffer-file-name buffer))
+                   :source source
                    :breakpoints
                    (cl-map
                     'vector
@@ -1421,6 +1440,10 @@ Starts a new process as per request of the debug adapter."
 (defun dape--setup (process config)
   "Helper for dape--start-* functions."
   (dape--remove-stack-pointers)
+  ;; FIXME Cleanup source buffers in a nicer way
+  (cl-loop for (_ buffer) on dape--source-buffers by 'cddr
+           do (when (buffer-live-p buffer)
+                (kill-buffer buffer)))
   (setq dape--config config
         dape--seq 0
         dape--seq-event 0
@@ -1430,6 +1453,7 @@ Starts a new process as per request of the debug adapter."
         dape--capabilities nil
         dape--threads nil
         dape--stack-id nil
+        dape--source-buffers nil
         dape--process process
         dape--restart-in-progress nil
         dape--repl-insert-text-guard nil)
@@ -2008,6 +2032,46 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                                       dape--breakpoints)))
 
 
+;;; Source buffers
+
+(defun dape--source-ensure (process plist cb)
+  "Ensure that source object in PLIST exist for PROCESS.
+See `dape--callback' for expected CB signature."
+  (let* ((source (plist-get plist :source))
+         (path (plist-get source :path))
+         (source-reference (plist-get source :sourceReference))
+         (buffer (plist-get dape--source-buffers source-reference)))
+    (cond
+     ((or path
+          (and buffer (buffer-live-p buffer)))
+      (funcall cb process))
+     ((and (numberp source-reference) (> source-reference 0))
+      (dape--with dape-request (process
+                                "source"
+                                (list
+                                 :source source
+                                 :sourceReference source-reference))
+        (when-let ((content (plist-get body :content))
+                   (buffer
+                    (generate-new-buffer (format "*dape-source %s*"
+                                                 (plist-get source :name)))))
+          (setq dape--source-buffers
+                (plist-put dape--source-buffers
+                           (plist-get source :sourceReference) buffer))
+          (with-current-buffer buffer
+            (if-let* ((mime (plist-get body :mimeType))
+                      (mode (alist-get mime dape-mime-mode nil nil 'equal)))
+                (unless (eq major-mode mode)
+                  (funcall mode))
+              (message "Unknown mime type %s, see `dape-mime-mode'" (plist-get body :mimeType)))
+            (setq-local buffer-read-only t
+                        dape--source source)
+            (let ((inhibit-read-only t))
+              (erase-buffer)
+              (insert content)))
+          (funcall cb process)))))))
+
+
 ;;; Stack pointers
 
 (defvar dape--stack-position (make-marker)
@@ -2023,18 +2087,19 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
 (defun dape--update-stack-pointers ()
   "Update stack pointer marker."
   (dape--remove-stack-pointers)
-  (when-let* ((frame (dape--current-stack-frame))
-              (marker (dape--object-to-marker frame)))
-    (with-current-buffer (marker-buffer marker)
-      (dape--add-eldoc-hook)
-      (save-excursion
-        (goto-char (marker-position marker))
-        (set-marker dape--stack-position
-                    (line-beginning-position))))
-    (dape--goto-source frame
-                       (memq major-mode
-                             '(dape-repl-mode))
-                       t)))
+  (when-let ((frame (dape--current-stack-frame)))
+    (dape--with dape--source-ensure ((dape--live-process t) frame)
+      (when-let ((marker (dape--object-to-marker frame)))
+        (with-current-buffer (marker-buffer marker)
+          (dape--add-eldoc-hook)
+          (save-excursion
+            (goto-char (marker-position marker))
+            (set-marker dape--stack-position
+                        (line-beginning-position))))
+        (dape--goto-source frame
+                           (memq major-mode
+                                 '(dape-repl-mode))
+                           t)))))
 
 (add-to-list 'overlay-arrow-variable-list 'dape--stack-position)
 
@@ -2528,14 +2593,17 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
 (dape--info-buffer-command dape-info-breakpoint-goto (dape--info-breakpoint)
   "Goto breakpoint at line in dape info buffer."
   (when-let* ((buffer (overlay-buffer dape--info-breakpoint))
-              (file (buffer-file-name buffer))
               (line
                (with-current-buffer buffer
-                 (line-number-at-pos (overlay-start dape--info-breakpoint)))))
-    (dape--goto-source `(:source (:path ,file)
-                                 :line ,line)
-                       nil
-                       t)))
+                 (line-number-at-pos (overlay-start dape--info-breakpoint))))
+              (source
+               (with-current-buffer buffer
+                 (or dape--source
+                     (list
+                      :name (file-name-nondirectory
+                             (buffer-file-name buffer))
+                      :path (buffer-file-name buffer))))))
+    (dape--goto-source (list :source source :line line) nil t)))
 
 (dape--info-buffer-command dape-info-breakpoint-delete (dape--info-breakpoint)
   "Delete breakpoint at line in dape info buffer."
@@ -2569,7 +2637,6 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
     (gdb-table-add-row table '("Num" "Type" "On" "Where" "What"))
     (dolist (breakpoint (reverse dape--breakpoints))
       (when-let* ((buffer (overlay-buffer breakpoint))
-                  (file (buffer-file-name buffer))
                   (line (with-current-buffer buffer
                           (line-number-at-pos (overlay-start breakpoint)))))
         (setq table-line (1+ table-line))
@@ -2584,7 +2651,9 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
             "condition")
            ("breakpoint"))
           ""
-          (dape--format-file-line file line)
+          (if-let (file (buffer-file-name buffer))
+              (dape--format-file-line file line)
+            (buffer-name buffer))
           (cond
            ((overlay-get breakpoint 'dape-log-message)
             (propertize (overlay-get breakpoint 'dape-log-message)
