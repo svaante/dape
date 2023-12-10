@@ -1297,7 +1297,7 @@ Adapter is identified with PROCESS."
                command
                arguments))
 
-(cl-defmethod dape-handle-request (process (command (eql runInTerminal)) seq arguments)
+(cl-defmethod dape-handle-request (process (_command (eql runInTerminal)) _seq arguments)
   "Handle runInTerminal requests.
 Starts a new process to run process to be debugged."
   (let* ((cwd (plist-get process :cwd))
