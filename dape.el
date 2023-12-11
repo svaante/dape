@@ -265,12 +265,17 @@ Functions and symbols in configuration:
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
-(defcustom dape-buffer-window-arrangment
-  'left
+(defcustom dape-buffer-window-arrangment 'left
   "Rules for display dape buffers."
   :type '(choice (const :tag "GUD gdb like" gud)
                  (const :tag "Left side" left)
                  (const :tag "Right side" right)))
+
+(defcustom dape-stepping-granularity 'line
+  "The granularity of one step in the stepping requests."
+  :type '(choice (const :tag "Step statement" statement)
+                 (const :tag "Step line" line)
+                 (const :tag "Step instruction" instruction)))
 
 (defcustom dape-on-start-hooks '(dape-repl dape-info)
   "Hook to run on session start."
@@ -485,7 +490,8 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
       (dotimes (_ (or arg 1))
         (dape-request (dape--live-process)
                       command
-                      (dape--thread-id-object)
+                      `(,@(dape--thread-id-object)
+                        :granularity ,(symbol-name dape-stepping-granularity))
                       (dape--callback
                        (when success
                          (dape--update-state "running")
@@ -1559,10 +1565,19 @@ Starts a new process as per request of the debug adapter."
   (interactive (list current-prefix-arg))
   (dape--next-like-command "stepOut" arg))
 
-(defun dape-continue (&optional arg)
+(defun dape-continue ()
   "Resumes execution."
-  (interactive (list current-prefix-arg))
-  (dape--next-like-command "continue" arg))
+  (interactive)
+  (dape-request (dape--live-process)
+                "continue"
+                (dape--thread-id-object)
+                (dape--callback
+                 (when success
+                   (dape--update-state "running")
+                   (dape--remove-stack-pointers)
+                   (dolist (thread dape--threads)
+                     (plist-put thread :status "running"))
+                   (run-hooks 'dape-update-ui-hooks)))))
 
 (defun dape-pause ()
   "Pause execution."
