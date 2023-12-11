@@ -448,8 +448,6 @@ The hook is run with one argument, the compilation buffer."
   "Plist of sources reference to buffer.")
 (defvar dape--breakpoints nil
   "List of session breakpoint overlays.")
-(defvar dape--variable-overlays nil
-  "List of variaiable overlays.")
 (defvar dape--exceptions nil
   "List of available exceptions as plists.")
 (defvar dape--watched nil
