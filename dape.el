@@ -255,15 +255,17 @@
 						  "vscode.java.resolveMainClass"
 						  (project-name (project-current))))
 		   nil t))
-     target (lambda () (file-relative-name (buffer-file-name)
-					   (project-root (project-current))))
-      :args ""
-      :stopOnEntry nil
-      :type "java"
-      :request "launch"
-      :vmArgs " -XX:+ShowCodeDetailsInExceptionMessages"
-      :console "integratedConsole"
-      :internalConsoleOptions "neverOpen"))
+     target (lambda () (when (buffer-file-name)
+			 (file-relative-name (buffer-file-name)
+					     (project-root (project-current)))))
+     :args ""
+     :stopOnEntry nil
+     :type "java"
+     :request "launch"
+     :vmArgs " -XX:+ShowCodeDetailsInExceptionMessages"
+     :console "integratedConsole"
+     :internalConsoleOptions "neverOpen"))
+
   "This variable holds the Dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
