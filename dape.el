@@ -2903,6 +2903,14 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 
 (dape--info-buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
+(defvar dape-info-scope-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "e" 'dape-info-scope-toggle)
+    (define-key map "W" 'dape-info-scope-watch-dwim)
+    (define-key map "=" 'dape-info-variable-edit)
+    map)
+  "Local keymap for dape scope buffers.")
+
 ;; TODO Add bindings for adding data breakpoint
 
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
@@ -3044,6 +3052,13 @@ CB is expected to be `dape--info-scope-update'."
 
 
 ;;; Info watch buffer
+
+(defvar dape-info-watch-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "d" 'dape-info-scope-watch-dwim)
+    (define-key map "e" 'dape-info-scope-toggle)
+    map)
+  "Local keymap for dape watch buffer.")
 
 (define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"
   "Major mode for Dape info watch."
