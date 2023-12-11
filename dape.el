@@ -489,7 +489,10 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
         (dape-request (dape--live-process)
                       command
                       `(,@(dape--thread-id-object)
-                        :granularity ,(symbol-name dape-stepping-granularity))
+                        ,@(when (plist-get dape--capabilities
+                                           :supportsSteppingGranularity)
+                            (list :granularity
+                                  (symbol-name dape-stepping-granularity))))
                       (dape--callback
                        (when success
                          (dape--update-state "running")
