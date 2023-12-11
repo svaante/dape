@@ -925,13 +925,15 @@ If NOWARN does not error on no active process."
     (dape--debug 'io "Sending:\n%S" object)
     (process-send-string process string)))
 
-(defun dape-request (process command arguments &optional cb)
+(defun dape-request (process command arguments &optional cb skip-timeout)
   "Send request COMMAND to PROCESS with ARGUMENTS.
 If CB set, invoke CB on response.
+If SKIP-TIMEOUT non nil skip timeout handler creation.
 See `dape--callback' for expected function signature."
   (let ((seq (setq dape--seq (1+ dape--seq)))
         (object (and arguments (list :arguments arguments))))
-    (dape--create-timer process seq)
+    (unless skip-timeout
+      (dape--create-timer process seq))
     (when cb
       (puthash seq cb dape--cb))
     (dape-send-object process
@@ -985,7 +987,9 @@ Uses `dape--config' to derive type and to construct request."
                      (plist-put dape--config 'start-debugging nil))
                    (unless success
                      (dape--repl-message msg 'dape-repl-exit-code-fail)
-                     (dape-kill))))))
+                     (dape-kill)))
+                  ;; dlv adapter takes some time during launch request
+                  'skip-timeout)))
 
 (defun dape--set-breakpoints (process buffer breakpoints &optional cb)
   "Set BREAKPOINTS in BUFFER by send setBreakpoints request to PROCESS.
