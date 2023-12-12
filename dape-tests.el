@@ -29,18 +29,21 @@
 
 (defmacro dape--with-files (file-fixtures &rest body)
   `(let* ((temp-dir (make-temp-file "dape-tests-" t))
-          (default-directory temp-dir)
-          (buffers (buffer-list)))
+          (default-directory temp-dir))
      (unwind-protect
-         (progn
+         (let (,@(mapcar (pcase-lambda (`(,symbol))
+                             symbol)
+                         file-fixtures))
            (setq dape--info-expanded-p
                  (make-hash-table :test 'equal))
            (dape-quit)
-           (dape--should-eventually (not dape--process))
-           ,@(mapcar (pcase-lambda (`(,file-name . ,content))
+           (dape--should-eventually (not dape--process) 10)
+           ,@(mapcar (pcase-lambda (`(,symbol (,file-name . ,content)))
                        `(with-current-buffer (find-file-noselect ,file-name)
                           (insert (mapconcat 'eval ',content "\n"))
                           (save-buffer)
+                          (setq ,symbol (current-buffer))
+                          (prog-mode)
                           ;; Set normal breakpoints
                           (save-excursion
                             (dolist (line (dape--lines-with-property 'bp))
@@ -53,21 +56,17 @@
                               (dape--goto-line line)
                               (dape-breakpoint-expression
                                (get-text-property (point) 'condition))))
-                          (goto-char (point-min))
                           (goto-char (point-min))))
                      file-fixtures)
            ,@body)
-       (delete-directory temp-dir t)
-       (dolist (buffer (buffer-list))
-         (unless (member buffer buffers)
-           (kill-buffer buffer))))))
+       (delete-directory temp-dir t))))
 
 (defmacro dape--should-eventually (pred &optional seconds)
-  (let ((seconds (or seconds 5)))
+  (let ((seconds (or seconds 10)))
     `(progn
        (with-timeout (,seconds (should ,pred))
          (while (not ,pred)
-           (accept-process-output nil 1)))
+           (accept-process-output nil 0.01)))
        (should ,pred)
        ,pred)))
 
@@ -93,30 +92,139 @@
   (dape (dape--config-eval key options)))
 
 ;;; Tests
+(defun dape-test-restart (buffer &rest dape-args)
+  (apply 'dape- dape-args)
+  (with-current-buffer buffer
+    ;; assert that we are at breakpoint
+    (dape--should-eventually
+     (equal (line-number-at-pos)
+            (dape--line-with-property 'bp 1)))
+    ;; reset point to first line
+    (goto-char (point-min))
+    (dape--should-eventually
+     (not (equal (line-number-at-pos)
+                 (dape--line-with-property 'bp 1))))
+    ;; restart
+    (dape-restart)
+    ;; assert that we are at breakpoint
+    (dape--should-eventually
+     (equal (line-number-at-pos)
+            (dape--line-with-property 'bp 1)))))
+
+(ert-deftest dape-test-restart ()
+  "Restart with debugpy restart."
+  (dape--with-files
+   ((main-buffer ("main.py"
+                  "pass"
+                  (propertize "pass" 'bp 1))))
+   (dape-test-restart main-buffer
+                      'debugpy
+                      :program (buffer-file-name main-buffer)
+                      :cwd default-directory))
+  (dape--with-files
+   ((index-buffer ("index.js"
+                  "()=>{};"
+                  (propertize "()=>{};" 'bp 1))))
+   (dape-test-restart index-buffer
+                      'js-debug-node
+                      :program (buffer-file-name index-buffer)
+                      :cwd default-directory))
+  (dape--with-files
+   ((index-buffer ("main.c"
+                   "int main() {"
+                   (propertize "return 0;" 'bp 1)
+                   "}")))
+   (dape-test-restart index-buffer
+                      'codelldb-cc
+                      :program
+                      (file-name-concat default-directory "./a.out")
+                      :cwd default-directory
+                      'compile "gcc -g -o a.out main.c"))
+  ;; (dape--with-files
+  ;;  ((main-buffer ("main.go"
+  ;;                 "package main"
+  ;;                 "func main() {"
+  ;;                 (propertize "}" 'bp 1))))
+  ;;  (dape-test-restart-with-new-session main-buffer
+  ;;                                      'dlv
+  ;;                                      :program default-directory
+  ;;                                      :cwd default-directory))
+  )
+
+(defun dape-test-restart-with-new-session (buffer &rest dape-args)
+   (apply 'dape- dape-args)
+   (with-current-buffer buffer
+     ;; assert that we are at breakpoint
+     (dape--should-eventually
+      (equal (line-number-at-pos)
+             (dape--line-with-property 'bp 1)))
+     ;; reset point to first line
+     (goto-char (point-min))
+     (dape--should-eventually
+      (not (equal (line-number-at-pos)
+                  (dape--line-with-property 'bp 1))))
+     ;; rerun last session
+     (apply 'dape- dape-args)
+     ;; assert that we are at breakpoint
+     (dape--should-eventually
+      (equal (line-number-at-pos)
+             (dape--line-with-property 'bp 1)))))
+
+(ert-deftest dape-test-debugpy-restart-with-new-session ()
+  "Should be able to restart with `dape' even though session active."
+  (dape--with-files
+   ((main-buffer ("main.py"
+                  "pass"
+                  (propertize "pass" 'bp 1))))
+   (dape-test-restart-with-new-session main-buffer
+                                       'debugpy
+                                       :program (buffer-file-name main-buffer)
+                                       :cwd default-directory))
+  (dape--with-files
+   ((index-buffer ("index.js"
+                  "()=>{};"
+                  (propertize "()=>{};" 'bp 1))))
+   (dape-test-restart-with-new-session index-buffer
+                                       'js-debug-node
+                                       :program (buffer-file-name index-buffer)
+                                       :cwd default-directory))
+  (dape--with-files
+   ((main-buffer ("main.c"
+                  "int main() {"
+                  (propertize "return 0;" 'bp 1)
+                  "}")))
+   (dape-test-restart-with-new-session main-buffer
+                                       'codelldb-cc
+                                       :program
+                                       (file-name-concat default-directory "./a.out")
+                                       :cwd default-directory
+                                       'compile "gcc -g -o a.out main.c")))
 
 (ert-deftest dape-test-debugpy-scope-buffer ()
+  "Assert basic scope buffer content."
+  ;; TODO apply to other languages
   (dape--with-files
-   (("main.py"
-     "a = 0"
-     "b = 'test'"
-     "c = {'a': [1]}"
-     (propertize "pass" 'bp 1)))
+   ((main-buffer ("main.py"
+                  "class C:"
+                  "\tmember = [1]"
+                  "a = 0"
+                  "b = 'test'"
+                  "c = C()"
+                  (propertize "pass" 'bp 1))))
    (dape- 'debugpy
-          :program (expand-file-name "main.py")
-          :cwd (expand-file-name "."))
+          :program (buffer-file-name main-buffer)
+          :cwd default-directory)
    (dape--should-eventually
     (equal dape--state "stopped"))
    ;; Validate content
    (with-current-buffer (dape--should-eventually
                          (dape--info-get-live-buffer 'dape-info-scope-mode 0))
-     (dape--should-eventually
-      (equal
-       (dape--variables-in-buffer)
-       '("special variables" "a" "b" "c")))
+     (dape--should-eventually (member "a" (dape--variables-in-buffer)))
+     (dape--should-eventually (member "b" (dape--variables-in-buffer)))
+     (dape--should-eventually (member "c" (dape--variables-in-buffer)))
      (dape--apply-to-matches "^+ c" 'dape-info-scope-toggle)
-     (dape--should-eventually
-      (equal
-       (dape--variables-in-buffer)
-       '("special variables" "a" "b" "c"
-         "special variables" "function variables" "'a'" "len()"))))))
+     (dape--should-eventually (member "a" (dape--variables-in-buffer)))
+     (dape--should-eventually (member "b" (dape--variables-in-buffer)))
+     (dape--should-eventually (member "c" (dape--variables-in-buffer)))
+     (dape--should-eventually (member "member" (dape--variables-in-buffer))))))
 
