@@ -2479,25 +2479,26 @@ with ARGS."
   (if dape--info-buffer-in-redraw
       (run-with-timer 0.01 nil 'dape--info-buffer-update-1
                       buffer args)
-    (let ((dape--info-buffer-in-redraw t))
-      (with-current-buffer buffer
-        ;; Would be nice with replace-buffer-contents
-        ;; But it seams to messes up string properties
-        (let ((line (line-number-at-pos (point) t))
-              (old-window (selected-window)))
-          ;; Still don't know any better way of keeping window scroll?
-          (when-let ((window (get-buffer-window buffer)))
-            (select-window window))
-          (save-window-excursion
-            (let ((inhibit-read-only t))
-              (erase-buffer)
-              (apply dape--info-buffer-update-fn args))
-            (ignore-errors
-              (goto-char (point-min))
-              (forward-line (1- line)))
-            (dape--info-set-header-line-format))
-          (when old-window
-            (select-window old-window)))))))
+    (when (buffer-live-p buffer)
+      (let ((dape--info-buffer-in-redraw t))
+        (with-current-buffer buffer
+          ;; Would be nice with replace-buffer-contents
+          ;; But it seams to messes up string properties
+          (let ((line (line-number-at-pos (point) t))
+                (old-window (selected-window)))
+            ;; Still don't know any better way of keeping window scroll?
+            (when-let ((window (get-buffer-window buffer)))
+              (select-window window))
+            (save-window-excursion
+              (let ((inhibit-read-only t))
+                (erase-buffer)
+                (apply dape--info-buffer-update-fn args))
+              (ignore-errors
+                (goto-char (point-min))
+                (forward-line (1- line)))
+              (dape--info-set-header-line-format))
+            (when old-window
+              (select-window old-window))))))))
 
 (defun dape--info-buffer-update (buffer)
   "Update dape info BUFFER."
