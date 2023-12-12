@@ -69,18 +69,18 @@
 (defcustom dape-configs
   `(,@(let ((codelldb
              `(ensure dape-ensure-command
-               command ,(file-name-concat dape-adapter-dir
-                                          "codelldb"
-                                          "extension"
-                                          "adapter"
-                                          "codelldb")
-               port :autoport
-               fn dape-config-autoport
-               :type "lldb"
-               :request "launch"
-               :cwd dape-cwd-fn
-               :program dape-find-file
-               :args [])))
+                      command ,(file-name-concat dape-adapter-dir
+                                                 "codelldb"
+                                                 "extension"
+                                                 "adapter"
+                                                 "codelldb")
+                      port :autoport
+                      fn dape-config-autoport
+                      :type "lldb"
+                      :request "launch"
+                      :cwd dape-cwd-fn
+                      :program dape-find-file
+                      :args [])))
         `((codelldb-cc
            modes (c-mode c-ts-mode c++-mode c++-ts-mode)
            command-args ("--port" :autoport)
@@ -151,21 +151,21 @@
      :cwd dape-cwd-fn)
     ,@(let ((js-debug
              `(modes (js-mode js-ts-mode)
-               ensure ,(lambda (config)
-                         (dape-ensure-command config)
-                         (let ((js-debug-file
-                                (file-name-concat
-                                 (dape--config-eval-value (plist-get config 'command-cwd))
-                                 (dape--config-eval-value (car (plist-get config 'command-args))))))
-                           (unless (file-exists-p js-debug-file)
-                             (user-error "File %S does not exist" js-debug-file))))
-               command "node"
-               command-cwd ,(file-name-concat dape-adapter-dir
-                                              "js-debug")
-               command-args (,(file-name-concat "src" "dapDebugServer.js")
-                             :autoport)
-               port :autoport
-               fn dape-config-autoport)))
+                     ensure ,(lambda (config)
+                               (dape-ensure-command config)
+                               (let ((js-debug-file
+                                      (file-name-concat
+                                       (dape--config-eval-value (plist-get config 'command-cwd))
+                                       (dape--config-eval-value (car (plist-get config 'command-args))))))
+                                 (unless (file-exists-p js-debug-file)
+                                   (user-error "File %S does not exist" js-debug-file))))
+                     command "node"
+                     command-cwd ,(file-name-concat dape-adapter-dir
+                                                    "js-debug")
+                     command-args (,(file-name-concat "src" "dapDebugServer.js")
+                                   :autoport)
+                     port :autoport
+                     fn dape-config-autoport)))
         `((js-debug-node
            ,@js-debug
            :type "pwa-node"
@@ -945,9 +945,9 @@ The exceptions are derived from `dape--exceptions'."
                                 (list :threadId (plist-get thread :id)
                                       :levels 50))))
       (plist-put thread :stackFrames
-               (cl-map 'list
-                       'identity
-                       (plist-get res :stackFrames)))))))
+                 (cl-map 'list
+                         'identity
+                         (plist-get res :stackFrames)))))))
 
 (defun dape--variables (conn object)
   "Update OBJECTs variables by adapter CONN."
@@ -985,11 +985,11 @@ PRED is called with PATH and OBJECT."
 FRAME-ID specifies which frame the EXPRESSION is evaluated in and
 CONTEXT which the result is going to be displayed in."
   (jsonrpc-request conn
-                      "evaluate"
-                      (append (when (dape--stopped-threads)
-                                (list :frameId frame-id))
-                              (list :expression expression
-                                    :context context))))
+                   "evaluate"
+                   (append (when (dape--stopped-threads)
+                             (list :frameId frame-id))
+                           (list :expression expression
+                                 :context context))))
 
 (defun dape--set-variable (conn ref variable value)
   "Set VARIABLE VALUE with REF by request to PROCESS.
@@ -1019,9 +1019,9 @@ REF should refer to VARIABLE container."
   (let* ((id (plist-get stack-frame :id))
          (res (jsonrpc-request conn "scopes" (list :frameId id))))
     (plist-put stack-frame :scopes
-                 (cl-map 'list
-                         'identity
-                         (plist-get res :scopes)))))
+               (cl-map 'list
+                       'identity
+                       (plist-get res :scopes)))))
 
 (defun dape--inactive-threads-stack-trace (conn)
   (dolist (thread dape--threads)
@@ -1214,9 +1214,9 @@ Starts a new process to run process to be debugged."
                      :body ,params))
             ((eq subtype 'request)
              `(:type "request"
-                    :seq ,(+ (setq last-id id) n-sent-notifs)
-                    :command ,method
-                    ,@(when params `(:arguments ,params))))
+                     :seq ,(+ (setq last-id id) n-sent-notifs)
+                     :command ,method
+                     ,@(when params `(:arguments ,params))))
             (t
              (cond (error
                     `(:type "response"
@@ -1243,7 +1243,7 @@ Starts a new process to run process to be debugged."
           ((eq success :json-false)
            `(:jsonrpc "2.0" :id ,request_seq
                       :error ,(list :code 32600
-                                   :message (or (plist-get body :error) message))))
+                                    :message (or (plist-get body :error) message))))
           ((eq success t)
            `(:jsonrpc "2.0" :id ,request_seq :result ,body))
           (command
@@ -1319,12 +1319,12 @@ Starts a new process to run process to be debugged."
       (ignore-errors
         (setq network-process
               (make-network-process
-                         :name "Dape adapter connection"
-                         :buffer buffer
-                         :host host
-                         :coding 'utf-8-emacs-unix
-                         :service (plist-get config 'port)
-                         :noquery t)))
+               :name "Dape adapter connection"
+               :buffer buffer
+               :host host
+               :coding 'utf-8-emacs-unix
+               :service (plist-get config 'port)
+               :noquery t)))
       (sleep-for 0.1)
       (setq retries (1- retries)))
     (if (zerop retries)
@@ -1687,10 +1687,10 @@ Removes itself on execution."
          (read-number "Count: " dape-read-memory-default-count)))
   (cl-destructuring-bind (&key address data &allow-other-keys)
       (jsonrpc-request (dape--live-process)
-                              "readMemory"
-                              (list
-                               :memoryReference memory-reference
-                               :count count))
+                       "readMemory"
+                       (list
+                        :memoryReference memory-reference
+                        :count count))
     (when (and address data)
       (setq address (dape--address-to-number address)
             data (base64-decode-string data))
@@ -1990,9 +1990,9 @@ Handles newline."
      (t
       (dape--repl-insert-prompt)
       (let ((res (dape--evaluate-expression (dape--live-process)
-                                 (plist-get (dape--current-stack-frame) :id)
-                                 (substring-no-properties input)
-                                 "repl")))
+                                            (plist-get (dape--current-stack-frame) :id)
+                                            (substring-no-properties input)
+                                            "repl")))
         (dape--repl-message (plist-get res :result)))))))
 
 (defun dape--repl-completion-at-point ()
@@ -2114,22 +2114,22 @@ Handles newline."
     (set-process-filter (get-buffer-process (current-buffer))
                         'comint-output-filter)
     (insert (propertize
-               (format
-                "* Welcome to Dape REPL! *
+             (format
+              "* Welcome to Dape REPL! *
 Available Dape commands: %s
 Empty input will rerun last command.\n\n\n"
-                (mapconcat 'identity
-                           (mapcar (lambda (cmd)
-                                     (let ((str (car cmd)))
-                                       (if dape-repl-use-shorthand
-                                           (concat "["
-                                                   (substring str 0 1)
-                                                   "]"
-                                                   (substring str 1))
-                                         str)))
-                                   dape-repl-commands)
-                           ", "))
-               'font-lock-face 'italic))
+              (mapconcat 'identity
+                         (mapcar (lambda (cmd)
+                                   (let ((str (car cmd)))
+                                     (if dape-repl-use-shorthand
+                                         (concat "["
+                                                 (substring str 0 1)
+                                                 "]"
+                                                 (substring str 1))
+                                       str)))
+                                 dape-repl-commands)
+                         ", "))
+             'font-lock-face 'italic))
     (set-marker (process-mark (get-buffer-process (current-buffer))) (point))
     (comint-output-filter (get-buffer-process (current-buffer))
                           dape--repl-prompt)))
@@ -2367,8 +2367,8 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
   (unless (seq-find (lambda (buffer)
                       (and (get-buffer-window buffer)
                            (with-current-buffer buffer
-                               (or (dape--info-buffer-p 'dape-info-breakpoints-mode)
-                                   (dape--info-buffer-p 'dape-info-threads-mode)))))
+                             (or (dape--info-buffer-p 'dape-info-breakpoints-mode)
+                                 (dape--info-buffer-p 'dape-info-threads-mode)))))
                     (dape--info-buffer-list))
     (dape--display-buffer
      (dape--info-buffer 'dape-info-breakpoints-mode 'skip-update)))
@@ -2948,7 +2948,7 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
     (unless base-config
       (user-error "Unable to find `%s' in `dape-configs', available configurations: %s"
                   key (mapconcat (lambda (e) (symbol-name (car e)))
-                                  dape-configs ", ")))
+                                 dape-configs ", ")))
     (dape--config-eval-1 (seq-reduce (apply-partially 'apply 'plist-put)
                                      (seq-partition options 2)
                                      (copy-tree base-config)))))
@@ -3018,9 +3018,9 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
      ((or (not key)
           (and (not args) symbol-bounds))
       (let ((bounds (or line-bounds (cons (point) (point)))))
-      (list (car bounds) (cdr bounds)
-            (mapcar (lambda (name) (format "%s " name))
-                    dape--minibuffer-suggested-configs))))
+        (list (car bounds) (cdr bounds)
+              (mapcar (lambda (name) (format "%s " name))
+                      dape--minibuffer-suggested-configs))))
      ;; Complete config args
      ((and (alist-get key dape-configs)
            (or (and (not (plistp args))
@@ -3050,8 +3050,8 @@ See `dape--config-mode-p' how \"valid\" is defined."
                    when (and (dape--config-mode-p config)
                              (condition-case nil
                                  (or (funcall (or (plist-get config 'ensure)
-                                                   'identity)
-                                               config)
+                                                  'identity)
+                                              config)
                                      t)
                                (user-error nil)))
                    collect key))
@@ -3059,10 +3059,10 @@ See `dape--config-mode-p' how \"valid\" is defined."
           (or
            ;; Take first valid history item from session
            (seq-find (lambda (str)
-                          (ignore-errors
-                            (memql (car (dape--config-from-string str))
-                                   suggested-configs)))
-                        dape-session-history)
+                       (ignore-errors
+                         (memql (car (dape--config-from-string str))
+                                suggested-configs)))
+                     dape-session-history)
            ;; Take first suggested config if only one exist
            (and (length= suggested-configs 1)
                 (symbol-name (car suggested-configs))))))
