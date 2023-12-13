@@ -251,16 +251,22 @@ Breakpoint should be present on a line where all variables are present."
   (with-current-buffer (dape--should-eventually
                         (dape--info-get-live-buffer 'dape-info-scope-mode 0))
     (dape--should-eventually
-     (and (member "a" (dape--variable-names-in-buffer))
-          (member "b" (dape--variable-names-in-buffer))
-          (member "c" (dape--variable-names-in-buffer))
-          (not (member "member" (dape--variable-names-in-buffer)))))
+     (member "a" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (member "b" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (member "c" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (not (member "member" (dape--variable-names-in-buffer))))
     (dape--apply-to-matches "^+ c" 'dape-info-scope-toggle)
     (dape--should-eventually
-     (and (member "a" (dape--variable-names-in-buffer))
-          (member "b" (dape--variable-names-in-buffer))
-          (member "c" (dape--variable-names-in-buffer))
-          (member "member" (dape--variable-names-in-buffer))))))
+     (member "a" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (member "b" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (member "c" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (member "member" (dape--variable-names-in-buffer)))))
 
 (ert-deftest dape-test-scope-buffer-contents ()
   "Assert basic scope buffer content."
@@ -304,22 +310,26 @@ Breakpoint should be present on a line where all variables are present."
 Watch buffer should contain variables a and expandable c with
 property member.
 Breakpoint should be present on a line where all variables are present."
+  (dape-watch-dwim "a")
   (dape-watch-dwim "b")
-  (dape-watch-dwim "c")
   (apply 'dape- dape-args)
   (dape--should-eventually
    (equal dape--state "stopped"))
   (with-current-buffer (dape--should-eventually
                         (dape--info-get-live-buffer 'dape-info-watch-mode))
     (dape--should-eventually
-     (and (member "a" (dape--variable-names-in-buffer))
-          (member "b" (dape--variable-names-in-buffer))
-          (not (member "member" (dape--variable-names-in-buffer)))))
+     (member "a" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (member "b" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (not (member "member" (dape--variable-names-in-buffer))))
     (dape--apply-to-matches "^+ b" 'dape-info-scope-toggle)
     (dape--should-eventually
-     (and (member "a" (dape--variable-names-in-buffer))
-          (member "b" (dape--variable-names-in-buffer))
-          (member "member" (dape--variable-names-in-buffer))))))
+     (member "a" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (member "b" (dape--variable-names-in-buffer)))
+    (dape--should-eventually
+     (member "member" (dape--variable-names-in-buffer)))))
 
 (ert-deftest dape-test-watch-buffer-contents ()
   "Assert basic watch buffer content."
