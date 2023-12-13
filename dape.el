@@ -3142,6 +3142,12 @@ Used to derive initial-contents in `dape--read-config'.")
 (defvar dape--minibuffer-suggested-configs nil
   "Suggested configurations in minibuffer.")
 
+(defun dape--plistp (object)
+  "Non-nil if and only if OBJECT is a valid plist."
+  (and-let* (((listp object))
+             (len (length object))
+             ((zerop (% len 2))))))
+
 (defun dape--config-eval-value (value &optional skip-function for-adapter)
   "Evaluate dape config VALUE.
 If SKIP-FUNCTION and VALUE is an function it is not invoked.
@@ -3150,10 +3156,7 @@ apply."
   (cond
    ((functionp value) (or (and skip-function value)
                           (funcall-interactively value)))
-   ;; plist
-   ((and-let* (((listp value))
-               (len (length value))
-               ((zerop (% len 2)))))
+   ((dape--plistp value)
     (dape--config-eval-1 value skip-function for-adapter))
    ((vectorp value) (cl-map 'vector
                             (lambda (value)
@@ -3204,7 +3207,7 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
           str (substring str (length (symbol-name name))))
     (unless (string-empty-p str)
       (setq read-config (read (format "(%s)" str))))
-    (unless (plistp read-config)
+    (unless (dape--plistp read-config)
       (user-error "Bad options format, see `dape-configs'"))
     (cl-loop for (key value) on read-config by 'cddr
              do (setq base-config (plist-put base-config key value)))
@@ -3262,9 +3265,9 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
                     dape--minibuffer-suggested-configs))))
      ;; Complete config args
      ((and (alist-get key dape-configs)
-           (or (and (not (plistp args))
+           (or (and (not (dape--plistp args))
                     symbol-bounds)
-               (and (plistp args)
+               (and (dape--plistp args)
                     whitespace-bounds)))
       (let ((args (if symbol-bounds
                       (nreverse (cdr (nreverse args)))
