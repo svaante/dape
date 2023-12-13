@@ -101,7 +101,8 @@ Helper for `dape--with-buffers'."
             (make-hash-table :test 'equal))
       (setq dape--watched nil)
       (dape-quit)
-      (dape--should-eventually (not dape--process) 10))))
+      (dape--should-eventually (not dape--process) 10)
+      (setq dape--state nil))))
 
 (defun dape--variable-names-in-buffer ()
   "Return list of variable names in buffer."
@@ -243,15 +244,18 @@ Expects breakpoint bp 1 in source."
                                  :cwd default-directory
                                  'compile "gcc -g -o a.out main.c")))
 
-(defun dape--test-scope-buffer-contents (&rest dape-args)
+(defun dape--test-scope-buffer-contents (buffer &rest dape-args)
   "Helper for ert test `dape-test-scope-buffer-contents'.
 Watch buffer should contain variables a, b and expandable c with
 property member.
 Breakpoint should be present on a line where all variables are present."
   (apply 'dape- dape-args)
-  (dape--should-eventually
-   (equal dape--state "stopped"))
-  ;; Validate content
+  ;; assert that we are at breakpoint and stopped
+  (with-current-buffer buffer
+    (dape--should-eventually
+     (equal (line-number-at-pos)
+            (dape--line-with-property 'bp 1))))
+  ;; validate content
   (with-current-buffer (dape--should-eventually
                         (dape--info-get-live-buffer 'dape-info-scope-mode 0))
     (dape--should-eventually
@@ -282,7 +286,8 @@ Breakpoint should be present on a line where all variables are present."
                   "b = 0"
                   "c = C()"
                   (propertize "pass" 'bp 1))))
-   (dape--test-scope-buffer-contents 'debugpy
+   (dape--test-scope-buffer-contents main-buffer
+                                     'debugpy
                                      :program (buffer-file-name main-buffer)
                                      :cwd default-directory))
   (dape--with-buffers
@@ -291,7 +296,8 @@ Breakpoint should be present on a line where all variables are present."
                    "var b = 0;"
                    "var c = {'member': 0};"
                    (propertize "()=>{};" 'bp 1))))
-   (dape--test-scope-buffer-contents 'js-debug-node
+   (dape--test-scope-buffer-contents index-buffer
+                                     'js-debug-node
                                      :program (buffer-file-name index-buffer)
                                      :cwd default-directory))
   (dape--with-buffers
@@ -303,13 +309,14 @@ Breakpoint should be present on a line where all variables are present."
            (propertize "return 0;" 'bp 1)
            "}")))
    (ignore main)
-   (dape--test-scope-buffer-contents 'codelldb-cc
+   (dape--test-scope-buffer-contents main
+                                     'codelldb-cc
                                      :program
                                      (file-name-concat default-directory "./a.out")
                                      :cwd default-directory
                                      'compile "gcc -g -o a.out main.c")))
 
-(defun dape--test-watch-buffer-contents (&rest dape-args)
+(defun dape--test-watch-buffer-contents (buffer &rest dape-args)
   "Helper for ert test `dape-test-watch-buffer-contents'.
 Watch buffer should contain variables a and expandable c with
 property member.
@@ -317,8 +324,14 @@ Breakpoint should be present on a line where all variables are present."
   (dape-watch-dwim "a")
   (dape-watch-dwim "b")
   (apply 'dape- dape-args)
+  ;; assert that we are at breakpoint and stopped
+  (with-current-buffer buffer
+    (dape--should-eventually
+     (equal (line-number-at-pos)
+            (dape--line-with-property 'bp 1))))
   (dape--should-eventually
    (equal dape--state "stopped"))
+  ;; validate contents of watch buffer
   (with-current-buffer (dape--should-eventually
                         (dape--info-get-live-buffer 'dape-info-watch-mode))
     (dape--should-eventually
@@ -344,6 +357,7 @@ Breakpoint should be present on a line where all variables are present."
                   "a = 0"
                   "b = C()"
                   (propertize "pass" 'bp 1))))
-   (dape--test-watch-buffer-contents 'debugpy
+   (dape--test-watch-buffer-contents main-buffer
+                                     'debugpy
                                      :program (buffer-file-name main-buffer)
                                      :cwd default-directory)))
