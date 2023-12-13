@@ -73,7 +73,7 @@ Helper for `dape--with-buffers'."
               (save-buffer)
               (push (current-buffer) buffers)
               ;; need prog mode for setting breakpoints
-              (prog-mode)
+              ;; (prog-mode)
               ;; set normal breakpoints on 'bp
               (save-excursion
                 (dolist (line (dape--lines-with-property 'bp))
@@ -94,17 +94,20 @@ Helper for `dape--with-buffers'."
               (goto-char (point-min))))
           (setq buffers (nreverse buffers))
           (apply fn buffers))
-      ;; clean up files
-      (delete-directory temp-dir t)
       ;; reset dape
+      (dape-quit)
       (setq dape--info-expanded-p
             (make-hash-table :test 'equal))
       (setq dape--watched nil)
-      (dape-quit)
-      (dape--should-eventually (not dape--process) 10)
-      (setq dape--state nil)
-      (sleep-for 10) ;; UGNGHGHG
-      )))
+      (dape--should-eventually
+       (not dape--process) 10)
+      (dape--should-eventually
+       (not (seq-find (lambda (buffer)
+                        (string-match-p "\\*dape-.+\\*"
+                                        (buffer-name buffer)))
+                      (buffer-list))))
+      ;; clean up files
+      (delete-directory temp-dir t))))
 
 (defun dape--variable-names-in-buffer ()
   "Return list of variable names in buffer."
