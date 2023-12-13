@@ -117,10 +117,14 @@ Helper for `dape--with-buffers'."
 
 (defun dape--apply-to-matches (regex fn)
   "Apply FN to each match of REGEX in the current buffer."
-  (save-excursion
-    (goto-char (point-min))
-    (while (re-search-forward regex nil t)
-      (funcall-interactively fn))))
+  (let (found)
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward regex nil t)
+        (setq found t)
+        (funcall-interactively fn)))
+    (unless found
+      (error "Pattern %S not found in %s" regex (current-buffer)))))
 
 (defun dape- (key &rest options)
   "Invoke `dape' config KEY with OPTIONS."
@@ -258,7 +262,7 @@ Breakpoint should be present on a line where all variables are present."
      (member "c" (dape--variable-names-in-buffer)))
     (dape--should-eventually
      (not (member "member" (dape--variable-names-in-buffer))))
-    (dape--apply-to-matches "^+ c" 'dape-info-scope-toggle)
+    (dape--apply-to-matches "^\\+ c" 'dape-info-scope-toggle)
     (dape--should-eventually
      (member "a" (dape--variable-names-in-buffer)))
     (dape--should-eventually
@@ -323,7 +327,7 @@ Breakpoint should be present on a line where all variables are present."
      (member "b" (dape--variable-names-in-buffer)))
     (dape--should-eventually
      (not (member "member" (dape--variable-names-in-buffer))))
-    (dape--apply-to-matches "^+ b" 'dape-info-scope-toggle)
+    (dape--apply-to-matches "^\\+ b" 'dape-info-scope-toggle)
     (dape--should-eventually
      (member "a" (dape--variable-names-in-buffer)))
     (dape--should-eventually
