@@ -3150,7 +3150,11 @@ apply."
   (cond
    ((functionp value) (or (and skip-function value)
                           (funcall-interactively value)))
-   ((plistp value) (dape--config-eval-1 value skip-function for-adapter))
+   ;; plist
+   ((and-let* (((listp value))
+               (len (length value))
+               ((zerop (% len 2)))))
+    (dape--config-eval-1 value skip-function for-adapter))
    ((vectorp value) (cl-map 'vector
                             (lambda (value)
                               (dape--config-eval-value value
