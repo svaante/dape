@@ -102,7 +102,9 @@ Helper for `dape--with-buffers'."
       (setq dape--watched nil)
       (dape-quit)
       (dape--should-eventually (not dape--process) 10)
-      (setq dape--state nil))))
+      (setq dape--state nil)
+      (sleep-for 10) ;; UGNGHGHG
+      )))
 
 (defun dape--variable-names-in-buffer ()
   "Return list of variable names in buffer."
