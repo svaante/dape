@@ -1014,7 +1014,7 @@ If NOWARN does not error on no active process."
          (json (json-serialize object :false-object nil))
          (string (format "Content-Length: %d\r\n\r\n%s" (length json) json)))
     (dape--debug 'io "Sending:\n%S" object)
-    (condition-case err
+    (condition-case-unless-debug err
         (process-send-string process string)
       (error (dape--debug 'error "%s"
                           (error-message-string err))))))
