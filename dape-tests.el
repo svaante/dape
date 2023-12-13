@@ -4,9 +4,6 @@
 (require 'dape)
 (require 'ert)
 
-(setq ert-batch-print-level 10)
-(setq ert-batch-print-length 15)
-
 ;;; Helpers
 (defun dape--goto-line (line)
   "Goto LINE."
