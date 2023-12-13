@@ -39,8 +39,8 @@ jobs:
       run: |
         sudo apt install wget
         mkdir -p ~/.emacs.d/debug-adapters/
-        wget https://github.com/microsoft/vscode-js-debug/releases/download/v1.85.0/js-debug-dap-v1.85.0.tar.gz
-        tar -xvzf js-debug-dap-v1.85.0.tar.gz -C ~/.emacs.d/debug-adapters
+        wget https://github.com/microsoft/vscode-js-debug/releases/download/v1.84.0/js-debug-dap-v1.84.0.tar.gz
+        tar -xvzf js-debug-dap-v1.84.0.tar.gz -C ~/.emacs.d/debug-adapters
 
     - name: Build
       run: make all
