@@ -1,0 +1,49 @@
+name: test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install emacs
+      uses: purcell/setup-emacs@master
+      with:
+        version: 28.2
+
+    - name: Install Python
+      uses: actions/setup-python@v2
+      with:
+          python-version: "3.9"
+          architecture: "x64"
+
+    - name: Install debugpy
+      run: |
+        pip3 install debugpy
+
+    - name: Download codelldb
+      run: |
+        sudo apt install wget
+        mkdir -p ~/.emacs.d/debug-adapters/codelldb/
+        wget https://github.com/vadimcn/codelldb/releases/download/v1.10.0/codelldb-x86_64-linux.vsix
+        unzip codelldb-x86_64-linux.vsix -d ~/.emacs.d/debug-adapters/codelldb/
+
+    - name: Download js-debug
+      run: |
+        sudo apt install wget
+        mkdir -p ~/.emacs.d/debug-adapters/
+        wget https://github.com/microsoft/vscode-js-debug/releases/download/v1.85.0/js-debug-dap-v1.85.0.tar.gz
+        tar -xvzf js-debug-dap-v1.85.0.tar.gz -C ~/.emacs.d/debug-adapters
+
+    - name: Build
+      run: make all
+
+    - name: Test
+      run: make test
