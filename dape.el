@@ -644,33 +644,50 @@ DEFAULT specifies which file to return on empty input."
     (read-number "Pid: ")))
 
 (defun dape-config-autoport (config)
-  "Replace occurences of `:autoport' in CONFIG `command-args' and `port'.
-Will replace symbol and string occurences of \"autoport\"."
+  "Replaces :autoport in CONFIG keys `command-args' and `port'.
+If `port' is `:autoport' replaces with open port, if not replaces
+with value of `port' instead.
+Replaces symbol and string occurences of \"autoport\"."
   ;; Stolen from `Eglot'
-  (let* ((port-probe (make-network-process :name "dape-port-probe-dummy"
-                                           :server t
-                                           :host "localhost"
-                                           :service 0))
-         (port-number (unwind-protect
-                          (process-contact port-probe :service)
-                        (delete-process port-probe)))
-         (port (if (eq (plist-get config 'port) :autoport)
-                   port-number
-                 (plist-get config 'port)))
-         (command-args (seq-map (lambda (item)
-                                  (cond
-                                   ((eq item :autoport)
-                                    (number-to-string port-number))
-                                   ((stringp item)
-                                    (string-replace ":autoport"
-                                                    (number-to-string port-number)
-                                                    item))))
-                                (plist-get config 'command-args))))
-    (let ((config
-           (thread-first config
-                         (plist-put 'port port)
-                         (plist-put 'command-args command-args))))
-      config)))
+  (let ((port (plist-get config 'port)))
+    (when (eq (plist-get config 'port) :autoport)
+      (let ((port-probe (make-network-process :name "dape-port-probe-dummy"
+                                              :server t
+                                              :host "localhost"
+                                              :service 0)))
+        (setq port
+              (unwind-protect
+                  (process-contact port-probe :service)
+                (delete-process port-probe)))))
+    (let ((command-args (seq-map (lambda (item)
+                                   (cond
+                                    ((eq item :autoport)
+                                     (number-to-string port))
+                                    ((stringp item)
+                                     (string-replace ":autoport"
+                                                     (number-to-string port)
+                                                     item))))
+                                 (plist-get config 'command-args))))
+          (thread-first config
+                        (plist-put 'port port)
+                        (plist-put 'command-args command-args)))))
+
+(defun dape-config-ssh-command (config)
+  (if-let* (((plist-get config 'command))
+            (default-directory (or (plist-get config 'command-cwd)
+                                   default-directory))
+            ((tramp-tramp-file-p default-directory))
+            (parts (tramp-dissect-file-name default-directory))
+            ((string= "ssh" (tramp-file-name-method parts)))
+            (tramp-ssh-prefix
+             (tramp-completion-make-tramp-file-name (tramp-file-name-method parts)
+                                                    (tramp-file-name-user parts)
+                                                    (tramp-file-name-host parts)
+                                                    "")))
+      (plist-put config 'mappings
+                 (append `((,tramp-ssh-prefix . ""))
+                         (plist-get config 'mappings)))
+    config))
 
 (defun dape-ensure-command (config)
   "Ensure that `command' from CONFIG exist system."
