@@ -1607,6 +1607,8 @@ Starts a new process as per request of the debug adapter."
 (defun dape-continue ()
   "Resumes execution."
   (interactive)
+  (unless (dape--stopped-threads)
+    (user-error "No stopped threads"))
   (dape-request (dape--live-process)
                 "continue"
                 (dape--thread-id-object)
