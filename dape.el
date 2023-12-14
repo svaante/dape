@@ -2662,18 +2662,10 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
 
 (dape--info-buffer-command dape-info-breakpoint-goto (dape--info-breakpoint)
   "Goto breakpoint at line in dape info buffer."
-  (when-let* ((buffer (overlay-buffer dape--info-breakpoint))
-              (line
-               (with-current-buffer buffer
-                 (line-number-at-pos (overlay-start dape--info-breakpoint))))
-              (source
-               (with-current-buffer buffer
-                 (or dape--source
-                     (list
-                      :name (file-name-nondirectory
-                             (buffer-file-name buffer))
-                      :path (buffer-file-name buffer))))))
-    (dape--goto-source (list :source source :line line) nil t)))
+  (when-let* ((buffer (overlay-buffer dape--info-breakpoint)))
+    (display-buffer buffer
+                    dape-display-source-buffer-action)
+    (goto-char (overlay-start buffer))))
 
 (dape--info-buffer-command dape-info-breakpoint-delete (dape--info-breakpoint)
   "Delete breakpoint at line in dape info buffer."
