@@ -449,9 +449,9 @@ The hook is run with one argument, the compilation buffer."
   "Current session configuration plist.")
 (defvar dape--timers nil
   "List of running timers.")
-(defvar dape--seq nil
+(defvar dape--seq 0
   "Session seq number.")
-(defvar dape--seq-event nil
+(defvar dape--seq-event 0
   "Session event seq number.")
 (defvar dape--cb nil
   "Hash table of request callbacks.")
