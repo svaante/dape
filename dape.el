@@ -206,8 +206,9 @@ configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
 
 Symbol Keys (Used by Dape):
-- fn: Function takes config and returns config, used to apply changes
-      to config at runtime.
+- fn: Function or list of functions, takes config and returns config.
+  If list functions are applied in order. Used for hiding unnecessary
+  configuration details from config history.
 - ensure: Function to ensure that adapter is available.
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
@@ -1836,8 +1837,13 @@ Use SKIP-COMPILE to skip compilation."
               (with-current-buffer buffer
                 (let ((inhibit-read-only t))
                   (erase-buffer)))))
-          (when-let ((fn (plist-get config 'fn)))
-            (setq config (funcall fn (copy-tree config))))
+          (when-let ((fn (plist-get config 'fn))
+                     (fns (or (and (functionp fn) (list fn))
+                              (and (listp fn) fn))))
+            (setq config
+                  (seq-reduce (lambda (config fn)
+                                (funcall fn config))
+                              fns (copy-tree config))))
           (when-let ((ensure (plist-get config 'ensure)))
             (funcall ensure (copy-tree config)))
           (cond
