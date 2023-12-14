@@ -51,6 +51,7 @@
 (require 'tree-widget)
 (require 'project)
 (require 'gdb-mi)
+(require 'tramp)
 
 
 ;;; Custom
