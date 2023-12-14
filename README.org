@@ -120,6 +120,11 @@ See for installation https://docs.flutter.dev/get-started/install
 ** C# - netcoredbg
 See https://github.com/Samsung/netcoredbg for installation
 
+** Ruby - rdbg
+Install with ~gem install debug~.
+
+See https://github.com/ruby/debug for more information
+
 ** Other untested adapters
 If you find a working configuration for any other debug adapter please submit a PR.
 

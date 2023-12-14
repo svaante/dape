@@ -199,7 +199,27 @@
      :request "launch"
      :cwd dape-cwd-fn
      :program dape-find-file
-     :stopAtEntry nil))
+     :stopAtEntry nil)
+    (rdbg
+     modes (ruby-mode ruby-ts-mode)
+     command "rdbg"
+     command-args ("-O" "--host" "0.0.0.0" "--port" :autoport "--")
+     command-cwd dape-cwd-fn
+     ensure dape-ensure-command
+     fn ((lambda (config)
+           (plist-put config 'command-args
+                      (append
+                       (plist-get config 'command-args)
+                       (list (plist-get config '--)))))
+         dape-config-autoport)
+     port :autoport
+     :type "Ruby"
+     ;; -- examples:
+     ;; target.rb
+     ;; rails server
+     ;; bundle exec ruby foo.rb
+     ;; bundle exec rake test
+     -- (lambda () (read-string "Invoke ruby command: "))))
   "This variable holds the Dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
