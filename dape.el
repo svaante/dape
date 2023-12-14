@@ -111,8 +111,10 @@
                          (call-process-shell-command
                           (format "%s -c \"import debugpy.adapter\"" python)))
                   (user-error "%s module debugpy is not installed" python))))
+     fn (dape-config-autoport dape-config-tramp)
      command "python3"
-     command-args ("-m" "debugpy.adapter")
+     command-args ("-m" "debugpy.adapter" "--port" :autoport)
+     port :autoport
      :request "launch"
      :type "executable"
      :cwd dape-cwd-fn
@@ -122,7 +124,7 @@
     (dlv
      modes (go-mode go-ts-mode)
      ensure dape-ensure-command
-     fn dape-config-autoport
+     fn (dape-config-autoport dape-config-tramp)
      command "dlv"
      command-args ("dap" "--listen" "127.0.0.1::autoport")
      command-cwd dape-cwd-fn
@@ -202,16 +204,17 @@
      :stopAtEntry nil)
     (rdbg
      modes (ruby-mode ruby-ts-mode)
+     ensure dape-ensure-command
      command "rdbg"
      command-args ("-O" "--host" "0.0.0.0" "--port" :autoport "--")
-     command-cwd dape-cwd-fn
-     ensure dape-ensure-command
+     command-cwd (lambda () (funcall dape-cwd-fn t))
      fn ((lambda (config)
            (plist-put config 'command-args
                       (append
                        (plist-get config 'command-args)
                        (list (plist-get config '--)))))
-         dape-config-autoport)
+         dape-config-autoport
+         dape-config-tramp)
      port :autoport
      :type "Ruby"
      ;; -- examples:
@@ -233,6 +236,8 @@ Symbol Keys (Used by Dape):
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
 - command-cwd: Working directory for the command.
+- prefix-local: Local src path prefix.
+- prefix-remote: Remote src path prefix.
 - host: Host of the debug adapter.
 - port: Port of the debug adapter.
 - modes: List of modes where the configuration is active in `dape'
@@ -394,7 +399,12 @@ left-to-right display order of the properties."
   :type 'function)
 
 (defcustom dape-cwd-fn #'dape--default-cwd
-  "Function to get current working directory."
+  "Function to get current working directory.
+The function should take one optional argument and return a string
+representing the absolute file path of the current working directory.
+If the optional argument is non nil return path with tramp prefix
+otherwise the path should be without prefix.
+See `dape--default-cwd'."
   :type 'function)
 
 (defcustom dape-compile-compile-hooks nil
@@ -541,6 +551,24 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
               (eq (plist-get thread :id) dape--thread-id))
             dape--threads))
 
+(defun dape--path (path format)
+  "Translate PATH to FORMAT.
+Accepted FORMAT values is `local' and `remote'."
+  (if-let* (((or (plist-member dape--config 'prefix-local)
+                 (plist-member dape--config 'prefix-remote)))
+            (prefix-local (or (plist-get dape--config 'prefix-local)
+                              ""))
+            (prefix-remote (or (plist-get dape--config 'prefix-remote)
+                               ""))
+            (mapping (pcase format
+                       ('local (cons prefix-remote prefix-local))
+                       ('remote (cons prefix-local prefix-remote))
+                       (_ (error "Unknown format")))))
+      (concat
+       (cdr mapping)
+       (string-remove-prefix (car mapping) path))
+    path))
+
 (defun dape--current-stack-frame ()
   "Current stack frame plist."
   (let* ((stack-frames (thread-first
@@ -573,6 +601,7 @@ Note requires `dape--source-ensure' if source is by reference."
                               ((buffer-live-p buffer)))
                     buffer)
                   (when-let* ((path (plist-get source :path))
+                              (path (dape--path path 'local))
                               ((file-exists-p path))
                               (buffer (find-file-noselect path t)))
                     buffer))))
@@ -604,12 +633,15 @@ If PULSE pulse on after opening file."
                                               (line-beginning-position 2)
                                               'next-error)))))))
 
-(defun dape--default-cwd ()
-  "Try to guess current project absolute file path."
-  (expand-file-name
-   (or (when-let ((project (project-current)))
-         (project-root project))
-       default-directory)))
+(defun dape--default-cwd (&optional skip-tramp-trim)
+  "Try to guess current project absolute file path.
+On SKIP-TRAMP-TRIM tramp prefix is keept in path."
+  (let ((root (or (when-let ((project (project-current)))
+                    (expand-file-name (project-root project)))
+                  default-directory)))
+    (if (and (not skip-tramp-trim) (tramp-tramp-file-p root))
+        (tramp-file-name-localname (tramp-dissect-file-name root))
+      root)))
 
 (defun dape-find-file (&optional default)
   "Read filename without any ignored extensions at project root.
@@ -672,21 +704,21 @@ Replaces symbol and string occurences of \"autoport\"."
                         (plist-put 'port port)
                         (plist-put 'command-args command-args)))))
 
-(defun dape-config-ssh-command (config)
-  (if-let* (((plist-get config 'command))
+(defun dape-config-tramp (config)
+  "Apply tramp file prefix on CONFIG if started in tramp context."
+  (if-let* (((and (not (plist-get config 'prefix-local))
+                  (not (plist-get config 'prefix-remote))
+                  (plist-get config 'command)))
             (default-directory (or (plist-get config 'command-cwd)
                                    default-directory))
             ((tramp-tramp-file-p default-directory))
             (parts (tramp-dissect-file-name default-directory))
-            ((string= "ssh" (tramp-file-name-method parts)))
-            (tramp-ssh-prefix
+            (tramp-prefix
              (tramp-completion-make-tramp-file-name (tramp-file-name-method parts)
                                                     (tramp-file-name-user parts)
                                                     (tramp-file-name-host parts)
                                                     "")))
-      (plist-put config 'mappings
-                 (append `((,tramp-ssh-prefix . ""))
-                         (plist-get config 'mappings)))
+      (plist-put config 'prefix-local tramp-prefix)
     config))
 
 (defun dape-ensure-command (config)
@@ -1049,7 +1081,7 @@ See `dape--callback' for expected CB signature."
                       (list
                        :name (file-name-nondirectory
                               (buffer-file-name buffer))
-                       :path (buffer-file-name buffer))))))
+                       :path (dape--path (buffer-file-name buffer) 'remote))))))
     (dape-request process
                   "setBreakpoints"
                   (list
@@ -1541,7 +1573,11 @@ Starts a new process as per request of the debug adapter."
                                     (dape--debug 'std-server
                                                  "Server stdout:\n%s"
                                                  string))
-                          :noquery t))
+                          :noquery t
+                          :file-handler t))
+      ;; FIXME Why do I need this?
+      (when (file-remote-p default-directory)
+        (sleep-for 0 300))
       (dape--debug 'info "Server process started %S"
                    (process-command dape--server-process)))
     (while (and (not process)
@@ -1582,7 +1618,8 @@ Starts a new process as per request of the debug adapter."
                                 :sentinel 'dape--process-sentinel
                                 :filter 'dape--process-filter
                                 :buffer buffer
-                                :noquery t))
+                                :noquery t
+                                :file-handler t))
     (dape--debug 'info "Process started %S" (process-command process))
     (dape--setup process config)))
 
@@ -2815,7 +2852,8 @@ CB is expected to be `dape--info-threads-update'."
                 (when-let ((dape-info-thread-buffer-locations)
                            (path (thread-first top-stack
                                                (plist-get :source)
-                                               (plist-get :path)))
+                                               (plist-get :path)
+                                               (dape--path 'local)))
                            (line (plist-get top-stack :line)))
                   (concat " of " (dape--format-file-line path line)))
                 (when-let ((dape-info-thread-buffer-addresses)
@@ -2892,7 +2930,8 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
                 (when-let ((dape-info-stack-buffer-locations)
                            (path (thread-first frame
                                                (plist-get :source)
-                                               (plist-get :path))))
+                                               (plist-get :path)
+                                               (dape--path 'local))))
                   (concat " of "
                           (dape--format-file-line path
                                                   (plist-get frame :line))))

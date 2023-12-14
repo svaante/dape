@@ -60,7 +60,11 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;;             (save-some-buffers t t)))
 
     ;; Projectile users
-    ;; (setq dape-cwd-fn 'projectile-project-root)
+    ;; (setq dape-cwd-fn (lambda (&optional skip-tramp-trim)
+    ;;                     (let ((root (projectile-project-root)))
+    ;;                       (if (and (not skip-tramp-trim) (tramp-tramp-file-p root))
+    ;;                           (tramp-file-name-localname (tramp-dissect-file-name root))
+    ;;                         root))))
     )
 #+end_src
 
