@@ -1022,53 +1022,48 @@ See `dape--callback' for expected function signature."
                                     (plist-put :command command)))))
 
 (defun dape--initialize (process)
-  "Send initialize request to PROCESS."
-  (dape-request process
-                "initialize"
-                (list :clientID "dape"
-                      :adapterID (plist-get dape--config
-                                            :type)
-                      :pathFormat "path"
-                      :linesStartAt1 t
-                      :columnsStartAt1 t
-                      ;;:locale "en-US"
-                      ;;:supportsVariableType t
-                      ;;:supportsVariablePaging t
-                      :supportsRunInTerminalRequest t
-                      ;;:supportsMemoryReferences t
-                      ;;:supportsInvalidatedEvent t
-                      ;;:supportsMemoryEvent t
-                      ;;:supportsArgsCanBeInterpretedByShell t
-                      :supportsProgressReporting t
-                      :supportsStartDebuggingRequest t
-                      ;;:supportsVariableType t
-                      )
-                (dape--callback
-                 (setq dape--capabilities body)
-                 (when success
-                   (dape--launch-or-attach process)))))
-
-(defun dape--launch-or-attach (process)
-  "Send launch or attach request to PROCESS.
-Uses `dape--config' to derive type and to construct request."
-  (let ((start-debugging (plist-get dape--config 'start-debugging)))
-    (dape-request process
-                  (or (plist-get dape--config :request) "launch")
-                  (append
-                   (cl-loop for (key value) on dape--config by 'cddr
-                            when (keywordp key)
-                            append (list key value))
-                   start-debugging)
-                  (dape--callback
-                   ;; nil start-debugging only if started as a part of
-                   ;; a start-debugging request
-                   (when start-debugging
-                     (plist-put dape--config 'start-debugging nil))
-                   (unless success
-                     (dape--repl-message msg 'dape-repl-exit-code-fail)
-                     (dape-kill)))
-                  ;; dlv adapter takes some time during launch request
-                  'skip-timeout)))
+  "Initialize and launch/attach session for PROCESS."
+  (dape--with dape-request (process
+                            "initialize"
+                            (list :clientID "dape"
+                                  :adapterID (plist-get dape--config
+                                                        :type)
+                                  :pathFormat "path"
+                                  :linesStartAt1 t
+                                  :columnsStartAt1 t
+                                  ;;:locale "en-US"
+                                  ;;:supportsVariableType t
+                                  ;;:supportsVariablePaging t
+                                  :supportsRunInTerminalRequest t
+                                  ;;:supportsMemoryReferences t
+                                  ;;:supportsInvalidatedEvent t
+                                  ;;:supportsMemoryEvent t
+                                  ;;:supportsArgsCanBeInterpretedByShell t
+                                  :supportsProgressReporting t
+                                  :supportsStartDebuggingRequest t
+                                  ;;:supportsVariableType t
+                                  ))
+    (if (not success)
+        (dape--repl-message msg 'dape-repl-exit-code-fail)
+      (setq dape--capabilities body)
+      (let ((start-debugging (plist-get dape--config 'start-debugging)))
+        (dape-request process
+                      (or (plist-get dape--config :request) "launch")
+                      (append
+                       (cl-loop for (key value) on dape--config by 'cddr
+                                when (keywordp key)
+                                append (list key value))
+                       start-debugging)
+                      (dape--callback
+                       ;; nil start-debugging only if started as a part of
+                       ;; a start-debugging request
+                       (when start-debugging
+                         (plist-put dape--config 'start-debugging nil))
+                       (unless success
+                         (dape--repl-message msg 'dape-repl-exit-code-fail)
+                         (dape-kill)))
+                      ;; dlv adapter takes some time during launch request
+                      'skip-timeout)))))
 
 (defun dape--set-breakpoints-in-buffer (process buffer &optional cb)
   "Set breakpoints in BUFFER by send setBreakpoints request to PROCESS.
