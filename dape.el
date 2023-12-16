@@ -1738,8 +1738,8 @@ Will remove log or expression breakpoint at line added with
 `dape-breakpoint-log' and/or `dape-breakpoint-expression'."
   (interactive)
   (if (dape--breakpoints-at-point '(dape-log-message dape-expr-message))
-      (dape-remove-breakpoint-at-point '(dape-log-message dape-expr-message))
-    (dape--place-breakpoint)))
+      (dape-breakpoint-remove-at-point '(dape-log-message dape-expr-message))
+    (dape--breakpoint-place)))
 
 (defun dape-breakpoint-log (log-message)
   "Add log breakpoint at line.
@@ -1756,9 +1756,9 @@ Expressions within `{}` are interpolated."
   (when-let ((prev-log-breakpoint (seq-find (lambda (ov)
                                               (overlay-get ov 'dape-log-message))
                                             (dape--breakpoints-at-point))))
-    (dape--remove-breakpoint prev-log-breakpoint t))
+    (dape--breakpoint-remove prev-log-breakpoint t))
   (unless (string-empty-p log-message)
-    (dape--place-breakpoint log-message)))
+    (dape--breakpoint-place log-message)))
 
 (defun dape-breakpoint-expression (expr-message)
   "Add expression breakpoint at current line.
@@ -1775,16 +1775,16 @@ When EXPR-MESSAGE is evaluated as true threads will pause at current line."
               (seq-find (lambda (ov)
                           (overlay-get ov 'dape-expr-message))
                         (dape--breakpoints-at-point))))
-    (dape--remove-breakpoint prev-expr-breakpoint t))
+    (dape--breakpoint-remove prev-expr-breakpoint t))
   (unless (string-empty-p expr-message)
-    (dape--place-breakpoint nil expr-message)))
+    (dape--breakpoint-place nil expr-message)))
 
-(defun dape-remove-breakpoint-at-point (&optional skip-types)
+(defun dape-breakpoint-remove-at-point (&optional skip-types)
   "Remove breakpoint, log breakpoint and expression at current line.
 SKIP-TYPES is a list of overlay properties to skip removal of."
   (interactive)
   (dolist (breakpoint (dape--breakpoints-at-point skip-types))
-    (dape--remove-breakpoint breakpoint)))
+    (dape--breakpoint-remove breakpoint)))
 
 (defun dape-breakpoint-remove-all ()
   "Remove all breakpoints."
@@ -1794,7 +1794,7 @@ SKIP-TYPES is a list of overlay properties to skip removal of."
     (dolist (buffer-breakpoints buffers-breakpoints)
       (pcase-let ((`(,buffer . ,breakpoints) buffer-breakpoints))
         (dolist (breakpoint breakpoints)
-          (dape--remove-breakpoint breakpoint t))
+          (dape--breakpoint-remove breakpoint t))
         (when-let ((process (dape--live-process t)))
           (dape--set-breakpoints-in-buffer process buffer))))))
 
@@ -2077,7 +2077,7 @@ If SKIP-TYPES overlays with properties in SKIP-TYPES are filtered."
   (when-let ((process (dape--live-process t)))
     (dape--set-breakpoints-in-buffer process (current-buffer)))))
 
-(defun dape--place-breakpoint (&optional log-message expression)
+(defun dape--breakpoint-place (&optional log-message expression)
   "Place breakpoint at current line.
 If LOG-MESSAGE place log breakpoint.
 If EXPRESSION place conditional breakpoint."
@@ -2113,7 +2113,7 @@ If EXPRESSION place conditional breakpoint."
   (add-hook 'kill-buffer-hook 'dape--breakpoint-buffer-kill-hook nil t)
   (run-hooks 'dape-update-ui-hooks))
 
-(defun dape--remove-breakpoint (overlay &optional skip-update)
+(defun dape--breakpoint-remove (overlay &optional skip-update)
   "Remove OVERLAY breakpoint from buffer and session.
 When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (setq dape--breakpoints (delq overlay dape--breakpoints))
@@ -2694,7 +2694,7 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
 
 (dape--info-buffer-command dape-info-breakpoint-delete (dape--info-breakpoint)
   "Delete breakpoint at line in dape info buffer."
-  (dape--remove-breakpoint dape--info-breakpoint)
+  (dape--breakpoint-remove dape--info-breakpoint)
   (dape--display-buffer (dape--info-buffer 'dape-info-breakpoints-mode)))
 
 (dape--info-buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
