@@ -2075,7 +2075,8 @@ If SKIP-TYPES overlays with properties in SKIP-TYPES are filtered."
     (dolist (breakpoint breakpoints)
       (setq dape--breakpoints (delq breakpoint dape--breakpoints)))
   (when-let ((process (dape--live-process t)))
-    (dape--set-breakpoints-in-buffer process (current-buffer)))))
+    (dape--set-breakpoints-in-buffer process (current-buffer))))
+  (run-hooks 'dape-update-ui-hooks))
 
 (defun dape--breakpoint-place (&optional log-message expression)
   "Place breakpoint at current line.
