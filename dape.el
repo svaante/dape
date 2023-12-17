@@ -1570,9 +1570,10 @@ Starts a new process as per request of the debug adapter."
       (sleep-for 0 100)
       (setq retries (1- retries)))
     (if (zerop retries)
-        (user-error "Unable to connect to server %s:%d"
-                    host
-                    (plist-get config 'port))
+        (progn (dape-kill)
+               (user-error "Unable to connect to server %s:%d"
+                           host
+                           (plist-get config 'port)))
       (dape--debug 'info "Connection to server established %s:%s"
                    host (plist-get config 'port)))
     (dape--setup process config)))
