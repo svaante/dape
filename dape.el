@@ -1164,14 +1164,6 @@ See `dape--callback' for expected CB signature."
             (funcall cb process nil))))
     (funcall cb process nil)))
 
-
-(defun dape--configuration-done (process)
-  "End initialization of adapter PROCESS."
-  (dape-request process
-                "configurationDone"
-                nil
-                (dape--callback nil)))
-
 (defun dape--get-threads (process stopped-id all-threads-stopped cb)
   "Helper for the stopped event to update `dape--threads'."
   (dape-request process
@@ -1408,7 +1400,7 @@ Starts a new process as per request of the debug adapter."
   (dape--update-state "initialized")
   (dape--with dape--configure-exceptions (process)
     (dape--with dape--set-breakpoints (process)
-      (dape--configuration-done process))))
+      (dape-request process "configurationDone" nil))))
 
 (cl-defmethod dape-handle-event (process (_event (eql capabilities)) body)
   "Handle capabilities events."
