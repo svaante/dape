@@ -1526,77 +1526,74 @@ Starts a new process as per request of the debug adapter."
         (erase-buffer)))
     buffer))
 
-(defun dape--start-multi-session (config)
-  "Start multi session for CONFIG."
-  (dape--debug 'info "Starting new multi session with config:\n%S" config)
+(defun dape--create-connection (config)
+  (dape--debug 'info "Starting new session with config:\n%S" config)
   (let ((buffer (dape--get-buffer))
         (default-directory (or (plist-get config 'command-cwd)
                                default-directory))
-        (host (or (plist-get config 'host) "localhost"))
         (retries 30)
         process)
-    (when (and (plist-get config 'command)
-               (not (plist-get config 'start-debugging)))
-      (setq dape--server-process
-            (make-process :name "Dape adapter"
-                          :command (cons (plist-get config 'command)
-                                         (cl-map 'list 'identity
-                                                 (plist-get config 'command-args)))
-                          :buffer buffer
-                          :sentinel 'dape--process-sentinel
-                          :filter (lambda (_process string)
-                                    (dape--debug 'std-server
-                                                 "Server stdout:\n%s"
-                                                 string))
-                          :noquery t
-                          :file-handler t))
-      ;; FIXME Why do I need this?
-      (when (file-remote-p default-directory)
-        (sleep-for 0 300))
-      (dape--debug 'info "Server process started %S"
-                   (process-command dape--server-process)))
-    (while (and (not process)
-                (> retries 0))
-      (ignore-errors
-        (setq process
-              (make-network-process :name "Dape adapter connection"
-                                    :buffer buffer
-                                    :host host
-                                    :coding 'utf-8-emacs-unix
-                                    :service (plist-get config 'port)
-                                    :sentinel 'dape--process-sentinel
-                                    :filter 'dape--process-filter
-                                    :noquery t)))
-      (sleep-for 0 100)
-      (setq retries (1- retries)))
-    (if (zerop retries)
-        (progn (dape-kill)
-               (user-error "Unable to connect to server %s:%d"
-                           host
-                           (plist-get config 'port)))
-      (dape--debug 'info "Connection to server established %s:%s"
-                   host (plist-get config 'port)))
-    (dape--setup process config)))
-
-(defun dape--start-single-session (config)
-  "Start single session for CONFIG."
-  (dape--debug 'info "Starting new single session with config:\n%S" config)
-  (let ((buffer (dape--get-buffer))
-        (default-directory (or (plist-get config 'command-cwd)
-                               default-directory))
-        process)
-    (setq process (make-process :name "Dape adapter"
-                                :command (cons (plist-get config 'command)
-                                               (cl-map 'list 'identity
-                                                       (plist-get config 'command-args)))
-                                :connection-type 'pipe
-                                :coding 'utf-8-emacs-unix
-                                :sentinel 'dape--process-sentinel
-                                :filter 'dape--process-filter
-                                :buffer buffer
-                                :noquery t
-                                :file-handler t))
-    (dape--debug 'info "Process started %S" (process-command process))
+    (cond
+     ;; socket connection
+     ((plist-get config 'port)
+      ;; start server
+      (when (and (plist-get config 'command)
+                 (not (plist-get config 'start-debugging)))
+        (setq dape--server-process
+              (make-process :name "Dape adapter"
+                            :command (cons (plist-get config 'command)
+                                           (cl-map 'list 'identity
+                                                   (plist-get config 'command-args)))
+                            :buffer buffer
+                            :sentinel 'dape--process-sentinel
+                            :filter (lambda (_process string)
+                                      (dape--debug 'std-server
+                                                   "Server stdout:\n%s"
+                                                   string))
+                            :noquery t
+                            :file-handler t))
+        (dape--debug 'info "Server process started %S"
+                     (process-command dape--server-process))
+        ;; FIXME Why do I need this?
+        (when (file-remote-p default-directory)
+          (sleep-for 0 300)))
+      ;; connect to server
+      (let ((host (or (plist-get config 'host) "localhost")))
+        (while (and (not process)
+                    (> retries 0))
+          (ignore-errors
+            (setq process
+                  (make-network-process :name "Dape adapter connection"
+                                        :buffer buffer
+                                        :host host
+                                        :coding 'utf-8-emacs-unix
+                                        :service (plist-get config 'port)
+                                        :sentinel 'dape--process-sentinel
+                                        :filter 'dape--process-filter
+                                        :noquery t)))
+          (sleep-for 0 100)
+          (setq retries (1- retries)))
+        (if (zerop retries)
+            (progn (dape-kill)
+                   (user-error "Unable to connect to server %s:%d"
+                               host
+                               (plist-get config 'port)))
+          (dape--debug 'info "Connection to server established %s:%s"
+                       host (plist-get config 'port)))))
+     ;; stdio connection
+     (t
+      (setq process (make-process :name "Dape adapter"
+                                  :command (cons (plist-get config 'command)
+                                                 (cl-map 'list 'identity
+                                                         (plist-get config 'command-args)))
+                                  :connection-type 'pipe
+                                  :coding 'utf-8-emacs-unix
+                                  :sentinel 'dape--process-sentinel
+                                  :filter 'dape--process-filter
+                                  :buffer buffer
+                                  :noquery t
+                                  :file-handler t))
+      (dape--debug 'info "Process started %S" (process-command process))))
     (dape--setup process config)))
 
 
@@ -1899,13 +1896,9 @@ Use SKIP-COMPILE to skip compilation."
                               fns (copy-tree config))))
           (when-let ((ensure (plist-get config 'ensure)))
             (funcall ensure (copy-tree config)))
-          (cond
-           ((and (not skip-compile) (plist-get config 'compile))
-            (dape--compile config))
-           ((plist-get config 'port)
-            (dape--start-multi-session config))
-           (t
-            (dape--start-single-session config))))))
+          (if (and (not skip-compile) (plist-get config 'compile))
+              (dape--compile config)
+            (dape--create-connection config)))))
     (if (plist-get config 'start-debugging)
         (funcall fn)
       (dape-kill fn))))
