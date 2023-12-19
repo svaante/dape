@@ -3365,7 +3365,6 @@ See `dape--config-mode-p' how \"valid\" is defined."
                                               (let ((map (make-sparse-keymap)))
                                                 (set-keymap-parent map minibuffer-local-map)
                                                 (define-key map "C-M-i" #'completion-at-point)
-                                                (define-key map "TAB" #'completion-at-point)
                                                 (define-key map "\t" #'completion-at-point)
                                                 map)
                                               nil 'dape-history initial-contents))
