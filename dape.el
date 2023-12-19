@@ -1384,9 +1384,9 @@ Starts a new process as per request of the debug adapter."
   (when (hash-table-p dape--timers)
     (dolist (timer (hash-table-values dape--timers))
       (cancel-timer timer)))
-  (dape (plist-put dape--config
-                   'start-debugging
-                   (plist-get arguments :configuration))))
+  (dape--create-connection (plist-put dape--config
+                                      'start-debugging
+                                      (plist-get arguments :configuration))))
 
 
 ;;; Events
@@ -1880,28 +1880,19 @@ Executes alist key `launch' in `dape-configs' with :program as \"bin\".
 
 Use SKIP-COMPILE to skip compilation."
   (interactive (list (dape--read-config)))
-  (let ((fn
-         (dape--callback
-          (unless (plist-get config 'start-debugging)
-            (when-let ((buffer (get-buffer "*dape-debug*")))
-              (with-current-buffer buffer
-                (let ((inhibit-read-only t))
-                  (erase-buffer)))))
-          (when-let ((fn (plist-get config 'fn))
-                     (fns (or (and (functionp fn) (list fn))
-                              (and (listp fn) fn))))
-            (setq config
-                  (seq-reduce (lambda (config fn)
-                                (funcall fn config))
-                              fns (copy-tree config))))
-          (when-let ((ensure (plist-get config 'ensure)))
-            (funcall ensure (copy-tree config)))
-          (if (and (not skip-compile) (plist-get config 'compile))
-              (dape--compile config)
-            (dape--create-connection config)))))
-    (if (plist-get config 'start-debugging)
-        (funcall fn)
-      (dape-kill fn))))
+  (dape--with dape-kill ()
+    (when-let ((fn (plist-get config 'fn))
+               (fns (or (and (functionp fn) (list fn))
+                        (and (listp fn) fn))))
+      (setq config
+            (seq-reduce (lambda (config fn)
+                          (funcall fn config))
+                        fns (copy-tree config))))
+    (when-let ((ensure (plist-get config 'ensure)))
+      (funcall ensure (copy-tree config)))
+    (if (and (not skip-compile) (plist-get config 'compile))
+        (dape--compile config)
+      (dape--create-connection config))))
 
 
 ;;; Compile
