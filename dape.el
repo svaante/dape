@@ -2766,9 +2766,6 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
 
 (dape--info-buffer-command dape-info-select-thread (dape--info-thread)
   "Select thread at line in dape info buffer."
-  (unless (equal (plist-get dape--info-thread :status) "stopped")
-    (user-error "Unable to select thread %s, it's not stopped"
-                (plist-get dape--info-thread :status)))
   (dape-select-thread (plist-get dape--info-thread :id)))
 
 (defvar dape--info-threads-font-lock-keywords
