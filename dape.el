@@ -239,8 +239,8 @@ Symbol Keys (Used by Dape):
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
 - command-cwd: Working directory for the command.
-- prefix-local: Local src path prefix.
-- prefix-remote: Remote src path prefix.
+- prefix-local: Defines the source path prefix, accessible from Emacs.
+- prefix-remote: Defines the source path prefix, accessible by the adapter.
 - host: Host of the debug adapter.
 - port: Port of the debug adapter.
 - modes: List of modes where the configuration is active in `dape'
@@ -269,9 +269,13 @@ Functions and symbols in configuration:
                 :value-type
                 (plist :options
                        (((const :tag "List of modes where config is active in `dape' completions" modes) (repeat function))
+                        ((const :tag "Ensures adapter availability" ensure) function)
+                        ((const :tag "Transforms configuration at runtime" fn) (choice function (repeat function)))
                         ((const :tag "Shell command to initiate the debug adapter" command) (choice string symbol))
                         ((const :tag "List of string arguments for command" command-args) (repeat string))
                         ((const :tag "Working directory for command" command-cwd) (choice string symbol))
+                        ((const :tag "Path prefix for local src paths" prefix-local) string)
+                        ((const :tag "Path prefix for remote src paths" prefix-remote) string)
                         ((const :tag "Host of debug adapter" host) string)
                         ((const :tag "Port of debug adapter" port) natnum)
                         ((const :tag "Compile cmd" compile) string)
