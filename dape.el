@@ -1577,7 +1577,7 @@ Starts a new connection as per request of the debug adapter."
                                        (dape--debug 'std-server
                                                     "Server stdout:\n%s"
                                                     string))
-                             :buffer buffer)))
+                             :buffer (generate-new-buffer "*dape-server stderr*"))))
         (dape--debug 'info "Server process started %S"
                      (process-command dape--server-process))
         ;; FIXME Why do I need this?
@@ -1691,13 +1691,10 @@ CB will be called after adapter termination.
 With WITH-DISCONNECT use disconnect instead of terminate
 used internally as a fallback to terminate."
   (interactive)
-  (when (hash-table-p dape--timers)
-    (dolist (timer (hash-table-values dape--timers))
-      (cancel-timer timer)))
   (let ((connection
          (or connection
              (and (ignore-errors (jsonrpc-running-p dape--parent-connection))
-                  dape--parent-process)
+                  dape--parent-connection)
              (dape--live-connection t))))
     (cond
      ((and (not with-disconnect)
@@ -1709,7 +1706,7 @@ used internally as a fallback to terminate."
                     "terminate"
                     nil
                     (dape--callback
-                     (if (not success)
+                     (if (not success-p)
                          (dape-kill cb 'with-disconnect)
                        (dape--kill-processes)
                        (when cb
