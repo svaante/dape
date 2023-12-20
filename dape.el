@@ -1856,7 +1856,9 @@ Watched symbols are displayed in *dape-info* buffer.
   (run-hooks 'dape-update-ui-hooks))
 
 (defun dape-evaluate-expression (expression)
-  "Evaluate EXPRESSION."
+  "Evaluate EXPRESSION.
+EXPRESSION can be an expression or adapter command, as it's evaluated in
+repl context."
   (interactive
    (list (string-trim
           (read-string "Evaluate: "
@@ -1867,8 +1869,8 @@ Watched symbols are displayed in *dape-info* buffer.
   (dape--with dape--evaluate-expression ((dape--live-process)
                                          (plist-get (dape--current-stack-frame) :id)
                                          (substring-no-properties expression)
-                                         "hover")
-      (message "%S" body)))
+                                         "repl")
+      (message "%s" (plist-get body :result))))
 
 ;;;###autoload
 (defun dape (config &optional skip-compile)
