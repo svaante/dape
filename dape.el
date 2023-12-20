@@ -528,8 +528,8 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
                        (dape--remove-stack-pointers)
                        (dolist (thread dape--threads)
                          (plist-put thread :status "running"))
-                       (run-hooks 'dape-update-ui-hooks)))))
-  (user-error "No stopped threads"))
+                       (run-hooks 'dape-update-ui-hooks))))
+    (user-error "No stopped threads")))
 
 (defun dape--thread-id-object ()
   "Helper to construct a thread id object."
