@@ -597,8 +597,9 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
       (dape-request (dape--live-process)
                     command
                     `(,@(dape--thread-id-object)
-                      ,@(when (plist-get dape--capabilities
-                                         :supportsSteppingGranularity)
+                      ,@(when (eq (plist-get dape--capabilities
+                                             :supportsSteppingGranularity)
+                                  t)
                           (list :granularity
                                 (symbol-name dape-stepping-granularity))))
                     (dape--callback
@@ -1032,7 +1033,7 @@ If NOWARN does not error on no active process."
                        (condition-case nil
                            (json-parse-buffer :object-type 'plist
                                               :null-object nil
-                                              :false-object nil)
+                                              :false-object :json-false)
                          (error
                           (and
                            (dape--debug 'error
@@ -1078,7 +1079,9 @@ If NOWARN does not error on no active process."
 (defun dape-send-object (process &optional seq object)
   "Helper for `dape-request' to send SEQ request with OBJECT to PROCESS."
   (let* ((object (if seq (plist-put object :seq seq) object))
-         (json (json-serialize object :false-object nil))
+         (json (json-serialize object
+                               :false-object :json-false
+                               :null-object nil))
          (string (format "Content-Length: %d\r\n\r\n%s" (length json) json)))
     (dape--debug 'io "Sending:\n%S" object)
     (condition-case err
@@ -1134,7 +1137,7 @@ See `dape--callback' for expected function signature."
                       (append
                        (cl-loop for (key value) on dape--config by 'cddr
                                 when (keywordp key)
-                                append (list key value))
+                                append (list key (or value :json-false)))
                        start-debugging)
                       (dape--callback
                        ;; nil start-debugging only if started as a part of
@@ -1223,7 +1226,7 @@ See `dape--callback' for expected CB signature."
                      ;; new exception
                      (t
                       (plist-put exception :enabled
-                                 (plist-get exception :default))))))
+                                 (eq (plist-get exception :default) t))))))
                 (plist-get dape--capabilities
                            :exceptionBreakpointFilters)))
   (dape--set-exception-breakpoints process
@@ -1355,7 +1358,7 @@ See `dape--callback' for expected CB signature."
 REF should refer to VARIABLE container.
 See `dape--callback' for expected CB signature."
   (cond
-   ((and (plist-get dape--capabilities :supportsSetVariable)
+   ((and (eq (plist-get dape--capabilities :supportsSetVariable) t)
          (numberp ref))
     (dape--with dape-request
         (process
@@ -1797,7 +1800,8 @@ Starts a new process as per request of the debug adapter."
   (dape--remove-stack-pointers)
   (cond
    ((and (dape--live-process t)
-         (plist-get dape--capabilities :supportsRestartRequest))
+         (eq (plist-get dape--capabilities :supportsRestartRequest)
+             t))
     (setq dape--threads nil)
     (setq dape--thread-id nil)
     (setq dape--restart-in-progress t)
@@ -1825,8 +1829,9 @@ used internally as a fallback to terminate."
     (cond
      ((and (not with-disconnect)
            process
-           (plist-get dape--capabilities
-                      :supportsTerminateRequest))
+           (eq (plist-get dape--capabilities
+                          :supportsTerminateRequest)
+               t))
       (dape-request dape--process
                     "terminate"
                     nil
@@ -1840,8 +1845,9 @@ used internally as a fallback to terminate."
       (dape-request dape--process
                     "disconnect"
                     `(:restart nil .
-                               ,(when (plist-get dape--capabilities
-                                                 :supportTerminateDebuggee)
+                               ,(when (eq (plist-get dape--capabilities
+                                                     :supportTerminateDebuggee)
+                                          t)
                                   (list :terminateDebuggee t)))
                     (dape--callback
                      (dape--kill-processes)
@@ -3338,7 +3344,7 @@ Buffer is specified by MODE and ID."
            scope
            (list (plist-get scope :name))
            (lambda (path object)
-             (and (not (plist-get object :expensive))
+             (and (not (eq (plist-get object :expensive) t))
                   (gethash (cons (plist-get object :name) path)
                            dape--info-expanded-p))))
         (when (and scope scopes (eq dape--state 'stopped))
@@ -3400,7 +3406,7 @@ Buffer is specified by MODE and ID."
                  (list :variables dape--watched)
                  (list "Watch")
                  (lambda (path object)
-                   (and (not (plist-get object :expensive))
+                   (and (not (eq (plist-get object :expensive) t))
                         (gethash (cons (plist-get object :name) path)
                                  dape--info-expanded-p))))
               (dape--info-buffer-update-1 mode id :scopes scopes))))))))
@@ -3649,7 +3655,8 @@ See `dape--config-mode-p' how \"valid\" is defined."
   "Hook function to produce doc strings for `eldoc'.
 On success calles CB with the doc string.
 See `eldoc-documentation-functions', for more infomation."
-  (and-let* (((plist-get dape--capabilities :supportsEvaluateForHovers))
+  (and-let* (((eq (plist-get dape--capabilities :supportsEvaluateForHovers)
+                  t))
              (symbol (thing-at-point 'symbol)))
     (dape--evaluate-expression (dape--live-process)
                                (plist-get (dape--current-stack-frame) :id)
