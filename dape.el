@@ -121,6 +121,7 @@
      :cwd dape-cwd-fn
      :program dape-find-file-buffer-default
      :justMyCode nil
+     :console "integratedTerminal"
      :showReturnValue t)
     (dlv
      modes (go-mode go-ts-mode)
