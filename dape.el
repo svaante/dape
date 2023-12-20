@@ -280,7 +280,7 @@ Functions and symbols in configuration:
 
 ;; TODO Add more defaults, don't know which adapters support
 ;;      sourceReference
-(defcustom dape-mime-mode '(("text/x-lldb.disassembly" . asm-mode))
+(defcustom dape-mime-mode-alist '(("text/x-lldb.disassembly" . asm-mode))
   "On source request of mime type key open buffer with mode value."
   :type '(alist :key-type string :value-type function))
 
@@ -2135,10 +2135,10 @@ See `dape--callback' for expected CB signature."
                            (plist-get source :sourceReference) buffer))
           (with-current-buffer buffer
             (if-let* ((mime (plist-get body :mimeType))
-                      (mode (alist-get mime dape-mime-mode nil nil 'equal)))
+                      (mode (alist-get mime dape-mime-mode-alist nil nil 'equal)))
                 (unless (eq major-mode mode)
                   (funcall mode))
-              (message "Unknown mime type %s, see `dape-mime-mode'" (plist-get body :mimeType)))
+              (message "Unknown mime type %s, see `dape-mime-mode-alist'" (plist-get body :mimeType)))
             (setq-local buffer-read-only t
                         dape--source source)
             (let ((inhibit-read-only t))
