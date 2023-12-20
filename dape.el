@@ -511,26 +511,25 @@ The hook is run with one argument, the compilation buffer."
   (declare (indent 2))
   `(,request-fn ,@args (dape--callback ,@body)))
 
-(defun dape--next-like-command (command &optional arg)
+(defun dape--next-like-command (command)
   "Helper for interactive step like commands.
 Run step like COMMAND.  If ARG is set run COMMAND ARG times."
   (if (dape--stopped-threads)
-      (dotimes (_ (or arg 1))
-        (dape-request (dape--live-process)
-                      command
-                      `(,@(dape--thread-id-object)
-                        ,@(when (plist-get dape--capabilities
-                                           :supportsSteppingGranularity)
-                            (list :granularity
-                                  (symbol-name dape-stepping-granularity))))
-                      (dape--callback
-                       (when success
-                         (dape--update-state "running")
-                         (dape--remove-stack-pointers)
-                         (dolist (thread dape--threads)
-                           (plist-put thread :status "running"))
-                         (run-hooks 'dape-update-ui-hooks)))))
-    (user-error "No stopped threads")))
+      (dape-request (dape--live-process)
+                    command
+                    `(,@(dape--thread-id-object)
+                      ,@(when (plist-get dape--capabilities
+                                         :supportsSteppingGranularity)
+                          (list :granularity
+                                (symbol-name dape-stepping-granularity))))
+                    (dape--callback
+                     (when success
+                       (dape--update-state "running")
+                       (dape--remove-stack-pointers)
+                       (dolist (thread dape--threads)
+                         (plist-put thread :status "running"))
+                       (run-hooks 'dape-update-ui-hooks)))))
+  (user-error "No stopped threads"))
 
 (defun dape--thread-id-object ()
   "Helper to construct a thread id object."
@@ -1607,20 +1606,20 @@ Starts a new process as per request of the debug adapter."
 
 ;;; Commands
 
-(defun dape-next (&optional arg)
+(defun dape-next ()
   "Step one line (skip functions)."
-  (interactive (list current-prefix-arg))
-  (dape--next-like-command "next" arg))
+  (interactive)
+  (dape--next-like-command "next"))
 
-(defun dape-step-in (&optional arg)
+(defun dape-step-in ()
   "Steps into function/method. If not possible behaves like `dape-next'."
-  (interactive (list current-prefix-arg))
-  (dape--next-like-command "stepIn" arg))
+  (interactive)
+  (dape--next-like-command "stepIn"))
 
-(defun dape-step-out (&optional arg)
+(defun dape-step-out ()
   "Steps out of function/method. If not possible behaves like `dape-next'."
-  (interactive (list current-prefix-arg))
-  (dape--next-like-command "stepOut" arg))
+  (interactive)
+  (dape--next-like-command "stepOut"))
 
 (defun dape-continue ()
   "Resumes execution."
