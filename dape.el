@@ -1446,6 +1446,9 @@ Starts a new process as per request of the debug adapter."
                 :id (plist-get body :threadId)
                 :name "unnamed")
           dape--threads))
+  ;; Select thread if we don't have any thread selected
+  (unless dape--thread-id
+    (setq dape--thread-id (plist-get body :threadId)))
   (run-hooks 'dape-update-ui-hooks))
 
 (cl-defmethod dape-handle-event (process (_event (eql stopped)) body)
