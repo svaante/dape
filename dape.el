@@ -1911,6 +1911,10 @@ Use SKIP-COMPILE to skip compilation."
       (funcall ensure (copy-tree config)))
     (if (and (not skip-compile) (plist-get config 'compile))
         (dape--compile config)
+      (when-let ((buffer (get-buffer "*dape-debug*")))
+        (with-current-buffer buffer
+          (let ((inhibit-read-only t))
+            (erase-buffer))))
       (dape--create-connection config))))
 
 
