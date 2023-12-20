@@ -285,7 +285,10 @@ Functions and symbols in configuration:
 ;; TODO Add more defaults, don't know which adapters support
 ;;      sourceReference
 (defcustom dape-mime-mode-alist '(("text/x-lldb.disassembly" . asm-mode))
-  "On source request of mime type key open buffer with mode value."
+  "Alist of MIME types vs corresponding major mode functions.
+    Each element should look like (MIME-TYPE . MODE) where
+    MIME-TYPE is a string and MODE is the major mode function to
+    use for buffers of this MIME type."
   :type '(alist :key-type string :value-type function))
 
 (defcustom dape-key-prefix "\C-x\C-a"
