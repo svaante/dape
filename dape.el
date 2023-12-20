@@ -2495,6 +2495,7 @@ REVERSED selects previous."
   "Generic mode to derive all other Dape gud buffer modes from."
   :interactive nil
   (setq-local buffer-read-only t
+              truncate-lines t
               cursor-in-non-selected-windows nil
               dape--info-buffer-fetch-fn (lambda (cb)
                                            (funcall cb)))
@@ -2989,8 +2990,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
   :interactive nil
   (setq dape--info-buffer-fetch-fn #'dape--info-scope-fetch
         dape--info-buffer-update-fn #'dape--info-scope-update
-        dape--info-buffer-related '((dape-info-watch-mode nil "Watch"))
-        truncate-lines t)
+        dape--info-buffer-related '((dape-info-watch-mode nil "Watch")))
   (dape--info-set-header-line-format))
 
 (defun dape--info-group-2-related-buffers (scopes)
@@ -3136,8 +3136,7 @@ CB is expected to be `dape--info-scope-update'."
   :interactive nil
   (setq dape--info-buffer-fetch-fn #'dape--info-watch-fetch
         dape--info-buffer-update-fn #'dape--info-watch-update
-        dape--info-buffer-related '((dape-info-watch-mode nil "Watch"))
-        truncate-lines t))
+        dape--info-buffer-related '((dape-info-watch-mode nil "Watch"))))
 
 (defun dape--info-watch-fetch (cb)
   "Fetches data for `dape--info-watch-update'.
