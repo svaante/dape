@@ -472,7 +472,7 @@ The hook is run with one argument, the compilation buffer."
 (defvar dape--cb nil
   "Hash table of request callbacks.")
 (defvar dape--state nil
-  "Session state string.")
+  "Session state.")
 (defvar dape--thread-id nil
   "Selected thread id.")
 (defvar dape--stack-id nil
@@ -531,7 +531,7 @@ Run step like COMMAND.  If ARG is set run COMMAND ARG times."
                                 (symbol-name dape-stepping-granularity))))
                     (dape--callback
                      (when success
-                       (dape--update-state "running")
+                       (dape--update-state 'running)
                        (dape--remove-stack-pointers)
                        (dolist (thread dape--threads)
                          (plist-put thread :status "running"))
@@ -995,7 +995,7 @@ If NOWARN does not error on no active process."
                                          "Timeout for reached for seq %d"
                                          seq)
                             (when (dape--live-process t)
-                              (dape--update-state "timed out"))
+                              (dape--update-state 'timed-out))
                             (remhash seq dape--timers)
                             (when-let ((cb (gethash seq dape--cb)))
                               (remhash seq dape--cb)
@@ -1411,7 +1411,7 @@ Starts a new process as per request of the debug adapter."
 
 (cl-defmethod dape-handle-event (process (_event (eql initialized)) _body)
   "Handle initialized events."
-  (dape--update-state "initialized")
+  (dape--update-state 'initialized)
   (dape--with dape--configure-exceptions (process)
     (dape--with dape--set-breakpoints (process)
       (dape-request process "configurationDone" nil))))
@@ -1427,7 +1427,7 @@ Starts a new process as per request of the debug adapter."
   (let ((start-method (format "%sed"
                               (or (plist-get body :startMethod)
                                   "start"))))
-    (dape--update-state start-method)
+    (dape--update-state (intern start-method))
     (dape--repl-message (format "Process %s %s"
                                 start-method
                                 (plist-get body :name)))))
@@ -1444,7 +1444,7 @@ Starts a new process as per request of the debug adapter."
         (plist-put thread :name (or (plist-get thread :name)
                                     "unnamed")))
     ;; If new thread use thread state as global state
-    (dape--update-state (plist-get body :reason))
+    (dape--update-state (intern (plist-get body :reason)))
     (push (list :status (plist-get body :reason)
                 :id (plist-get body :threadId)
                 :name "unnamed")
@@ -1456,7 +1456,7 @@ Starts a new process as per request of the debug adapter."
 
 (cl-defmethod dape-handle-event (process (_event (eql stopped)) body)
   "Handle stopped events."
-  (dape--update-state "stopped")
+  (dape--update-state 'stopped)
   (setq dape--thread-id (plist-get body :threadId))
   (dape--get-threads process
                      (plist-get body :threadId)
@@ -1474,7 +1474,7 @@ Starts a new process as per request of the debug adapter."
 
 (cl-defmethod dape-handle-event (_process (_event (eql continued)) body)
   "Handle continued events."
-  (dape--update-state "running")
+  (dape--update-state 'running)
   (dape--remove-stack-pointers)
   (unless dape--thread-id
     (setq dape--thread-id (plist-get body :threadId))))
@@ -1491,7 +1491,7 @@ Starts a new process as per request of the debug adapter."
 
 (cl-defmethod dape-handle-event (_process (_event (eql exited)) body)
   "Handle exited events."
-  (dape--update-state "exited")
+  (dape--update-state 'exited)
   (dape--remove-stack-pointers)
   (dape--repl-message (format "* Exit code: %d *"
                               (plist-get body :exitCode))
@@ -1501,7 +1501,7 @@ Starts a new process as per request of the debug adapter."
 
 (cl-defmethod dape-handle-event (_process (_event (eql terminated)) _body)
   "Handle terminated events."
-  (dape--update-state "terminated")
+  (dape--update-state 'terminated)
   (dape--remove-stack-pointers)
   (dape--repl-message "* Program terminated *" 'italic)
   (unless dape--restart-in-progress
@@ -1530,7 +1530,7 @@ Starts a new process as per request of the debug adapter."
         dape--process process
         dape--restart-in-progress nil
         dape--repl-insert-text-guard nil)
-  (dape--update-state "starting")
+  (dape--update-state 'starting)
   (run-hook-with-args 'dape-on-start-hooks)
   (run-hooks 'dape-update-ui-hooks)
   (dape--initialize process))
@@ -1641,7 +1641,7 @@ Starts a new process as per request of the debug adapter."
                 (dape--thread-id-object)
                 (dape--callback
                  (when success
-                   (dape--update-state "running")
+                   (dape--update-state 'running)
                    (dape--remove-stack-pointers)
                    (dolist (thread dape--threads)
                      (plist-put thread :status "running"))
@@ -1650,7 +1650,7 @@ Starts a new process as per request of the debug adapter."
 (defun dape-pause ()
   "Pause execution."
   (interactive)
-  (when (equal dape--state "stopped")
+  (when (eq dape--state 'stopped)
     ;; cpptools crashes on pausing an paused thread
     (user-error "Thread already is stopped"))
   (dape-request (dape--live-process) "pause" (dape--thread-id-object)))
@@ -2892,7 +2892,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
   (cond
    ((or (not current-stack-frame)
         (not stack-frames)
-        (not (equal dape--state "stopped")))
+        (not (eq dape--state 'stopped)))
     (insert "No stopped thread."))
    (t
     (cl-loop with table = (make-gdb-table)
@@ -2938,7 +2938,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 
 (dape--info-buffer-command dape-info-scope-toggle (dape--info-path)
   "Expand or contract variable at line in dape info buffer."
-  (unless (equal dape--state "stopped")
+  (unless (eq dape--state 'stopped)
     (user-error "No stopped threads"))
   (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
            dape--info-expanded-p)
@@ -3103,7 +3103,7 @@ CB is expected to be `dape--info-scope-update'."
              (and (not (plist-get object :expensive))
                   (gethash (cons (plist-get object :name) path)
                            dape--info-expanded-p))))
-        (when (and scope scopes (equal dape--state "stopped"))
+        (when (and scope scopes (eq dape--state 'stopped))
           (funcall cb scope scopes))))))
 
 (defun dape--info-scope-update (scope scopes)
@@ -3417,9 +3417,9 @@ See `eldoc-documentation-functions', for more infomation."
 
 ;;; Mode line
 
-(defun dape--update-state (msg)
-  "Update Dape mode line with MSG."
-  (setq dape--state msg)
+(defun dape--update-state (state)
+  "Update Dape mode line with STATE symbol."
+  (setq dape--state state)
   (force-mode-line-update t))
 
 (defun dape--mode-line-format ()
@@ -3427,7 +3427,7 @@ See `eldoc-documentation-functions', for more infomation."
   (concat (propertize "Dape" 'face 'font-lock-constant-face)
           ":"
           (propertize
-           (or dape--state "unknown")
+           (format "%s" (or dape--state 'unknown))
            'face 'font-lock-doc-face)))
 
 (add-to-list 'mode-line-misc-info
