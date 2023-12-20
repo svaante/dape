@@ -2164,17 +2164,14 @@ See `dape--callback' for expected CB signature."
   (dape--remove-stack-pointers)
   (when-let ((frame (dape--current-stack-frame)))
     (dape--with dape--source-ensure ((dape--live-process t) frame)
+      (dape--goto-source frame (memq major-mode '(dape-repl-mode)) t)
       (when-let ((marker (dape--object-to-marker frame)))
         (with-current-buffer (marker-buffer marker)
           (dape--add-eldoc-hook)
           (save-excursion
             (goto-char (marker-position marker))
             (set-marker dape--stack-position
-                        (line-beginning-position))))
-        (dape--goto-source frame
-                           (memq major-mode
-                                 '(dape-repl-mode))
-                           t)))))
+                        (line-beginning-position))))))))
 
 (add-to-list 'overlay-arrow-variable-list 'dape--stack-position)
 
