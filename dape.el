@@ -327,7 +327,7 @@ Functions and symbols in configuration:
   :type 'natnum)
 
 (defcustom dape-info-hide-mode-line
-  (memql dape-buffer-window-arrangment '(left right))
+  (and (memql dape-buffer-window-arrangment '(left right)) t)
   "Hide mode line in dape info buffers."
   :type 'boolean)
 
