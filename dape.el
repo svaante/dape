@@ -1353,17 +1353,21 @@ Adapter is identified with PROCESS."
                command
                arguments))
 
-(cl-defmethod dape-handle-request (process (_command (eql runInTerminal)) _seq arguments)
+(cl-defmethod dape-handle-request (process (command (eql runInTerminal)) seq arguments)
   "Handle runInTerminal requests.
 Starts a new process to run process to be debugged."
-  (let* ((cwd (plist-get process :cwd))
-         (default-directory (or (and cwd
-                                     (not (string-blank-p cwd))
-                                     cwd)
-                                default-directory))
-         (buffer (get-buffer-create "*dape-shell*"))
-         (display-buffer-alist
-          '(((major-mode . shell-mode) . (display-buffer-no-window)))))
+  (let ((default-directory (or (plist-get arguments :cwd)
+                               default-directory))
+        (process-environment
+         (or (cl-loop for (key value) on (plist-get arguments :env) by 'cddr
+                      collect
+                      (format "%s=%s"
+                              (substring (format "%s" key) 1)
+                              value))
+             process-environment))
+        (buffer (get-buffer-create "*dape-shell*"))
+        (display-buffer-alist
+         '(((major-mode . shell-mode) . (display-buffer-no-window)))))
     (async-shell-command (string-join
                           (cl-map 'list
                                   'identity
@@ -1371,9 +1375,12 @@ Starts a new process to run process to be debugged."
                           " ")
                          buffer
                          buffer)
-    (dape--display-buffer buffer))
-  ;; For debugpy crashes if we send an response...
-  )
+    (dape--display-buffer buffer)
+    ;; For debugpy crashes if we send an response... it expects seq
+    ;; in response which makes no sense
+    ;; (dape--response process (symbol-name command) seq t
+    ;;                 `(:processID ,pid))
+    ))
 
 (cl-defmethod dape-handle-request (process (command (eql startDebugging)) seq arguments)
   "Handle startDebugging requests.
