@@ -1,0 +1,15 @@
+#+title: dape.el - Changelog
+#+author: Daniel Pettersson
+#+language: en
+
+* Version 0.3
+- Add support for source by sourceReference by =dape-mime-mode-alist=
+- Support stepping granularity with =dape-stepping-granularity=
+- Improve repl completions with completionTriggerCharacters
+- Add =rdbg= as a batteries included adapter
+- Extend =fn= config keyword to take a list of functions as well
+- Cleanup breakpoints on buffer kill
+- Add basic support for debugging with tramp
+- Add new configuration keys prefix-local and prefix-remote for source mapping
+- Minor bugfixes and improvements
+
