@@ -42,6 +42,17 @@ jobs:
         wget https://github.com/microsoft/vscode-js-debug/releases/download/v1.84.0/js-debug-dap-v1.84.0.tar.gz
         tar -xvzf js-debug-dap-v1.84.0.tar.gz -C ~/.emacs.d/debug-adapters
 
+   - name: Install Ruby and rdbg
+     run: |
+       git clone https://github.com/rbenv/rbenv.git ~/.rbenv
+       cd ~/.rbenv && src/configure --prefix=~/.rbenv && make -C src && make -C src install
+       git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build
+       git clone https://github.com/rbenv/rbenv-shims.git ~/.rbenv/plugins/rbenv-shims
+       export PATH="$HOME/.rbenv/bin:$PATH"
+       eval "$(rbenv init -)"
+       rbenv global 2.7.3
+       gem install debug
+
     - name: Build
       run: make all
 

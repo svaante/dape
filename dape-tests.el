@@ -50,6 +50,13 @@ If VALUE line PROPERTY value `equal' VALUE."
 If VALUE line PROPERTY value `equal' VALUE."
   (car (dape--lines-with-property property value)))
 
+(defun dape--line-number-at-regex (regexp)
+  "Search for a line matching the REGEXP in the current buffer."
+  (save-excursion
+    (let ((match (re-search-forward regexp nil t)))
+      (when match
+        (line-number-at-pos)))))
+
 (defmacro dape--should-eventually (pred &optional seconds)
   "PRED should eventually be non nil during duration SECONDS.'
 If PRED does not eventually return nil, abort the current test as
@@ -116,6 +123,7 @@ Helper for `dape--with-buffers'."
           (setq buffers (nreverse buffers))
           (apply fn buffers))
       ;; reset dape
+      (advice-add 'yes-or-no-p :around (defun always-yes (&rest _) t))
       (dape-quit)
       (setq dape--info-expanded-p
             (make-hash-table :test 'equal))
@@ -127,6 +135,7 @@ Helper for `dape--with-buffers'."
                         (string-match-p "\\*dape-.+\\*"
                                         (buffer-name buffer)))
                       (buffer-list))))
+      (advice-remove 'yes-or-no-p 'always-yes)
       ;; clean up files
       (delete-directory temp-dir t))))
 
@@ -180,7 +189,7 @@ Expects breakpoint bp 1 in source."
             (dape--line-with-property 'bp 1)))))
 
 (ert-deftest dape-test-restart ()
-  "Restart with debugpy restart."
+  "Restart with restart."
   (dape--with-buffers
    ((main-buffer ("main.py"
                   "pass"
@@ -208,6 +217,16 @@ Expects breakpoint bp 1 in source."
                        (file-name-concat default-directory "./a.out")
                        :cwd default-directory
                        'compile "gcc -g -o a.out main.c"))
+  (dape--with-buffers
+      ((main-buffer ("main.rb"
+                     "puts \"\""
+                     "puts \"\""
+                     (propertize "0" 'bp 1))))
+       (dape--test-restart main-buffer
+                           'rdbg
+                           'command-cwd default-directory
+                           '-c (format "ruby \"%s\"" (buffer-file-name main-buffer))))
+
   ;; (dape--with-buffers
   ;;  ((main-buffer (("main.go"
   ;;                 package main"
@@ -268,7 +287,16 @@ Expects breakpoint bp 1 in source."
                                  :program
                                  (file-name-concat default-directory "./a.out")
                                  :cwd default-directory
-                                 'compile "gcc -g -o a.out main.c")))
+                                 'compile "gcc -g -o a.out main.c"))
+  (dape--with-buffers
+      ((main-buffer ("main.rb"
+                     "puts \"\""
+                     "puts \"\""
+                     (propertize "0" 'bp 1))))
+       (dape--test-restart-with-dape main-buffer
+                                     'rdbg
+                                     'command-cwd default-directory
+                                     '-c (format "ruby \"%s\"" (buffer-file-name main-buffer)))))
 
 (defun dape--test-scope-buffer-contents (buffer &rest dape-args)
   "Helper for ert test `dape-test-scope-buffer-contents'.
@@ -285,22 +313,22 @@ Breakpoint should be present on a line where all variables are present."
   (with-current-buffer (dape--should-eventually
                         (dape--info-get-live-buffer 'dape-info-scope-mode 0))
     (dape--should-eventually
-     (member "a" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^  a"))
     (dape--should-eventually
-     (member "b" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^  b"))
     (dape--should-eventually
-     (member "c" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^\\+ c"))
     (dape--should-eventually
-     (not (member "member" (dape--variable-names-in-buffer))))
+     (not (dape--line-number-at-regex "^    member")))
     (dape--apply-to-matches "^\\+ c" 'dape-info-scope-toggle)
     (dape--should-eventually
-     (member "a" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^  a"))
     (dape--should-eventually
-     (member "b" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^  b"))
     (dape--should-eventually
-     (member "c" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^\\+ c"))
     (dape--should-eventually
-     (member "member" (dape--variable-names-in-buffer)))))
+     (dape--line-number-at-regex "^    member"))))
 
 (ert-deftest dape-test-scope-buffer-contents ()
   "Assert basic scope buffer content."
@@ -356,34 +384,61 @@ Breakpoint should be present on a line where all variables are present."
      (equal (line-number-at-pos)
             (dape--line-with-property 'bp 1))))
   (dape--should-eventually
-   (equal dape--state "stopped"))
+   (equal dape--state 'stopped))
   ;; validate contents of watch buffer
   (with-current-buffer (dape--should-eventually
                         (dape--info-get-live-buffer 'dape-info-watch-mode))
     (dape--should-eventually
-     (member "a" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^  a"))
     (dape--should-eventually
-     (member "b" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^\\+ b"))
     (dape--should-eventually
-     (not (member "member" (dape--variable-names-in-buffer))))
+     (not (dape--line-number-at-regex "^    member")))
     (dape--apply-to-matches "^\\+ b" 'dape-info-scope-toggle)
     (dape--should-eventually
-     (member "a" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^  a"))
     (dape--should-eventually
-     (member "b" (dape--variable-names-in-buffer)))
+     (dape--line-number-at-regex "^\\+ b"))
     (dape--should-eventually
-     (member "member" (dape--variable-names-in-buffer)))))
+     (dape--line-number-at-regex "^    member"))))
 
-(ert-deftest dape-test-watch-buffer-contents ()
-  "Assert basic watch buffer content."
+(ert-deftest dape-test-watch-buffer()
+  "Assert basic watch buffer content and actions."
   (dape--with-buffers
    ((main-buffer ("main.py"
-                  "class C:"
+                  "class B:"
                   "\tmember = 0"
                   "a = 0"
-                  "b = C()"
+                  "b = B()"
                   (propertize "pass" 'bp 1))))
-   (dape--test-watch-buffer-contents main-buffer
-                                     'debugpy
-                                     :program (buffer-file-name main-buffer)
-                                     :cwd default-directory)))
+  (dape-watch-dwim "a")
+  (dape-watch-dwim "b")
+  (dape- 'debugpy
+          :program (buffer-file-name main-buffer)
+          :cwd default-directory)
+  ;; assert that we are at breakpoint and stopped
+  (with-current-buffer main-buffer
+    (dape--should-eventually
+     (equal (line-number-at-pos)
+            (dape--line-with-property 'bp 1))))
+  (dape--should-eventually
+   (equal dape--state 'stopped))
+  ;; assert contents of watch buffer
+  (with-current-buffer (dape--should-eventually
+                        (dape--info-get-live-buffer 'dape-info-watch-mode))
+    (dape--should-eventually
+     (dape--line-number-at-regex "^  a"))
+    (dape--should-eventually
+     (dape--line-number-at-regex "^\\+ b"))
+    ;; assert expansion of in watch buffer
+    (dape--apply-to-matches "^\\+ b" 'dape-info-scope-toggle)
+    (dape--should-eventually
+     (dape--line-number-at-regex "^    member"))
+    ;; assert set value in watch buffer
+    (dape--should-eventually
+     (dape--line-number-at-regex "^    member.*0"))
+    (cl-letf (((symbol-function 'read-string)
+                (lambda (&rest _) "99")))
+      (dape--apply-to-matches "^    member" 'dape-info-variable-edit))
+    (dape--should-eventually
+     (dape--line-number-at-regex "^    member.*99")))))
