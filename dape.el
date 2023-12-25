@@ -467,8 +467,6 @@ The hook is run with one argument, the compilation buffer."
   "List of running timers.")
 (defvar dape--seq 0
   "Session seq number.")
-(defvar dape--seq-event 0
-  "Session event seq number.")
 (defvar dape--cb nil
   "Hash table of request callbacks.")
 (defvar dape--state nil
@@ -920,17 +918,9 @@ If NOWARN does not error on no active process."
          ;; netcoredbg sends seq as string for some reason
          (when (stringp seq)
            (setq seq (string-to-number seq)))
-         (cond
-          ;; FIXME This is only here for `godot' which keeps sending duplicate.
-          ((or (> seq dape--seq-event)
-               (zerop seq))
-           (setq dape--seq-event seq)
-           (dape-handle-event process
-                              (intern (plist-get object :event))
-                              (plist-get object :body)))
-          (t (dape--debug 'error
-                          "Event ignored due to request seq %d < last handled seq %d"
-                          seq dape--seq-event)))))
+         (dape-handle-event process
+                            (intern (plist-get object :event))
+                            (plist-get object :body))))
       (_ (dape--debug 'info "No handler for type %s" type)))))
 
 (defun dape--process-filter (process string)
@@ -1274,30 +1264,43 @@ See `dape--callback' for expected CB signature."
                               :context context))
                 cb))
 
-(defun dape--set-variable (process ref variable value &optional cb)
+(defun dape--set-variable (process ref variable value)
   "Set VARIABLE VALUE with REF by request to PROCESS.
 REF should refer to VARIABLE container.
 See `dape--callback' for expected CB signature."
   (cond
+   ((and (plist-get dape--capabilities :supportsSetVariable)
+         (numberp ref))
+    (dape--with dape-request
+        (process
+         "setVariable"
+         (list
+          :variablesReference ref
+          :name (plist-get variable :name)
+          :value value))
+      (if (not success)
+          (message "%s" msg)
+        (plist-put variable :variables nil)
+        (cl-loop for (key value) on body by 'cddr
+                 do (plist-put variable key value))
+        (run-hooks 'dape-update-ui-hooks))))
    ((and (plist-get dape--capabilities :supportsSetExpression)
          (or (plist-get variable :evaluateName)
-             (not (numberp ref))))
-      (dape-request process
-                    "setExpression"
-                    (list :frameId (plist-get (dape--current-stack-frame) :id)
-                          :expression (or (plist-get variable :evaluateName)
-                                          (plist-get variable :name))
-                          :value value)
-                    cb))
-   ((numberp ref)
-    (dape-request process
-                  "setVariable"
-                  (list
-                   :variablesReference ref
-                   :name (plist-get variable :name)
-                   :value value)
-                  cb))
-   ((error "Adapter does not support setting variable from watch."))))
+             (plist-get variable :name)))
+    (dape--with dape-request
+        (process
+         "setExpression"
+         (list :frameId (plist-get (dape--current-stack-frame) :id)
+               :expression (or (plist-get variable :evaluateName)
+                               (plist-get variable :name))
+               :value value))
+      (if (not success)
+          (message "%s" msg)
+        ;; FIXME: js-debug caches variables response for each stop
+        ;; therefore it's not to just refresh all variables as it will
+        ;; return the old value
+        (dape--update process))))
+   ((user-error "Unable to set variable"))))
 
 (defun dape--scopes (process stack-frame cb)
   "Send scopes request to PROCESS for STACK-FRAME plist.
@@ -1519,7 +1522,6 @@ Starts a new process as per request of the debug adapter."
                 (kill-buffer buffer)))
   (setq dape--config config
         dape--seq 0
-        dape--seq-event 0
         dape--timers (make-hash-table)
         dape--cb (make-hash-table)
         dape--thread-id nil
@@ -2959,19 +2961,15 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 (dape--info-buffer-command dape-info-variable-edit
   (dape--info-ref dape--info-variable)
   "Edit variable value at line in dape info buffer."
-  (dape--with dape--set-variable
-      ((dape--live-process)
-       dape--info-ref
-       dape--info-variable
-       (read-string
-        (format "Set value of %s `%s' = "
-                (plist-get dape--info-variable :type)
-                (plist-get dape--info-variable :name))
-        (or (plist-get dape--info-variable :value)
-            (plist-get dape--info-variable :result))))
-    (cond
-     (success (dape--update process))
-     (t (dape--repl-message msg)))))
+  (dape--set-variable (dape--live-process)
+                       dape--info-ref
+                       dape--info-variable
+                       (read-string
+                        (format "Set value of %s `%s' = "
+                                (plist-get dape--info-variable :type)
+                                (plist-get dape--info-variable :name))
+                        (or (plist-get dape--info-variable :value)
+                            (plist-get dape--info-variable :result)))))
 
 (dape--info-buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
