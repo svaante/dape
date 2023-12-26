@@ -1299,7 +1299,7 @@ See `dape--callback' for expected CB signature."
         ;; FIXME: js-debug caches variables response for each stop
         ;; therefore it's not to just refresh all variables as it will
         ;; return the old value
-        (dape--update process))))
+        (dape--update process nil t))))
    ((user-error "Unable to set variable"))))
 
 (defun dape--scopes (process stack-frame cb)
@@ -1328,7 +1328,8 @@ See `dape--callback' for expected CB signature."
           (when (length= dape--threads responses)
             (funcall cb process)))))))
 
-(defun dape--update (process &optional skip-clear-stack-frames)
+(defun dape--update (process
+                     &optional skip-clear-stack-frames skip-stack-pointer-flash)
   "Update dape data and ui.
 PROCESS specifies adapter process.
 If SKIP-CLEAR-STACK-FRAMES not all stack frame data is cleared.  This
@@ -1338,7 +1339,7 @@ is usefully if only to load data for another thread."
       (dolist (thread dape--threads)
         (plist-put thread :stackFrames nil)))
     (dape--with dape--stack-trace (process current-thread)
-      (dape--update-stack-pointers)
+      (dape--update-stack-pointers skip-stack-pointer-flash)
       (dape--with dape--scopes (process (dape--current-stack-frame))
         (run-hooks 'dape-update-ui-hooks)))))
 
@@ -2175,12 +2176,13 @@ See `dape--callback' for expected CB signature."
       (dape--remove-eldoc-hook)))
   (set-marker dape--stack-position nil))
 
-(defun dape--update-stack-pointers ()
+(defun dape--update-stack-pointers (&optional skip-stack-pointer-flash)
   "Update stack pointer marker."
   (dape--remove-stack-pointers)
   (when-let ((frame (dape--current-stack-frame)))
     (dape--with dape--source-ensure ((dape--live-process t) frame)
-      (dape--goto-source frame (memq major-mode '(dape-repl-mode)) t)
+      (dape--goto-source frame (memq major-mode '(dape-repl-mode))
+                         (not skip-stack-pointer-flash))
       (when-let ((marker (dape--object-to-marker frame)))
         (with-current-buffer (marker-buffer marker)
           (dape--add-eldoc-hook)
@@ -2271,6 +2273,8 @@ Handles newline."
                                  (substring-no-properties input)
                                  "repl"
                                  (dape--callback
+                                  (when success
+                                    (dape--update process nil t))
                                   (dape--repl-message (concat
                                                        (if success
                                                            (plist-get body :result)
