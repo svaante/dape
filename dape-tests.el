@@ -487,7 +487,7 @@ Expects line with string \"breakpoint\" in source."
             (dape--line-number-at-regex "^2 .* stopped in thread_fn")
             (member 'dape--info-thread-position
                     overlay-arrow-variable-list)
-            (= (marker-position dape--info-stack-position)
+            (= (marker-position dape--info-thread-position)
                (save-excursion
                  (dape--goto-line (dape--line-number-at-regex
                                    "^2 .* stopped in thread_fn"))
@@ -509,7 +509,7 @@ Expects line with string \"breakpoint\" in source."
             (dape--line-number-at-regex "^2 .* stopped in thread_fn")
             (member 'dape--info-thread-position
                     overlay-arrow-variable-list)
-            (= (marker-position dape--info-stack-position)
+            (= (marker-position dape--info-thread-position)
                (save-excursion
                  (dape--goto-line (dape--line-number-at-regex
                                    "^1 .* stopped in"))
