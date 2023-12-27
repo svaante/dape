@@ -106,6 +106,7 @@
     (debugpy
      modes (python-mode python-ts-mode)
      ensure (lambda (config)
+              (dape-ensure-command config)
               (let ((python
                      (dape--config-eval-value (plist-get config 'command))))
                 (unless (zerop
@@ -281,6 +282,15 @@ Functions and symbols in configuration:
                         ((const :tag "Compile cmd" compile) string)
                         ((const :tag "Adapter type" :type) string)
                         ((const :tag "Request type launch/attach" :request) string)))))
+
+(defcustom dape-commands nil
+  "Default commands for `dape' completion.
+Sometimes it is useful for files or directories to supply local values
+for this variable.
+
+Example value:
+((codelldb-cc :program \"/home/user/project/a.out\"))"
+  :type '(repeat sexp))
 
 ;; TODO Add more defaults, don't know which adapters support
 ;;      sourceReference
@@ -738,7 +748,7 @@ Replaces symbol and string occurences of \"autoport\"."
   (let ((command
          (dape--config-eval-value (plist-get config 'command))))
     (unless (or (file-executable-p command)
-                (executable-find command))
+                (executable-find command t))
       (user-error "Unable to locate %S" command))))
 
 (defun dape--overlay-region (&optional extended)
@@ -1954,8 +1964,7 @@ Use SKIP-COMPILE to skip compilation."
             (seq-reduce (lambda (config fn)
                           (funcall fn config))
                         fns (copy-tree config))))
-    (when-let ((ensure (plist-get config 'ensure)))
-      (funcall ensure (copy-tree config)))
+    (dape--config-ensure config t)
     (if (and (not skip-compile) (plist-get config 'compile))
         (dape--compile config)
       (when-let ((buffer (get-buffer "*dape-debug*")))
@@ -3341,7 +3350,7 @@ CB is expected to be `dape--info-watch-update'."
 (defvar dape-session-history nil
   "Current sessions `dape--read-config' history.
 Used to derive initial-contents in `dape--read-config'.")
-(defvar dape--minibuffer-suggested-configs nil
+(defvar dape--minibuffer-suggestions nil
   "Suggested configurations in minibuffer.")
 
 (defun dape--plistp (object)
@@ -3439,6 +3448,18 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
                                  1
                                  (1- (length config-str))))))))
 
+(defun dape--config-ensure (config &optional signal)
+  "Ensure that CONFIG is valid executable.
+If SIGNAL is non nil raises an `user-error'."
+  (if-let ((ensure-fn (plist-get config 'ensure)))
+      (let ((default-directory (or (plist-get config 'command-cwd)
+                                   default-directory)))
+        (condition-case err
+            (or (funcall ensure-fn config) t)
+          (user-error
+           (if signal (user-error (cdr err)) nil))))
+    t))
+
 (defun dape--config-mode-p (config)
   "Is CONFIG enabled for current mode."
   (let ((modes (plist-get config 'modes)))
@@ -3462,9 +3483,9 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
      ((or (not key)
           (and (not args) symbol-bounds))
       (let ((bounds (or line-bounds (cons (point) (point)))))
-      (list (car bounds) (cdr bounds)
-            (mapcar (lambda (name) (format "%s " name))
-                    dape--minibuffer-suggested-configs))))
+        (list (car bounds) (cdr bounds)
+              (mapcar (lambda (suggestion) (format "%s " suggestion))
+                      dape--minibuffer-suggestions))))
      ;; Complete config args
      ((and (alist-get key dape-configs)
            (or (and (not (dape--plistp args))
@@ -3489,30 +3510,34 @@ Initial contents defaults to valid configuration if there is only one
 or last mode valid history item from this session.
 
 See `dape--config-mode-p' how \"valid\" is defined."
-  (let* ((suggested-configs
+  (let* ((from-dape-commands
+          (cl-loop for (key . config) in dape-commands
+                   when (dape--config-ensure config)
+                   collect (dape--config-to-string key config)))
+         (suggested-configs
           (cl-loop for (key . config) in dape-configs
                    when (and (dape--config-mode-p config)
-                             (condition-case nil
-                                 (or (funcall (or (plist-get config 'ensure)
-                                                   'identity)
-                                               config)
-                                     t)
-                               (user-error nil)))
-                   collect key))
+                             (dape--config-ensure config))
+                   collect (dape--config-to-string key nil)))
          (initial-contents
           (or
+           ;; Take `dape-command' if exist
+           (car from-dape-commands)
            ;; Take first valid history item from session
            (seq-find (lambda (str)
-                          (ignore-errors
-                            (memql (car (dape--config-from-string str))
-                                   suggested-configs)))
-                        dape-session-history)
+                       (ignore-errors
+                         (member (thread-first (dape--config-from-string str)
+                                               (car)
+                                               (dape--config-to-string nil))
+                                 suggested-configs)))
+                     dape-session-history)
            ;; Take first suggested config if only one exist
            (and (length= suggested-configs 1)
-                (symbol-name (car suggested-configs))))))
+                (car suggested-configs)))))
     (minibuffer-with-setup-hook
         (lambda ()
-          (setq-local dape--minibuffer-suggested-configs suggested-configs)
+          (setq-local dape--minibuffer-suggestions
+                      (append from-dape-commands suggested-configs))
           (set-syntax-table emacs-lisp-mode-syntax-table)
           (add-hook 'completion-at-point-functions
                     #'dape--config-completion-at-point nil t))
