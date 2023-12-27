@@ -26,12 +26,12 @@
 (require 'ert)
 
 ;;; Helpers
-(defun dape--goto-line (line)
+(defun dape-test--goto-line (line)
   "Goto LINE."
   (goto-char (point-min))
   (forward-line (1- line)))
 
-(defun dape--line-number-at-regex (regexp)
+(defun dape-test--line-at-regex (regexp)
   "Search for a line matching the REGEXP in the current buffer."
   (save-excursion
     (goto-char (point-min))
@@ -39,7 +39,7 @@
       (when match
         (line-number-at-pos)))))
 
-(defmacro dape--should-eventually (pred &optional seconds)
+(defmacro dape-test--should (pred &optional seconds)
   "PRED should eventually be non nil during duration SECONDS.'
 If PRED does not eventually return nil, abort the current test as
 failed."
@@ -53,7 +53,7 @@ failed."
          (ignore ret)
          ret))))
 
-(defmacro dape--with-buffers (buffer-fixtures &rest body)
+(defmacro dape-test--with-files (buffer-fixtures &rest body)
   "Setup BUFFER-FIXTURES call body with bindings and clean up.
 FIXTURE is an alist of the form
 (BUFFER-BINDING (FILE-NAME . CONTENT-LIST).
@@ -64,15 +64,15 @@ CONTENT-LIST.
 - condition: inserts condition breakpoint
 - log: inserts log breakpoint"
   (declare (indent 1) (debug t))
-  `(dape--call-with-buffers ',(mapcar 'cdr buffer-fixtures)
-                            (lambda ,(mapcar 'car buffer-fixtures)
-                              ,@body)))
+  `(dape-test--call-with-files ',(mapcar 'cdr buffer-fixtures)
+                               (lambda ,(mapcar 'car buffer-fixtures)
+                                 ,@body)))
 
 (defvar dape--test-skip-cleanup nil)
 
-(defun dape--call-with-buffers (fixtures fn)
+(defun dape-test--call-with-files (fixtures fn)
   "Setup FIXTURES and apply FN with created buffers.
-Helper for `dape--with-buffers'."
+Helper for `dape-test--with-files'."
   (let* ((temp-dir (make-temp-file "dape-tests-" t))
          (default-directory temp-dir)
          buffers)
@@ -94,9 +94,9 @@ Helper for `dape--with-buffers'."
         (setq dape--info-expanded-p
               (make-hash-table :test 'equal))
         (setq dape--watched nil)
-        (dape--should-eventually
+        (dape-test--should
          (not dape--process) 10)
-        (dape--should-eventually
+        (dape-test--should
          (not (seq-find (lambda (buffer)
                           (string-match-p "\\*dape-.+\\*"
                                           (buffer-name buffer)))
@@ -105,14 +105,14 @@ Helper for `dape--with-buffers'."
         ;; clean up files
         (delete-directory temp-dir t)))))
 
-(defun dape--apply-to-match (regex fn)
+(defun dape-test--apply-to-match (regex fn)
   "Apply FN to match of REGEX in the current buffer."
   (save-excursion
     (goto-char (point-min))
     (when (re-search-forward regex nil)
       (funcall-interactively fn))))
 
-(defun dape- (key &rest options)
+(defun dape-test--debug (key &rest options)
   "Invoke `dape' config KEY with OPTIONS."
   (dape (dape--config-eval key options)))
 
@@ -122,28 +122,28 @@ Helper for `dape--with-buffers'."
 Expects line with string \"breakpoint\" in source."
   (with-current-buffer buffer
     ;; set breakpoint
-    (let ((line (dape--line-number-at-regex "breakpoint")))
+    (let ((line (dape-test--line-at-regex "breakpoint")))
       (save-excursion
-        (dape--goto-line line)
+        (dape-test--goto-line line)
         (dape-breakpoint-toggle)))
-    (apply 'dape- dape-args)
+    (apply 'dape-test--debug dape-args)
     ;; at breakpoint and stopped
-    (dape--should-eventually
+    (dape-test--should
      (and (eq dape--state 'stopped)
           (equal (line-number-at-pos)
-                 (dape--line-number-at-regex "breakpoint"))))
+                 (dape-test--line-at-regex "breakpoint"))))
     ;; restart
     (goto-char (point-min))
     (dape-restart)
     ;; at breakpoint and stopped
-    (dape--should-eventually
+    (dape-test--should
      (and (eq dape--state 'stopped)
           (equal (line-number-at-pos)
-                 (dape--line-number-at-regex "breakpoint"))))))
+                 (dape-test--line-at-regex "breakpoint"))))))
 
 (ert-deftest dape-test-restart ()
   "Restart with restart."
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.py"
         ("pass"
@@ -152,7 +152,7 @@ Expects line with string \"breakpoint\" in source."
                         'debugpy
                         :program (buffer-file-name main-buffer)
                         :cwd default-directory))
-  (dape--with-buffers
+  (dape-test--with-files
       ((index-buffer
         "index.js"
         ("()=>{};"
@@ -161,7 +161,7 @@ Expects line with string \"breakpoint\" in source."
                         'js-debug-node
                         :program (buffer-file-name index-buffer)
                         :cwd default-directory))
-  (dape--with-buffers
+  (dape-test--with-files
       ((index-buffer
         "main.c"
         ("int main() {"
@@ -173,7 +173,7 @@ Expects line with string \"breakpoint\" in source."
                         (file-name-concat default-directory "./a.out")
                         :cwd default-directory
                         'compile "gcc -g -o a.out main.c"))
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.rb"
         ("puts \"\""
@@ -182,35 +182,36 @@ Expects line with string \"breakpoint\" in source."
     (dape--test-restart main-buffer
                         'rdbg
                         'command-cwd default-directory
-                        '-c (format "ruby \"%s\"" (buffer-file-name main-buffer)))))
+                        '-c (format "ruby \"%s\""
+                                    (buffer-file-name main-buffer)))))
 
 (defun dape--test-restart-with-dape (buffer &rest dape-args)
   "Helper for ert test `dape-test-restart-with-dape'.
 Expects line with string \"breakpoint\" in source."
   (with-current-buffer buffer
     ;; set breakpoint
-    (let ((line (dape--line-number-at-regex "breakpoint")))
+    (let ((line (dape-test--line-at-regex "breakpoint")))
       (save-excursion
-        (dape--goto-line line)
+        (dape-test--goto-line line)
         (dape-breakpoint-toggle)))
-    (apply 'dape- dape-args)
+    (apply 'dape-test--debug dape-args)
     ;; at breakpoint and stopped
-    (dape--should-eventually
+    (dape-test--should
      (and (eq dape--state 'stopped)
           (equal (line-number-at-pos)
-                 (dape--line-number-at-regex "breakpoint"))))
+                 (dape-test--line-at-regex "breakpoint"))))
     ;; restart
     (goto-char (point-min))
-    (apply 'dape- dape-args)
+    (apply 'dape-test--debug dape-args)
     ;; at breakpoint and stopped
-    (dape--should-eventually
+    (dape-test--should
      (and (eq dape--state 'stopped)
           (equal (line-number-at-pos)
-                 (dape--line-number-at-regex "breakpoint"))))))
+                 (dape-test--line-at-regex "breakpoint"))))))
 
 (ert-deftest dape-test-restart-with-dape ()
   "Should be able to restart with `dape' even though session active."
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.py"
         ("pass"
@@ -219,7 +220,7 @@ Expects line with string \"breakpoint\" in source."
                                   'debugpy
                                   :program (buffer-file-name main-buffer)
                                   :cwd default-directory))
-  (dape--with-buffers
+  (dape-test--with-files
       ((index-buffer
         "index.js"
         ("()=>{};"
@@ -228,7 +229,7 @@ Expects line with string \"breakpoint\" in source."
                                   'js-debug-node
                                   :program (buffer-file-name index-buffer)
                                   :cwd default-directory))
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.c"
         ("int main() {"
@@ -240,7 +241,7 @@ Expects line with string \"breakpoint\" in source."
                                   (file-name-concat default-directory "./a.out")
                                   :cwd default-directory
                                   'compile "gcc -g -o a.out main.c"))
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.rb"
         ("puts \"\""
@@ -258,50 +259,50 @@ property member.
 Expects line with string \"breakpoint\" in source."
   ;; set breakpoint
   (with-current-buffer buffer
-    (let ((line (dape--line-number-at-regex "breakpoint")))
+    (let ((line (dape-test--line-at-regex "breakpoint")))
       (save-excursion
-        (dape--goto-line line)
+        (dape-test--goto-line line)
         (dape-breakpoint-toggle))))
-  (apply 'dape- dape-args)
+  (apply 'dape-test--debug dape-args)
   ;; we are at breakpoint and stopped
   (with-current-buffer buffer
-    (dape--should-eventually
+    (dape-test--should
      (equal (line-number-at-pos)
-            (dape--line-number-at-regex "breakpoint"))))
-  (with-current-buffer (dape--should-eventually
+            (dape-test--line-at-regex "breakpoint"))))
+  (with-current-buffer (dape-test--should
                         (dape--info-get-live-buffer 'dape-info-scope-mode 0))
-    (dape--should-eventually
-     (dape--line-number-at-regex "^  a"))
-    (dape--should-eventually
-     (dape--line-number-at-regex "^\\+ b"))
+    (dape-test--should
+     (dape-test--line-at-regex "^  a"))
+    (dape-test--should
+     (dape-test--line-at-regex "^\\+ b"))
     ;; expansion
-    (dape--apply-to-match "^\\+ b" 'dape-info-scope-toggle)
-    (dape--should-eventually
-     (dape--line-number-at-regex "^    member"))
+    (dape-test--apply-to-match "^\\+ b" 'dape-info-scope-toggle)
+    (dape-test--should
+     (dape-test--line-at-regex "^    member"))
     ;; contraction
-    (dape--apply-to-match "^\\- b" 'dape-info-scope-toggle)
-    (dape--should-eventually
-     (not (dape--line-number-at-regex "^    member")))
+    (dape-test--apply-to-match "^\\- b" 'dape-info-scope-toggle)
+    (dape-test--should
+     (not (dape-test--line-at-regex "^    member")))
     ;; set value
     (when (eq (plist-get dape--capabilities :supportsSetVariable)
               t)
-      (dape--should-eventually
-       (dape--line-number-at-regex "^  a *0"))
+      (dape-test--should
+       (dape-test--line-at-regex "^  a *0"))
       (cl-letf (((symbol-function 'read-string)
                  (lambda (&rest _) "99")))
-        (dape--apply-to-match "^  a" 'dape-info-variable-edit))
-      (dape--should-eventually
-       (dape--line-number-at-regex "^  a *99")))
+        (dape-test--apply-to-match "^  a" 'dape-info-variable-edit))
+      (dape-test--should
+       (dape-test--line-at-regex "^  a *99")))
     ;; add watch
-    (dape--apply-to-match "^  a" 'dape-info-scope-watch-dwim)
-    (with-current-buffer (dape--should-eventually
+    (dape-test--apply-to-match "^  a" 'dape-info-scope-watch-dwim)
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-watch-mode))
-      (dape--should-eventually
-       (dape--line-number-at-regex "^  a")))))
+      (dape-test--should
+       (dape-test--line-at-regex "^  a")))))
 
 (ert-deftest dape-test-scope-buffer ()
   "Assert basic scope buffer content."
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.py"
         ("class B:"
@@ -313,7 +314,7 @@ Expects line with string \"breakpoint\" in source."
                              'debugpy
                              :program (buffer-file-name main-buffer)
                              :cwd default-directory))
-  (dape--with-buffers
+  (dape-test--with-files
       ((index-buffer
         "index.js"
         ("var a = 0;"
@@ -323,7 +324,7 @@ Expects line with string \"breakpoint\" in source."
                              'js-debug-node
                              :program (buffer-file-name index-buffer)
                              :cwd default-directory))
-  (dape--with-buffers
+  (dape-test--with-files
       ((main
         "main.c"
         ("int main() {"
@@ -341,7 +342,7 @@ Expects line with string \"breakpoint\" in source."
 
 (ert-deftest dape-test-watch-buffer()
   "Watch buffer content and commands."
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.py"
         ("class B:"
@@ -354,51 +355,51 @@ Expects line with string \"breakpoint\" in source."
     (dape-watch-dwim "b")
     ;; set breakpoint
     (with-current-buffer main-buffer
-      (let ((line (dape--line-number-at-regex "breakpoint")))
+      (let ((line (dape-test--line-at-regex "breakpoint")))
         (save-excursion
-          (dape--goto-line line)
+          (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape- 'debugpy
-           :program (buffer-file-name main-buffer)
-           :cwd default-directory)
+    (dape-test--debug 'debugpy
+                      :program (buffer-file-name main-buffer)
+                      :cwd default-directory)
     ;; at breakpoint and stopped
     (with-current-buffer main-buffer
-      (dape--should-eventually
+      (dape-test--should
        (equal (line-number-at-pos)
-              (dape--line-number-at-regex "breakpoint"))))
-    (dape--should-eventually
+              (dape-test--line-at-regex "breakpoint"))))
+    (dape-test--should
      (equal dape--state 'stopped))
     ;; contents of watch buffer
-    (with-current-buffer (dape--should-eventually
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-watch-mode))
-      (dape--should-eventually
-       (and (dape--line-number-at-regex "^  a")
-            (dape--line-number-at-regex "^\\+ b")))
+      (dape-test--should
+       (and (dape-test--line-at-regex "^  a")
+            (dape-test--line-at-regex "^\\+ b")))
       ;; expansion
-      (dape--apply-to-match "^\\+ b" 'dape-info-scope-toggle)
-      (dape--should-eventually
-       (dape--line-number-at-regex "^    member"))
+      (dape-test--apply-to-match "^\\+ b" 'dape-info-scope-toggle)
+      (dape-test--should
+       (dape-test--line-at-regex "^    member"))
       ;; assert contraction
-      (dape--apply-to-match "^\\- b" 'dape-info-scope-toggle)
-      (dape--should-eventually
-       (not (dape--line-number-at-regex "^    member")))
+      (dape-test--apply-to-match "^\\- b" 'dape-info-scope-toggle)
+      (dape-test--should
+       (not (dape-test--line-at-regex "^    member")))
       ;; set value
-      (dape--should-eventually
-       (dape--line-number-at-regex "^  a *0"))
+      (dape-test--should
+       (dape-test--line-at-regex "^  a *0"))
       (cl-letf (((symbol-function 'read-string)
                  (lambda (&rest _) "99")))
-        (dape--apply-to-match "^  a" 'dape-info-variable-edit))
-      (dape--should-eventually
-       (dape--line-number-at-regex "^  a *99"))
+        (dape-test--apply-to-match "^  a" 'dape-info-variable-edit))
+      (dape-test--should
+       (dape-test--line-at-regex "^  a *99"))
       ;; watch removal
-      (dape--apply-to-match "^  a" 'dape-info-scope-watch-dwim)
-      (dape--should-eventually
-       (not (dape--line-number-at-regex "^  a"))))))
+      (dape-test--apply-to-match "^  a" 'dape-info-scope-watch-dwim)
+      (dape-test--should
+       (not (dape-test--line-at-regex "^  a"))))))
 
 (ert-deftest dape-test-stack-buffer()
   "Stack buffer contents and commands."
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.py"
         ("def a():"
@@ -410,50 +411,50 @@ Expects line with string \"breakpoint\" in source."
          "a()")))
     ;; set breakpoint
     (with-current-buffer main-buffer
-      (let ((line (dape--line-number-at-regex "breakpoint")))
+      (let ((line (dape-test--line-at-regex "breakpoint")))
         (save-excursion
-          (dape--goto-line line)
+          (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape- 'debugpy
-           :program (buffer-file-name main-buffer)
-           :cwd default-directory)
+    (dape-test--debug 'debugpy
+                      :program (buffer-file-name main-buffer)
+                      :cwd default-directory)
     ;; at breakpoint and stopped
     (with-current-buffer main-buffer
-      (dape--should-eventually
+      (dape-test--should
        (= (line-number-at-pos)
-          (dape--line-number-at-regex "breakpoint"))))
-    (with-current-buffer (dape--should-eventually
+          (dape-test--line-at-regex "breakpoint"))))
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-stack-mode))
       ;; buffer contents
-      (dape--should-eventually
-       (and (dape--line-number-at-regex "^1 in b")
-            (dape--line-number-at-regex "^2 in a")
+      (dape-test--should
+       (and (dape-test--line-at-regex "^1 in b")
+            (dape-test--line-at-regex "^2 in a")
             (member 'dape--info-stack-position
                     overlay-arrow-variable-list)
             (= (marker-position dape--info-stack-position) 1)))
       ;; select stack frame
-      (dape--apply-to-match "^2 in a" 'dape-info-stack-select)
+      (dape-test--apply-to-match "^2 in a" 'dape-info-stack-select)
       ;; buffer contents
-      (dape--should-eventually
+      (dape-test--should
        (and (= (marker-position dape--info-stack-position)
                (save-excursion
-                 (dape--goto-line (dape--line-number-at-regex "^2 in a"))
+                 (dape-test--goto-line (dape-test--line-at-regex "^2 in a"))
                  (point))))))
     ;; scope buffer should update to new stack
     (with-current-buffer
-        (dape--should-eventually
+        (dape-test--should
          (dape--info-get-live-buffer 'dape-info-scope-mode 0))
-      (dape--should-eventually
-       (dape--line-number-at-regex "^  a_var")))
+      (dape-test--should
+       (dape-test--line-at-regex "^  a_var")))
     ;; source buffer points at new stack frame
     (with-current-buffer main-buffer
       (= (line-number-at-pos)
-         (dape--line-number-at-regex "stack")))))
+         (dape-test--line-at-regex "stack")))))
 
 (ert-deftest dape-test-threads-buffer ()
   "Threads buffer contents and commands."
-  (dape--with-buffers
+  (dape-test--with-files
       ((main-buffer
         "main.py"
         ("import threading"
@@ -465,66 +466,64 @@ Expects line with string \"breakpoint\" in source."
          "thread.join()")))
     ;; set breakpoint
     (with-current-buffer main-buffer
-      (let ((line (dape--line-number-at-regex "breakpoint")))
+      (let ((line (dape-test--line-at-regex "breakpoint")))
         (save-excursion
-          (dape--goto-line line)
+          (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape- 'debugpy
-           :program (buffer-file-name main-buffer)
-           :cwd default-directory)
+    (dape-test--debug 'debugpy
+                      :program (buffer-file-name main-buffer)
+                      :cwd default-directory)
     ;; at breakpoint and stopped
     (with-current-buffer main-buffer
-      (dape--should-eventually
+      (dape-test--should
        (= (line-number-at-pos)
-          (dape--line-number-at-regex "breakpoint"))))
+          (dape-test--line-at-regex "breakpoint"))))
     (dape--info-buffer 'dape-info-threads-mode)
-    (with-current-buffer (dape--should-eventually
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-threads-mode))
       ;; buffer contents
-      (dape--should-eventually
-       (and (dape--line-number-at-regex "^1 .* stopped in")
-            (dape--line-number-at-regex "^2 .* stopped in thread_fn")
+      (dape-test--should
+       (and (dape-test--line-at-regex "^1 .* stopped in")
+            (dape-test--line-at-regex "^2 .* stopped in thread_fn")
             (member 'dape--info-thread-position
                     overlay-arrow-variable-list)
             (= (marker-position dape--info-thread-position)
                (save-excursion
-                 (dape--goto-line (dape--line-number-at-regex
-                                   "^2 .* stopped in thread_fn"))
+                 (dape-test--goto-line (dape-test--line-at-regex
+                                        "^2 .* stopped in thread_fn"))
                  (point))))))
-    (with-current-buffer (dape--should-eventually
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-scope-mode 0))
       ;; scope buffer in thread_fn
-      (dape--should-eventually
-       (dape--line-number-at-regex "^  thread_var")))
-    (with-current-buffer (dape--should-eventually
+      (dape-test--should
+       (dape-test--line-at-regex "^  thread_var")))
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-threads-mode))
       ;; select thread
-      (dape--apply-to-match "^1 .* stopped in" 'dape-info-select-thread))
-    (with-current-buffer (dape--should-eventually
+      (dape-test--apply-to-match "^1 .* stopped in" 'dape-info-select-thread))
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-threads-mode))
       ;; thread selected
-      (dape--should-eventually
-       (and (dape--line-number-at-regex "^1 .* stopped in")
-            (dape--line-number-at-regex "^2 .* stopped in thread_fn")
+      (dape-test--should
+       (and (dape-test--line-at-regex "^1 .* stopped in")
+            (dape-test--line-at-regex "^2 .* stopped in thread_fn")
             (member 'dape--info-thread-position
                     overlay-arrow-variable-list)
             (= (marker-position dape--info-thread-position)
                (save-excursion
-                 (dape--goto-line (dape--line-number-at-regex
-                                   "^1 .* stopped in"))
+                 (dape-test--goto-line (dape-test--line-at-regex
+                                        "^1 .* stopped in"))
                  (point))))))
-    (with-current-buffer (dape--should-eventually
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-scope-mode 0))
       ;; scope buffer in thread_fn
-      (dape--should-eventually
-       (not (dape--line-number-at-regex "^  thread_var"))))))
-
-
+      (dape-test--should
+       (not (dape-test--line-at-regex "^  thread_var"))))))
 
 (ert-deftest dape-test-repl-buffer ()
-  "Threads buffer contents and commands."
-  (dape--with-buffers
+  "Repl buffer contents and commands."
+  (dape-test--with-files
       ((main-buffer
         "main.py"
         ("a = 0 # breakpoint"
@@ -532,37 +531,96 @@ Expects line with string \"breakpoint\" in source."
          "c = 0 # third line")))
     ;; set breakpoint
     (with-current-buffer main-buffer
-      (let ((line (dape--line-number-at-regex "breakpoint")))
+      (let ((line (dape-test--line-at-regex "breakpoint")))
         (save-excursion
-          (dape--goto-line line)
+          (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape- 'debugpy
-           :program (buffer-file-name main-buffer)
-           :cwd default-directory)
+    (dape-test--debug 'debugpy
+                      :program (buffer-file-name main-buffer)
+                      :cwd default-directory)
     ;; at breakpoint and stopped
-    (dape--should-eventually
+    (dape-test--should
      (eq dape--state 'stopped))
     (with-current-buffer main-buffer
-      (dape--should-eventually
+      (dape-test--should
        (= (line-number-at-pos)
-          (dape--line-number-at-regex "breakpoint"))))
+          (dape-test--line-at-regex "breakpoint"))))
     (pop-to-buffer "*dape-repl*")
     (insert "next")
     (comint-send-input)
     (with-current-buffer main-buffer
-      (dape--should-eventually
+      (dape-test--should
        (= (line-number-at-pos)
-          (dape--line-number-at-regex "second line"))))
+          (dape-test--line-at-regex "second line"))))
     (insert "next")
     (comint-send-input)
     (with-current-buffer main-buffer
-      (dape--should-eventually
+      (dape-test--should
        (= (line-number-at-pos)
-          (dape--line-number-at-regex "third line"))))
+          (dape-test--line-at-regex "third line"))))
     (insert "a = 99")
     (comint-send-input)
-    (with-current-buffer (dape--should-eventually
+    (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-scope-mode 0))
-      (dape--should-eventually
-       (dape--line-number-at-regex "^  a *99")))))
+      (dape-test--should
+       (dape-test--line-at-regex "^  a *99")))))
+
+(ert-deftest dape-test-modules-buffer ()
+  "Modules buffer contents and commands."
+  (dape-test--with-files
+      ((main-buffer
+        "main.py"
+        ("pass # breakpoint")))
+    ;; set breakpoint
+    (with-current-buffer main-buffer
+      (let ((line (dape-test--line-at-regex "breakpoint")))
+        (save-excursion
+          (dape-test--goto-line line)
+          (dape-breakpoint-toggle))))
+    ;; start debugging
+    (dape-test--debug 'debugpy
+                      :program (buffer-file-name main-buffer)
+                      :cwd default-directory)
+    ;; at breakpoint and stopped
+    (dape-test--should
+     (eq dape--state 'stopped))
+    (dape--info-buffer 'dape-info-modules-mode)
+    ;; contents
+    (with-current-buffer (dape-test--should
+                          (dape--info-get-live-buffer 'dape-info-modules-mode))
+      (dape-test--should
+       (dape-test--line-at-regex "^__main__ of main.py")))))
+
+(ert-deftest dape-test-sources-buffer ()
+  "Sources buffer contents and commands."
+  (dape-test--with-files
+      ((index-buffer
+        "index.js"
+        ("()=>{};"
+         "()=>{}; // breakpoint")))
+    ;; set breakpoint
+    (with-current-buffer index-buffer
+      (let ((line (dape-test--line-at-regex "breakpoint")))
+        (save-excursion
+          (dape-test--goto-line line)
+          (dape-breakpoint-toggle))))
+    ;; start debugging
+    (dape-test--debug 'js-debug-node
+                      :program (buffer-file-name index-buffer)
+                      :cwd default-directory)
+    ;; stopped
+    (dape-test--should
+     (eq dape--state 'stopped))
+    (dape--info-buffer 'dape-info-sources-mode)
+    ;; contents
+    (with-current-buffer (dape-test--should
+                          (dape--info-get-live-buffer 'dape-info-sources-mode))
+      (dape-test--should
+       (and (dape-test--line-at-regex "^os ")
+            (dape-test--line-at-regex "index.js"))))
+    (with-current-buffer (dape-test--should
+                          (dape--info-get-live-buffer 'dape-info-sources-mode))
+      (dape-test--apply-to-match "^os " 'dape-info-sources-goto))
+    (dape-test--should
+     (member "*dape-source os*" (mapcar 'buffer-name (buffer-list))))))
