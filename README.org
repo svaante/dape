@@ -24,7 +24,7 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + No dependencies
 
 [[https://raw.githubusercontent.com/svaante/dape/resources/c-light-left.png]]
-And with ~(setq dape-buffer-window-arrangment 'gud)~ + ~corfu~ as ~completion-in-region-function~.
+And with ~(setq dape-buffer-window-arrangement 'gud)~ + ~corfu~ as ~completion-in-region-function~.
 [[https://raw.githubusercontent.com/svaante/dape/resources/js-light-gud.png]]
 Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-operandi-tinted]].
 
@@ -35,10 +35,10 @@ Currently =Dape= does not come with any debug adapter configuration.
   (use-package dape
     ;; To use window configuration like gud (gdb-mi)
     ;; :init
-    ;; (setq dape-buffer-window-arrangment 'gud)
+    ;; (setq dape-buffer-window-arrangement 'gud)
     :config
     ;; Info buffers to the right
-    ;; (setq dape-buffer-window-arrangment 'right)
+    ;; (setq dape-buffer-window-arrangement 'right)
 
     ;; To not display info and/or buffers on startup
     ;; (remove-hook 'dape-on-start-hooks 'dape-info)

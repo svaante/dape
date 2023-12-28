@@ -312,11 +312,15 @@ Example value:
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
-(defcustom dape-buffer-window-arrangment 'left
+(defcustom dape-buffer-window-arrangement 'left
   "Rules for display dape buffers."
   :type '(choice (const :tag "GUD gdb like" gud)
                  (const :tag "Left side" left)
                  (const :tag "Right side" right)))
+
+(define-obsolete-variable-alias
+  'dape-buffer-window-arrangment
+  'dape-buffer-window-arrangement "0.3.0")
 
 (defcustom dape-stepping-granularity 'line
   "The granularity of one step in the stepping requests."
@@ -341,7 +345,7 @@ Example value:
   :type 'natnum)
 
 (defcustom dape-info-hide-mode-line
-  (and (memql dape-buffer-window-arrangment '(left right)) t)
+  (and (memql dape-buffer-window-arrangement '(left right)) t)
   "Hide mode line in dape info buffers."
   :type 'boolean)
 
@@ -814,23 +818,23 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                          (kill-buffer buffer)))))
 
 (defun dape--display-buffer (buffer)
-  "Display BUFFER according to `dape-buffer-window-arrangment'."
+  "Display BUFFER according to `dape-buffer-window-arrangement'."
   (display-buffer
    buffer
    (let ((mode (with-current-buffer buffer major-mode)))
-     (pcase dape-buffer-window-arrangment
+     (pcase dape-buffer-window-arrangement
        ((or 'left 'right)
         (cons '(display-buffer-in-side-window)
               (pcase mode
                 ('dape-repl-mode '((side . bottom) (slot . -1)))
                 ('shell-mode '((side . bottom) (slot . 1)))
                 ((or 'dape-info-scope-mode 'dape-info-watch-mode)
-                 `((side . ,dape-buffer-window-arrangment) (slot . -1)))
+                 `((side . ,dape-buffer-window-arrangement) (slot . -1)))
                 ((or 'dape-info-stack-mode 'dape-info-modules-mode
                      'dape-info-sources-mode)
-                 `((side . ,dape-buffer-window-arrangment) (slot . 0)))
+                 `((side . ,dape-buffer-window-arrangement) (slot . 0)))
                 ((or 'dape-info-breakpoints-mode 'dape-info-threads-mode)
-                 `((side . ,dape-buffer-window-arrangment) (slot . 1)))
+                 `((side . ,dape-buffer-window-arrangement) (slot . 1)))
                 (_ (error "Unable to display buffer of mode `%s'" mode)))))
        ('gud
         (pcase mode
@@ -847,7 +851,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
           ((or 'dape-info-breakpoints-mode 'dape-info-threads-mode)
            '((display-buffer-in-side-window) (side . bottom) (slot . 1)))
           (_ (error "Unable to display buffer of mode `%s'" mode))))
-       (_ (user-error "Invalid value of `dape-buffer-window-arrangment'"))))))
+       (_ (user-error "Invalid value of `dape-buffer-window-arrangement'"))))))
 
 
 ;;; Process and parsing
