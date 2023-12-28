@@ -544,21 +544,24 @@ Expects line with string \"breakpoint\" in source."
      (eq dape--state 'stopped))
     (with-current-buffer main-buffer
       (dape-test--should
-       (= (line-number-at-pos)
-          (dape-test--line-at-regex "breakpoint"))))
+       (and (= (line-number-at-pos)
+               (dape-test--line-at-regex "breakpoint"))
+            (eq dape--state 'stopped))))
     (pop-to-buffer "*dape-repl*")
     (insert "next")
     (comint-send-input)
     (with-current-buffer main-buffer
       (dape-test--should
-       (= (line-number-at-pos)
-          (dape-test--line-at-regex "second line"))))
+       (and (= (line-number-at-pos)
+               (dape-test--line-at-regex "second line"))
+            (eq dape--state 'stopped))))
     (insert "next")
     (comint-send-input)
     (with-current-buffer main-buffer
       (dape-test--should
-       (= (line-number-at-pos)
-          (dape-test--line-at-regex "third line"))))
+       (and (= (line-number-at-pos)
+               (dape-test--line-at-regex "third line"))
+            (eq dape--state 'stopped))))
     (insert "a = 99")
     (comint-send-input)
     (with-current-buffer (dape-test--should
