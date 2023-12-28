@@ -43,9 +43,9 @@ jobs:
         tar -xvzf js-debug-dap-v1.84.0.tar.gz -C ~/.emacs.d/debug-adapters
 
     - name: Install ruby
-      uses: actions/setup-ruby@v1
+      uses: ruby/setup-ruby@v1
       with:
-        ruby-version: '2.7'
+        ruby-version: '3.3'
 
     - name: Install rdbg
       run: gem install debug
