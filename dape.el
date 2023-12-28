@@ -826,10 +826,10 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                 ('shell-mode '((side . bottom) (slot . 1)))
                 ((or 'dape-info-scope-mode 'dape-info-watch-mode)
                  `((side . ,dape-buffer-window-arrangment) (slot . -1)))
-                ('dape-info-stack-mode
+                ((or 'dape-info-stack-mode 'dape-info-modules-mode
+                     'dape-info-sources-mode)
                  `((side . ,dape-buffer-window-arrangment) (slot . 0)))
-                ((or 'dape-info-breakpoints-mode 'dape-info-threads-mode
-                     'dape-info-exceptions-mode)
+                ((or 'dape-info-breakpoints-mode 'dape-info-threads-mode)
                  `((side . ,dape-buffer-window-arrangment) (slot . 1)))
                 (_ (error "Unable to display buffer of mode `%s'" mode)))))
        ('gud
@@ -841,10 +841,10 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
              (display-buffer-pop-up-window) (direction . right) (dedicated . t)))
           ((or 'dape-info-scope-mode 'dape-info-watch-mode)
            '((display-buffer-in-side-window) (side . top) (slot . 0)))
-          ('dape-info-stack-mode
+          ((or 'dape-info-stack-mode 'dape-info-modules-mode
+               'dape-info-sources-mode)
            '((display-buffer-in-side-window) (side . bottom) (slot . -1)))
-          ((or 'dape-info-breakpoints-mode 'dape-info-threads-mode
-               'dape-info-exceptions-mode)
+          ((or 'dape-info-breakpoints-mode 'dape-info-threads-mode)
            '((display-buffer-in-side-window) (side . bottom) (slot . 1)))
           (_ (error "Unable to display buffer of mode `%s'" mode))))
        (_ (user-error "Invalid value of `dape-buffer-window-arrangment'"))))))
@@ -2648,7 +2648,6 @@ with ARGS."
           (pcase mode
             ('dape-info-breakpoints-mode "Breakpoints")
             ('dape-info-threads-mode "Threads")
-            ('dape-info-exceptions-mode "Exceptions")
             ('dape-info-stack-mode "Stack")
             ('dape-info-modules-mode "Modules")
             ('dape-info-sources-mode "Sources")
