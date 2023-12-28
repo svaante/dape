@@ -2499,8 +2499,6 @@ Empty input will rerun last command.\n\n\n"
 ;; TODO Becouse buttons where removed from info buffer
 ;;      there should be a way to controll execution by mouse
 
-(defvar-local dape--info-buffer-fetch-fn nil)
-(defvar-local dape--info-buffer-update-fn nil)
 (defvar-local dape--info-buffer-related nil
   "List of related buffers.")
 (defvar-local dape--info-buffer-identifier nil
@@ -2551,16 +2549,14 @@ REVERSED selects previous."
 
 (defun dape--info-buffer-change-fn (&rest _rest)
   "Hook fn for `window-buffer-change-functions' to ensure updates."
-  (dape--info-buffer-update (current-buffer)))
+  (dape--info-update (current-buffer)))
 
 (define-derived-mode dape-info-parent-mode special-mode ""
   "Generic mode to derive all other Dape gud buffer modes from."
   :interactive nil
   (setq-local buffer-read-only t
               truncate-lines t
-              cursor-in-non-selected-windows nil
-              dape--info-buffer-fetch-fn (lambda (cb)
-                                           (funcall cb)))
+              cursor-in-non-selected-windows nil)
   (add-hook 'window-buffer-change-functions 'dape--info-buffer-change-fn
             nil 'local)
   (when dape-info-hide-mode-line
@@ -2598,16 +2594,19 @@ Header line is custructed from buffer local
               " "))
          dape--info-buffer-related)))
 
-(defun dape--info-buffer-update-1 (buffer args)
+(defun dape--info-buffer-update-1 (mode id &rest args)
   "Helper for `dape--info-buffer-update'.
-Updates BUFFER contents with by calling `dape--info-buffer-update-fn'
+Updates BUFFER contents with by calling `dape--info-buffer-update-contents'
 with ARGS."
   (if dape--info-buffer-in-redraw
-      (run-with-timer 0.01 nil 'dape--info-buffer-update-1
-                      buffer args)
-    (when (buffer-live-p buffer)
+      (run-with-timer 0.01 nil
+                      (lambda (mode id args)
+                        (apply 'dape--info-buffer-update-1 mode id args)))
+    (when-let ((buffer (dape--info-get-live-buffer mode id)))
       (let ((dape--info-buffer-in-redraw t))
         (with-current-buffer buffer
+          (unless (derived-mode-p 'dape-info-parent-mode)
+            (error "Trying to update non info buffer."))
           ;; Would be nice with replace-buffer-contents
           ;; But it seams to messes up string properties
           (let ((line (line-number-at-pos (point) t))
@@ -2618,7 +2617,7 @@ with ARGS."
             (save-window-excursion
               (let ((inhibit-read-only t))
                 (erase-buffer)
-                (apply dape--info-buffer-update-fn args))
+                (apply 'dape--info-buffer-update-contents args))
               (ignore-errors
                 (goto-char (point-min))
                 (forward-line (1- line)))
@@ -2626,12 +2625,15 @@ with ARGS."
             (when old-window
               (select-window old-window))))))))
 
-(defun dape--info-buffer-update (buffer)
+(cl-defgeneric dape--info-buffer-update (mode &optional id)
+  "Updates buffer specified by MODE and ID."
+  (dape--info-buffer-update-1 mode id))
+
+(defun dape--info-update (buffer)
   "Update dape info BUFFER."
-  (with-current-buffer buffer
-    (funcall dape--info-buffer-fetch-fn
-             (lambda (&rest args)
-               (dape--info-buffer-update-1 buffer args)))))
+  (apply 'dape--info-buffer-update
+         (with-current-buffer buffer
+           (list major-mode dape--info-buffer-identifier))))
 
 (defun dape--info-get-live-buffer (mode &optional identifier)
   "Get live dape info buffer with MODE and IDENTIFIER."
@@ -2667,7 +2669,7 @@ If SKIP-UPDATE is non nil skip updating buffer contents."
         (setq dape--info-buffer-identifier identifier)
         (push buffer dape--info-buffers)))
     (unless skip-update
-      (dape--info-buffer-update buffer))
+      (dape--info-update buffer))
     buffer))
 
 (defmacro dape--info-buffer-command (name properties doc &rest body)
@@ -2706,7 +2708,7 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
 (defun dape-info-update ()
   "Update and display `dape-info-*' buffers."
   (dolist (buffer (dape--info-buffer-list))
-    (dape--info-buffer-update buffer)))
+    (dape--info-update buffer)))
 
 
 (defun dape-info ()
@@ -2779,11 +2781,10 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
   "Breakpoints"
   :interactive nil
   "Major mode for Dape info breakpoints."
-  (setq dape--info-buffer-update-fn #'dape--info-breakpoints-update
-        dape--info-buffer-related dape--info-group-1-related))
+  (setq dape--info-buffer-related dape--info-group-1-related))
 
-(defun dape--info-breakpoints-update ()
-  "Updates `dape-info-breakpoints-mode' buffer."
+(cl-defmethod dape--info-buffer-update-contents
+  (&context (major-mode dape-info-breakpoints-mode))
   (let ((table (make-gdb-table))
         (table-line 0))
     (gdb-table-add-row table '("Num" "Type" "On" "Where" "What"))
@@ -2863,21 +2864,21 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
   :interactive nil
   (setq font-lock-defaults '(dape--info-threads-font-lock-keywords)
         dape--info-thread-position (make-marker)
-        dape--info-buffer-fetch-fn #'dape--info-threads-fetch
-        dape--info-buffer-update-fn #'dape--info-threads-update
         dape--info-buffer-related dape--info-group-1-related)
   (add-to-list 'overlay-arrow-variable-list 'dape--info-thread-position))
 
-(defun dape--info-threads-fetch (cb)
-  "Fetches data for `dape--info-threads-update'.
-CB is expected to be `dape--info-threads-update'."
+(cl-defmethod dape--info-buffer-update ((mode (eql dape-info-threads-mode)) id)
+  "Fetches data for `dape-info-threads-mode' and updates buffer.
+Buffer is specified by MODE and ID."
   (if-let ((process (dape--live-process t))
            ((eq dape--state 'stopped)))
       (dape--with dape--inactive-threads-stack-trace (process)
-        (funcall cb (dape--current-thread)))
-    (funcall cb nil)))
+        (dape--info-buffer-update-1 mode id
+                                    :current-thread (dape--current-thread)))
+    (dape--info-buffer-update-1 mode id :current-thread nil)))
 
-(defun dape--info-threads-update (current-thread)
+(cl-defmethod dape--info-buffer-update-contents
+  (&context (major-mode dape-info-threads-mode) &key current-thread)
   "Updates `dape-info-threads-mode' buffer from CURRENT-THREAD."
   (set-marker dape--info-thread-position nil)
   (if (not dape--threads)
@@ -2945,21 +2946,22 @@ CB is expected to be `dape--info-threads-update'."
   :interactive nil
   (setq font-lock-defaults '(dape--info-stack-font-lock-keywords)
         dape--info-stack-position (make-marker)
-        dape--info-buffer-fetch-fn #'dape--info-stack-fetch
-        dape--info-buffer-update-fn #'dape--info-stack-update
         dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
                                     (dape-info-modules-mode nil "Modules")
                                     (dape-info-sources-mode nil "Sources")))
   (add-to-list 'overlay-arrow-variable-list 'dape--info-stack-position))
 
-(defun dape--info-stack-fetch (cb)
-  "Fetches data for `dape--info-stack-update'.
-CB is expected to be `dape--info-stack-update'."
+(cl-defmethod dape--info-buffer-update ((mode (eql dape-info-stack-mode)) id)
+  "Fetches data for `dape-info-stack-mode' and updates buffer.
+Buffer is specified by MODE and ID."
   (let ((stack-frames (plist-get (dape--current-thread) :stackFrames))
         (current-stack-frame (dape--current-stack-frame)))
-    (funcall cb current-stack-frame stack-frames)))
+    (dape--info-buffer-update-1 mode id
+                                :current-stack-frame current-stack-frame
+                                :stack-frames stack-frames)))
 
-(defun dape--info-stack-update (current-stack-frame stack-frames)
+(cl-defmethod dape--info-buffer-update-contents
+  (&context (major-mode dape-info-stack-mode) &key current-stack-frame stack-frames)
   "Updates `dape-info-stack-mode' buffer.
 Updates from CURRENT-STACK-FRAME STACK-FRAMES."
   (set-marker dape--info-stack-position nil)
@@ -3023,12 +3025,12 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
   "Major mode for Dape info modules."
   :interactive nil
   (setq font-lock-defaults '(dape--info-modules-font-lock-keywords)
-        dape--info-buffer-update-fn #'dape--info-modules-update
         dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
                                     (dape-info-modules-mode nil "Modules")
                                     (dape-info-sources-mode nil "Sources"))))
 
-(defun dape--info-modules-update ()
+(cl-defmethod dape--info-buffer-update-contents
+  (&context (major-mode dape-info-modules-mode))
   "Updates `dape-info-modules-mode' buffer."
   (cl-loop with table = (make-gdb-table)
            for module in (reverse dape--modules)
@@ -3069,12 +3071,12 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 (define-derived-mode dape-info-sources-mode dape-info-parent-mode "Sources"
   "Major mode for Dape info sources."
   :interactive nil
-  (setq dape--info-buffer-update-fn #'dape--info-sources-update
-        dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
+  (setq dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
                                     (dape-info-modules-mode nil "Modules")
                                     (dape-info-sources-mode nil "Sources"))))
 
-(defun dape--info-sources-update ()
+(cl-defmethod dape--info-buffer-update-contents
+  (&context (major-mode dape-info-sources-mode))
   "Updates `dape-info-modules-mode' buffer."
   (cl-loop with table = (make-gdb-table)
            for source in (reverse dape--sources)
@@ -3146,9 +3148,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
   "Major mode for Dape info scope."
   :interactive nil
-  (setq dape--info-buffer-fetch-fn #'dape--info-scope-fetch
-        dape--info-buffer-update-fn #'dape--info-scope-update
-        dape--info-buffer-related '((dape-info-watch-mode nil "Watch")))
+  (setq dape--info-buffer-related '((dape-info-watch-mode nil "Watch")))
   (dape--info-set-header-line-format))
 
 (defun dape--info-group-2-related-buffers (scopes)
@@ -3241,9 +3241,9 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
                                        (plist-get object :variablesReference)
                                        path)))))
 
-(defun dape--info-scope-fetch (cb)
-  "Fetches data for `dape--info-scope-update'.
-CB is expected to be `dape--info-scope-update'."
+(cl-defmethod dape--info-buffer-update ((mode (eql dape-info-scope-mode)) id)
+  "Fetches data for `dape-info-scope-mode' and updates buffer.
+Buffer is specified by MODE and ID."
   (when-let* ((process (dape--live-process t))
               (frame (dape--current-stack-frame))
               (scopes (plist-get frame :scopes))
@@ -3251,7 +3251,7 @@ CB is expected to be `dape--info-scope-update'."
               ;;       have shrunk since last update and current
               ;;       scope buffer should be killed and replaced if
               ;;       if visible
-              (scope (nth dape--info-buffer-identifier scopes)))
+              (scope (nth id scopes)))
     (dape--with dape--variables (process scope)
       (dape--with dape--variables-recursive
           (process
@@ -3262,9 +3262,10 @@ CB is expected to be `dape--info-scope-update'."
                   (gethash (cons (plist-get object :name) path)
                            dape--info-expanded-p))))
         (when (and scope scopes (eq dape--state 'stopped))
-          (funcall cb scope scopes))))))
+          (dape--info-buffer-update-1 mode id :scope scope :scopes scopes))))))
 
-(defun dape--info-scope-update (scope scopes)
+(cl-defmethod dape--info-buffer-update-contents
+  (&context (major-mode dape-info-scope-mode) &key scope scopes)
   "Updates `dape-info-scope-mode' buffer for SCOPE, SCOPES."
   (rename-buffer (format "*dape-info %s*" (plist-get scope :name)) t)
   (setq dape--info-buffer-related
@@ -3292,19 +3293,17 @@ CB is expected to be `dape--info-scope-update'."
 (define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"
   "Major mode for Dape info watch."
   :interactive nil
-  (setq dape--info-buffer-fetch-fn #'dape--info-watch-fetch
-        dape--info-buffer-update-fn #'dape--info-watch-update
-        dape--info-buffer-related '((dape-info-watch-mode nil "Watch"))))
+  (setq dape--info-buffer-related '((dape-info-watch-mode nil "Watch"))))
 
-(defun dape--info-watch-fetch (cb)
-  "Fetches data for `dape--info-watch-update'.
-CB is expected to be `dape--info-watch-update'."
+(cl-defmethod dape--info-buffer-update ((mode (eql dape-info-watch-mode)) id)
+  "Fetches data for `dape-info-watch-mode' and updates buffer.
+Buffer is specified by MODE and ID."
   (when-let* ((process (dape--live-process t))
               (frame (dape--current-stack-frame))
               (scopes (plist-get frame :scopes))
               (responses 0))
     (if (not dape--watched)
-        (funcall cb scopes)
+        (dape--info-buffer-update-1 mode id :scopes scopes)
       (dolist (plist dape--watched)
         (dape--with dape--evaluate-expression
             ((dape--live-process t)
@@ -3324,9 +3323,10 @@ CB is expected to be `dape--info-watch-update'."
                    (and (not (plist-get object :expensive))
                         (gethash (cons (plist-get object :name) path)
                                  dape--info-expanded-p))))
-              (funcall cb scopes))))))))
+              (dape--info-buffer-update-1 mode id :scopes scopes))))))))
 
-(defun dape--info-watch-update (scopes)
+(cl-defmethod dape--info-buffer-update-contents
+  (&context (major-mode dape-info-watch-mode) &key scopes)
   "Updates `dape-info-watch-mode' buffer for SCOPES."
   (when scopes
     (setq dape--info-buffer-related
