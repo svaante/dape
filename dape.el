@@ -367,15 +367,15 @@ Example value:
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
+(define-obsolete-variable-alias
+  'dape-buffer-window-arrangment
+  'dape-buffer-window-arrangement "0.3.0")
+
 (defcustom dape-buffer-window-arrangement 'left
   "Rules for display dape buffers."
   :type '(choice (const :tag "GUD gdb like" gud)
                  (const :tag "Left side" left)
                  (const :tag "Right side" right)))
-
-(define-obsolete-variable-alias
-  'dape-buffer-window-arrangment
-  'dape-buffer-window-arrangement "0.3.0")
 
 (defcustom dape-stepping-granularity 'line
   "The granularity of one step in the stepping requests."
