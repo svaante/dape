@@ -50,6 +50,9 @@ jobs:
     - name: Install rdbg
       run: gem install debug
 
+    - name: Install lzip to unpack elpa packages
+      run: sudo apt install lzip
+
     - name: Build
       run: make all
 
