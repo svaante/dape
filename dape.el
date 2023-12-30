@@ -77,7 +77,7 @@
                fn dape-config-autoport
                :type "lldb"
                :request "launch"
-               :cwd dape-cwd-fn
+               :cwd dape-cwd
                :program dape-find-file
                :args [])))
         `((codelldb-cc
@@ -100,7 +100,7 @@
                                 "OpenDebugAD7")
      :type "cppdbg"
      :request "launch"
-     :cwd dape-cwd-fn
+     :cwd dape-cwd
      :program dape-find-file
      :MIMode ,(seq-find 'executable-find '("lldb" "gdb")))
     (debugpy
@@ -119,7 +119,7 @@
      port :autoport
      :request "launch"
      :type "executable"
-     :cwd dape-cwd-fn
+     :cwd dape-cwd
      :program dape-find-file-buffer-default
      :justMyCode nil
      :console "integratedTerminal"
@@ -130,20 +130,20 @@
      fn (dape-config-autoport dape-config-tramp)
      command "dlv"
      command-args ("dap" "--listen" "127.0.0.1::autoport")
-     command-cwd (lambda () (funcall dape-cwd-fn t))
+     command-cwd dape-command-cwd
      port :autoport
      :request "launch"
      :type "debug"
-     :cwd dape-cwd-fn
-     :program dape-cwd-fn)
+     :cwd dape-cwd
+     :program dape-cwd)
     (flutter
      ensure dape-ensure-command
      modes (dart-mode)
      command "flutter"
      command-args ("debug_adapter")
-     command-cwd (lambda () (funcall dape-cwd-fn t))
+     command-cwd dape-command-cwd
      :type "dart"
-     :cwd dape-cwd-fn
+     :cwd dape-cwd
      :program dape-find-file-buffer-default
      :toolArgs ,(lambda () (vector "-d" (read-string "Device id: "))))
     (godot
@@ -151,7 +151,7 @@
      port 6006
      :request "launch"
      :type "server"
-     :cwd dape-cwd-fn)
+     :cwd dape-cwd)
     ,@(let ((js-debug
              `(modes (js-mode js-ts-mode)
                ensure ,(lambda (config)
@@ -172,7 +172,7 @@
         `((js-debug-node
            ,@js-debug
            :type "pwa-node"
-           :cwd dape-cwd-fn
+           :cwd dape-cwd
            :program dape-find-file-buffer-default
            :outputCapture "console"
            :sourceMapRenames t
@@ -187,14 +187,14 @@
            :url ,(lambda ()
                    (read-string "Url: "
                                 "http://localhost:3000"))
-           :webRoot dape-cwd-fn
+           :webRoot dape-cwd
            :outputCapture "console")))
     (lldb-vscode
      modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode)
      ensure dape-ensure-command
      command "lldb-vscode"
      :type "lldb-vscode"
-     :cwd dape-cwd-fn
+     :cwd dape-cwd
      :program dape-find-file)
     (netcoredbg
      modes (csharp-mode csharp-ts-mode)
@@ -202,7 +202,7 @@
      command "netcoredbg"
      command-args ["--interpreter=vscode"]
      :request "launch"
-     :cwd dape-cwd-fn
+     :cwd dape-cwd
      :program dape-find-file
      :stopAtEntry nil)
     (rdbg
@@ -210,7 +210,7 @@
      ensure dape-ensure-command
      command "rdbg"
      command-args ("-O" "--host" "0.0.0.0" "--port" :autoport "-c" "--" :-c)
-     command-cwd (lambda () (funcall dape-cwd-fn t))
+     command-cwd dape-command-cwd
      fn ((lambda (config)
            (plist-put config 'command-args
                       (mapcar (lambda (arg)
@@ -710,21 +710,28 @@ If PULSE pulse on after opening file."
                                               (line-beginning-position 2)
                                               'next-error)))))))
 
-(defun dape--default-cwd (&optional skip-tramp-trim)
-  "Try to guess current project absolute file path.
-On SKIP-TRAMP-TRIM tramp prefix is keept in path."
-  (let ((root (or (when-let ((project (project-current)))
-                    (expand-file-name (project-root project)))
-                  default-directory)))
-    (if (and (not skip-tramp-trim) (tramp-tramp-file-p root))
+(defun dape--default-cwd ()
+  "Try to guess current project absolute file path with `project'."
+  (or (when-let ((project (project-current)))
+        (expand-file-name (project-root project)))
+      default-directory))
+
+(defun dape-cwd ()
+  "Use `dape-cwd-fn' to guess current working as local path."
+  (let ((root (funcall dape-cwd-fn)))
+    (if (tramp-tramp-file-p root)
         (tramp-file-name-localname (tramp-dissect-file-name root))
       root)))
+
+(defun dape-command-cwd ()
+  "Use `dape-cwd-fn' to guess current working directory."
+  (funcall dape-cwd-fn))
 
 (defun dape-find-file (&optional default)
   "Read filename without any ignored extensions at project root.
 DEFAULT specifies which file to return on empty input."
   (let* ((completion-ignored-extensions nil)
-         (default-directory (funcall dape-cwd-fn t))
+         (default-directory (funcall dape-cwd-fn))
          (file
           (expand-file-name
            (read-file-name (if default
