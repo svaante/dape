@@ -1691,11 +1691,17 @@ Starts a new process as per request of the debug adapter."
                             :buffer buffer
                             :sentinel 'dape--process-sentinel
                             :filter (lambda (_process string)
-                                      (dape--debug 'std-server
-                                                   "Server stdout:\n%s"
-                                                   string))
+                                      (dape--repl-message string))
                             :noquery t
-                            :file-handler t))
+                            :file-handler t
+                            :stderr
+                            (make-pipe-process
+                             :name "Dape adapter stderr"
+                             :filter (lambda (_process string)
+                                       (dape--debug 'std-server
+                                                    "Server stdout:\n%s"
+                                                    string))
+                             :buffer buffer)))
         (dape--debug 'info "Server process started %S"
                      (process-command dape--server-process))
         ;; FIXME Why do I need this?

@@ -101,6 +101,8 @@ Helper for `dape-test--with-files'."
                           (string-match-p "\\*dape-.+\\*"
                                           (buffer-name buffer)))
                         (buffer-list))))
+        (dape-test--should
+         (not (process-list)))
         (advice-remove 'yes-or-no-p 'always-yes)
         ;; clean up files
         (delete-directory temp-dir t)))))
