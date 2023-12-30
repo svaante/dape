@@ -226,7 +226,62 @@
      ;; rails server
      ;; bundle exec ruby foo.rb
      ;; bundle exec rake test
-     -c (lambda () (read-string "Invoke command: "))))
+     -c (lambda () (read-string "Invoke command: ")))
+    (jdtls
+     modes (java-mode java-ts-mode)
+     ensure (lambda (config)
+	      (require 'eglot)
+	      (let* ((target (plist-get config 'target))
+		     (target-file (cond ((functionp target) (funcall target))
+					((stringp target) target))))
+		(unless target-file
+		  (error "No debug target specified"))
+		(with-current-buffer (find-file target-file)
+		  (unless (eglot-current-server)
+		    (eglot-ensure)
+		    (error "No running eglot server, starting one. Try again when eglot server is running"))
+		  (unless (seq-contains-p (eglot--server-capable :executeCommandProvider :commands)
+					  "vscode.java.resolveClasspath")
+		    (error "jdtls instance does not bundle java-debug-server, please install")))))
+     fn (lambda (config)
+	  (pcase-let* ((target (plist-get config 'target))
+		       (default-directory (project-root (project-current)))
+		       (server (with-current-buffer (find-file target)
+				 (eglot-current-server)))
+		       (`(,project-name ,main-class)
+			(split-string (plist-get config 'entrypoint) ":"))
+		       (`[,module-paths ,class-paths]
+			(eglot-execute-command server "vscode.java.resolveClasspath"
+					       (vector main-class project-name))))
+	    (thread-first config
+			  (plist-put :mainClass main-class)
+			  (plist-put :projectName project-name)
+			  (plist-put :modulePaths module-paths)
+			  (plist-put :classPaths class-paths))))
+     port (lambda () (eglot-execute-command (eglot-current-server)
+					    "vscode.java.startDebugSession" nil))
+     entrypoint (lambda ()
+		  (completing-read
+		   "Main class: "
+		   (cl-map 'list
+			   (lambda (candidate)
+			     (concat (plist-get candidate :projectName) ":"
+				     (plist-get candidate :mainClass)))
+			   (eglot-execute-command (eglot-current-server)
+						  "vscode.java.resolveMainClass"
+						  (project-name (project-current))))
+		   nil t))
+     target (lambda () (when (buffer-file-name)
+			 (file-relative-name (buffer-file-name)
+					     (project-root (project-current)))))
+     :args ""
+     :stopOnEntry nil
+     :type "java"
+     :request "launch"
+     :vmArgs " -XX:+ShowCodeDetailsInExceptionMessages"
+     :console "integratedConsole"
+     :internalConsoleOptions "neverOpen"))
+
   "This variable holds the Dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)

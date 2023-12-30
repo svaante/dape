@@ -129,6 +129,19 @@ Install with ~gem install debug~.
 
 See https://github.com/ruby/debug for more information
 
+** Java - JDTLS with Java Debug Server plugin
+See https://github.com/eclipse-jdtls/eclipse.jdt.ls for installation of JDTLS.
+See https://github.com/microsoft/java-debug for installation of the Java Debug Server plugin.
+The Java config depends on Eglot running JDTLS with the plugin prior to starting Dape.
+Extend ~eglot-server-programs~ as follows to have JDTLS load the plugin:
+#+begin_src emacs-lisp
+  (add-to-list 'eglot-server-programs
+               `((java-mode java-ts-mode) .
+                 ("jdtls"
+                  :initializationOptions
+                  (:bundles ["/PATH/TO/java-debug/com.microsoft.java.debug.plugin/target/com.microsoft.java.debug.plugin-VERSION.jar"]))))
+#+end_src
+
 ** Other untested adapters
 If you find a working configuration for any other debug adapter please submit a PR.
 
