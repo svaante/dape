@@ -130,7 +130,7 @@
      fn (dape-config-autoport dape-config-tramp)
      command "dlv"
      command-args ("dap" "--listen" "127.0.0.1::autoport")
-     command-cwd dape-cwd-fn
+     command-cwd (lambda () (funcall dape-cwd-fn t))
      port :autoport
      :request "launch"
      :type "debug"
@@ -141,7 +141,7 @@
      modes (dart-mode)
      command "flutter"
      command-args ("debug_adapter")
-     command-cwd dape-cwd-fn
+     command-cwd (lambda () (funcall dape-cwd-fn t))
      :type "dart"
      :cwd dape-cwd-fn
      :program dape-find-file-buffer-default
@@ -753,7 +753,8 @@ Replaces symbol and string occurences of \"autoport\"."
          (dape--config-eval-value (plist-get config 'command))))
     (unless (or (file-executable-p command)
                 (executable-find command t))
-      (user-error "Unable to locate %S" command))))
+      (user-error "Unable to locate %s with default-directory %s"
+                  command default-directory))))
 
 (defun dape--overlay-region (&optional extended)
   "List of beg and end of current line.
@@ -3458,12 +3459,14 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
   "Ensure that CONFIG is valid executable.
 If SIGNAL is non nil raises an `user-error'."
   (if-let ((ensure-fn (plist-get config 'ensure)))
-      (let ((default-directory (or (plist-get config 'command-cwd)
-                                   default-directory)))
+      (let ((default-directory
+             (or (when-let ((command-cwd (plist-get config 'command-cwd)))
+                   (dape--config-eval-value command-cwd))
+                 default-directory)))
         (condition-case err
             (or (funcall ensure-fn config) t)
           (user-error
-           (if signal (user-error (cdr err)) nil))))
+           (if signal (user-error (cadr err)) nil))))
     t))
 
 (defun dape--config-mode-p (config)
