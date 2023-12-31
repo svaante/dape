@@ -48,7 +48,12 @@ failed."
        (with-timeout (,seconds)
          (while (not ,pred)
            (accept-process-output nil 0.01)))
-       (should ,pred)
+       (condition-case err
+         (should ,pred)
+         (ert-test-failed
+          (message "Current buffer: %s" (current-buffer))
+          (message "Current buffer contents:\n %s" (buffer-string))
+          (signal 'ert-test-failed (cdr err))))
        (let ((ret ,pred))
          (ignore ret)
          ret))))
