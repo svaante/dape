@@ -36,6 +36,7 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; To use window configuration like gud (gdb-mi)
     ;; :init
     ;; (setq dape-buffer-window-arrangement 'gud)
+
     :config
     ;; Info buffers to the right
     ;; (setq dape-buffer-window-arrangement 'right)
@@ -49,6 +50,7 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; (add-hook 'dape-on-stopped-hooks 'dape-repl)
 
     ;; By default dape uses gdb keybinding prefix
+    ;; If you do not want to use any prefix, set it to nil.
     ;; (setq dape-key-prefix "\C-x\C-a")
 
     ;; Kill compile buffer on build success
