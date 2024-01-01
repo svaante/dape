@@ -862,10 +862,10 @@ If EXTENDED end of line is after newline."
   (ignore-errors
     (and dape--process
          (delete-process dape--process))
-    (and dape--server-process
-         (delete-process dape--server-process))
     (and dape--parent-process
-         (delete-process dape--parent-process))))
+         (delete-process dape--parent-process))
+    (and dape--server-process
+         (delete-process dape--server-process))))
 
 (defun dape--kill-buffers (&optional skip-process-buffers)
   "Kill all Dape related buffers.
@@ -1483,6 +1483,10 @@ Starts a new process to run process to be debugged."
   "Handle startDebugging requests.
 Starts a new process as per request of the debug adapter."
   (dape--response process (symbol-name command) seq t)
+  (when (process-live-p dape--parent-process)
+    ;; If an adapter spawns multiple child process warn
+    ;; TODO this should be supported but is jsonrpc is needed as an first step
+    (dape--debug 'error "Multiple parent process"))
   (setq dape--parent-process dape--process)
   ;; js-vscode leaves launch request un-answered
   (when (hash-table-p dape--timers)
@@ -1625,13 +1629,19 @@ Starts a new process as per request of the debug adapter."
                           'dape-repl-exit-code-exit
                         'dape-repl-exit-code-fail)))
 
-(cl-defmethod dape-handle-event (_process (_event (eql terminated)) _body)
+(cl-defmethod dape-handle-event (process (_event (eql terminated)) body)
   "Handle terminated events."
-  (dape--update-state 'terminated)
-  (dape--remove-stack-pointers)
-  (dape--repl-message "* Program terminated *" 'italic)
-  (unless dape--restart-in-progress
-    (dape-kill)))
+  (if (and (process-live-p dape--parent-process)
+           (not (eq process dape--parent-process)))
+      (dape-handle-event dape--parent-process 'terminated body)
+    (dape--update-state 'terminated)
+    (dape--remove-stack-pointers)
+    (dape--repl-message "* Program terminated *" 'italic)
+    (unless (or dape--restart-in-progress
+                (eq (plist-get body :restart) t)
+                (or (eq dape--process process)
+                    (eq dape--parent-process process)))
+      (dape-kill))))
 
 
 ;;; Startup/Setup
