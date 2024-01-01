@@ -862,10 +862,10 @@ If EXTENDED end of line is after newline."
   (ignore-errors
     (and dape--process
          (delete-process dape--process))
-    (and dape--server-process
-         (delete-process dape--server-process))
     (and dape--parent-process
-         (delete-process dape--parent-process))))
+         (delete-process dape--parent-process))
+    (and dape--server-process
+         (delete-process dape--server-process))))
 
 (defun dape--kill-buffers (&optional skip-process-buffers)
   "Kill all Dape related buffers.
@@ -1638,7 +1638,9 @@ Starts a new process as per request of the debug adapter."
     (dape--remove-stack-pointers)
     (dape--repl-message "* Program terminated *" 'italic)
     (unless (or dape--restart-in-progress
-                (eq (plist-get body :restart) t))
+                (eq (plist-get body :restart) t)
+                (or (eq dape--process process)
+                    (eq dape--parent-process process)))
       (dape-kill))))
 
 
