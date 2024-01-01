@@ -111,6 +111,7 @@ Helper for `dape-test--with-files'."
         (dape-test--should
          (not (process-list)))
         (advice-remove 'yes-or-no-p 'always-yes)
+        (setq dape--state nil)
         ;; clean up buffers
         (dolist (buffer buffers)
           (kill-buffer buffer))
