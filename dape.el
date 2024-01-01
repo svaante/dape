@@ -567,8 +567,6 @@ The hook is run with one argument, the compilation buffer."
   "Debug adapter communications process.")
 (defvar dape--parent-process nil
   "Debug adapter parent process.  Used for by startDebugging adapters.")
-(defvar dape--restart-in-progress nil
-  "Used for prevent adapter killing when restart request is in flight.")
 
 (defvar-local dape--source nil
   "Store source plist in fetched source buffer.")
@@ -1625,12 +1623,12 @@ Starts a new process as per request of the debug adapter."
                           'dape-repl-exit-code-exit
                         'dape-repl-exit-code-fail)))
 
-(cl-defmethod dape-handle-event (_process (_event (eql terminated)) _body)
+(cl-defmethod dape-handle-event (_process (_event (eql terminated)) body)
   "Handle terminated events."
   (dape--update-state 'terminated)
   (dape--remove-stack-pointers)
   (dape--repl-message "* Program terminated *" 'italic)
-  (unless dape--restart-in-progress
+  (unless (eq (plist-get :restart body) t)
     (dape-kill)))
 
 
@@ -1655,7 +1653,6 @@ Starts a new process as per request of the debug adapter."
         dape--stack-id nil
         dape--source-buffers nil
         dape--process process
-        dape--restart-in-progress nil
         dape--repl-insert-text-guard nil)
   (dape--update-state 'starting)
   (run-hook-with-args 'dape-on-start-hooks)
@@ -1800,10 +1797,7 @@ Starts a new process as per request of the debug adapter."
          (plist-get dape--capabilities :supportsRestartRequest))
     (setq dape--threads nil)
     (setq dape--thread-id nil)
-    (setq dape--restart-in-progress t)
-    (dape-request dape--process "restart" nil
-                  (dape--callback
-                   (setq dape--restart-in-progress nil))))
+    (dape-request dape--process "restart" nil))
    ((and dape--config)
     (dape dape--config))
    ((user-error "Unable to derive session to restart, run `dape'"))))
