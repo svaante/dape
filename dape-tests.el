@@ -53,6 +53,8 @@ failed."
          (ert-test-failed
           (message "Current buffer: %s" (current-buffer))
           (message "Current buffer contents:\n%s" (buffer-string))
+          (when-let ((debug-buffer (get-buffer "*dape-debug*")))
+            (message "dape-debug contents:\n%s" (buffer-string)))
           (signal 'ert-test-failed (cdr err))))
        (let ((ret ,pred))
          (ignore ret)
