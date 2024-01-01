@@ -104,6 +104,8 @@ Helper for `dape-test--with-files'."
         (dape-test--should
          (not (process-list)))
         (advice-remove 'yes-or-no-p 'always-yes)
+        (dolist (buffer buffers)
+          (kill-buffer buffer))
         ;; clean up files
         (delete-directory temp-dir t)))))
 
@@ -542,21 +544,19 @@ Expects line with string \"breakpoint\" in source."
                       :program (buffer-file-name main-buffer)
                       :cwd default-directory)
     ;; at breakpoint and stopped
-    (dape-test--should
-     (eq dape--state 'stopped))
+    (dape-test--should (dape--stopped-threads))
     (with-current-buffer main-buffer
       (dape-test--should
-       (and (= (line-number-at-pos)
-               (dape-test--line-at-regex "breakpoint"))
-            (eq dape--state 'stopped))))
+       (= (line-number-at-pos)
+          (dape-test--line-at-regex "breakpoint"))))
     (pop-to-buffer "*dape-repl*")
     (insert "next")
     (comint-send-input)
+    (dape-test--should (dape--stopped-threads))
     (with-current-buffer main-buffer
       (dape-test--should
-       (and (= (line-number-at-pos)
-               (dape-test--line-at-regex "second line"))
-            (eq dape--state 'stopped))))
+       (= (line-number-at-pos)
+          (dape-test--line-at-regex "second line"))))
     (insert "next")
     (comint-send-input)
     (with-current-buffer main-buffer
