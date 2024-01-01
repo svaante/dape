@@ -3730,7 +3730,7 @@ See `eldoc-documentation-functions', for more infomation."
                dape-watch-dwim))
   (put cmd 'repeat-map 'dape-global-map))
 
-(global-set-key dape-key-prefix dape-global-map)
+(when dape-key-prefix (global-set-key dape-key-prefix dape-global-map))
 
 
 ;;; Hooks
