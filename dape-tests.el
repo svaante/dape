@@ -52,7 +52,7 @@ failed."
          (should ,pred)
          (ert-test-failed
           (message "Current buffer: %s" (current-buffer))
-          (message "Current buffer contents:\n %s" (buffer-string))
+          (message "Current buffer contents:\n%s" (buffer-string))
           (signal 'ert-test-failed (cdr err))))
        (let ((ret ,pred))
          (ignore ret)
@@ -109,6 +109,9 @@ Helper for `dape-test--with-files'."
         (dape-test--should
          (not (process-list)))
         (advice-remove 'yes-or-no-p 'always-yes)
+        ;; clean up buffers
+        (dolist (buffer buffers)
+          (kill-buffer buffer))
         ;; clean up files
         (delete-directory temp-dir t)))))
 
@@ -203,18 +206,16 @@ Expects line with string \"breakpoint\" in source."
         (dape-breakpoint-toggle)))
     (apply 'dape-test--debug dape-args)
     ;; at breakpoint and stopped
-    (dape-test--should
-     (and (eq dape--state 'stopped)
-          (equal (line-number-at-pos)
-                 (dape-test--line-at-regex "breakpoint"))))
+    (dape-test--should (equal dape--state 'stopped))
+    (dape-test--should (equal (line-number-at-pos)
+                              (dape-test--line-at-regex "breakpoint")))
     ;; restart
     (goto-char (point-min))
     (apply 'dape-test--debug dape-args)
     ;; at breakpoint and stopped
-    (dape-test--should
-     (and (eq dape--state 'stopped)
-          (equal (line-number-at-pos)
-                 (dape-test--line-at-regex "breakpoint"))))))
+    (dape-test--should (eq dape--state 'stopped))
+    (dape-test--should (= (line-number-at-pos)
+                          (dape-test--line-at-regex "breakpoint")))))
 
 (ert-deftest dape-test-restart-with-dape ()
   "Should be able to restart with `dape' even though session active."
@@ -380,29 +381,24 @@ Expects line with string \"breakpoint\" in source."
     ;; contents of watch buffer
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-watch-mode))
-      (dape-test--should
-       (and (dape-test--line-at-regex "^  a")
-            (dape-test--line-at-regex "^\\+ b")))
+      (dape-test--should (dape-test--line-at-regex "^  a"))
+      (dape-test--should (dape-test--line-at-regex "^\\+ b"))
       ;; expansion
       (dape-test--apply-to-match "^\\+ b" 'dape-info-scope-toggle)
       (dape-test--should
        (dape-test--line-at-regex "^    member"))
       ;; assert contraction
       (dape-test--apply-to-match "^\\- b" 'dape-info-scope-toggle)
-      (dape-test--should
-       (not (dape-test--line-at-regex "^    member")))
+      (dape-test--should (not (dape-test--line-at-regex "^    member")))
       ;; set value
-      (dape-test--should
-       (dape-test--line-at-regex "^  a *0"))
+      (dape-test--should (dape-test--line-at-regex "^  a *0"))
       (cl-letf (((symbol-function 'read-string)
                  (lambda (&rest _) "99")))
         (dape-test--apply-to-match "^  a" 'dape-info-variable-edit))
-      (dape-test--should
-       (dape-test--line-at-regex "^  a *99"))
+      (dape-test--should (dape-test--line-at-regex "^  a *99"))
       ;; watch removal
       (dape-test--apply-to-match "^  a" 'dape-info-scope-watch-dwim)
-      (dape-test--should
-       (not (dape-test--line-at-regex "^  a"))))))
+      (dape-test--should (not (dape-test--line-at-regex "^  a"))))))
 
 (ert-deftest dape-test-stack-buffer()
   "Stack buffer contents and commands."
@@ -434,20 +430,18 @@ Expects line with string \"breakpoint\" in source."
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-stack-mode))
       ;; buffer contents
-      (dape-test--should
-       (and (dape-test--line-at-regex "^1 in b")
-            (dape-test--line-at-regex "^2 in a")
-            (member 'dape--info-stack-position
-                    overlay-arrow-variable-list)
-            (= (marker-position dape--info-stack-position) 1)))
+      (dape-test--should (dape-test--line-at-regex "^1 in b"))
+      (dape-test--should (dape-test--line-at-regex "^2 in a"))
+      (dape-test--should (member 'dape--info-stack-position
+                                 overlay-arrow-variable-list))
+      (dape-test--should (= (marker-position dape--info-stack-position) 1))
       ;; select stack frame
       (dape-test--apply-to-match "^2 in a" 'dape-info-stack-select)
       ;; buffer contents
-      (dape-test--should
-       (and (= (marker-position dape--info-stack-position)
-               (save-excursion
-                 (dape-test--goto-line (dape-test--line-at-regex "^2 in a"))
-                 (point))))))
+      (dape-test--should (= (marker-position dape--info-stack-position)
+                            (save-excursion
+                              (dape-test--goto-line (dape-test--line-at-regex "^2 in a"))
+                              (point)))))
     ;; scope buffer should update to new stack
     (with-current-buffer
         (dape-test--should
@@ -456,8 +450,9 @@ Expects line with string \"breakpoint\" in source."
        (dape-test--line-at-regex "^  a_var")))
     ;; source buffer points at new stack frame
     (with-current-buffer main-buffer
-      (= (line-number-at-pos)
-         (dape-test--line-at-regex "stack")))))
+      (dape-test--should
+       (= (line-number-at-pos)
+          (dape-test--line-at-regex "stack"))))))
 
 (ert-deftest dape-test-threads-buffer ()
   "Threads buffer contents and commands."
@@ -490,38 +485,31 @@ Expects line with string \"breakpoint\" in source."
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-threads-mode))
       ;; buffer contents
-      (dape-test--should
-       (and (dape-test--line-at-regex "^1 .* stopped in")
-            (dape-test--line-at-regex "^2 .* stopped in thread_fn")
-            (member 'dape--info-thread-position
-                    overlay-arrow-variable-list)
-            (= (marker-position dape--info-thread-position)
-               (save-excursion
-                 (dape-test--goto-line (dape-test--line-at-regex
-                                        "^2 .* stopped in thread_fn"))
-                 (point))))))
+      (dape-test--should (dape-test--line-at-regex "^1 .* stopped in"))
+      (dape-test--should (dape-test--line-at-regex "^2 .* stopped in thread_fn"))
+      (dape-test--should (member 'dape--info-thread-position overlay-arrow-variable-list))
+      (dape-test--should (= (marker-position dape--info-thread-position)
+                            (save-excursion
+                              (dape-test--goto-line (dape-test--line-at-regex
+                                                     "^2 .* stopped in thread_fn"))
+                              (point)))))
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-scope-mode 0))
       ;; scope buffer in thread_fn
-      (dape-test--should
-       (dape-test--line-at-regex "^  thread_var")))
-    (with-current-buffer (dape-test--should
-                          (dape--info-get-live-buffer 'dape-info-threads-mode))
+      (dape-test--should (dape-test--line-at-regex "^  thread_var")))
+    (with-current-buffer (dape-test--should (dape--info-get-live-buffer 'dape-info-threads-mode))
       ;; select thread
       (dape-test--apply-to-match "^1 .* stopped in" 'dape-info-select-thread))
-    (with-current-buffer (dape-test--should
-                          (dape--info-get-live-buffer 'dape-info-threads-mode))
+    (with-current-buffer (dape-test--should (dape--info-get-live-buffer 'dape-info-threads-mode))
       ;; thread selected
-      (dape-test--should
-       (and (dape-test--line-at-regex "^1 .* stopped in")
-            (dape-test--line-at-regex "^2 .* stopped in thread_fn")
-            (member 'dape--info-thread-position
-                    overlay-arrow-variable-list)
-            (= (marker-position dape--info-thread-position)
-               (save-excursion
-                 (dape-test--goto-line (dape-test--line-at-regex
-                                        "^1 .* stopped in"))
-                 (point))))))
+      (dape-test--should (dape-test--line-at-regex "^1 .* stopped in"))
+      (dape-test--should (dape-test--line-at-regex "^2 .* stopped in thread_fn"))
+      (dape-test--should (member 'dape--info-thread-position overlay-arrow-variable-list))
+      (dape-test--should (= (marker-position dape--info-thread-position)
+                            (save-excursion
+                              (dape-test--goto-line (dape-test--line-at-regex
+                                                     "^1 .* stopped in"))
+                              (point)))))
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-scope-mode 0))
       ;; scope buffer in thread_fn
@@ -546,29 +534,25 @@ Expects line with string \"breakpoint\" in source."
     (dape-test--debug 'debugpy
                       :program (buffer-file-name main-buffer)
                       :cwd default-directory)
+
     ;; at breakpoint and stopped
-    (dape-test--should
-     (eq dape--state 'stopped))
     (with-current-buffer main-buffer
-      (dape-test--should
-       (and (= (line-number-at-pos)
-               (dape-test--line-at-regex "breakpoint"))
-            (eq dape--state 'stopped))))
+      (dape-test--should (= (line-number-at-pos)
+                            (dape-test--line-at-regex "breakpoint"))))
+    (dape-test--should (eq dape--state 'stopped))
+    (dape-test--should (get-buffer "*dape-repl*"))
     (pop-to-buffer "*dape-repl*")
     (insert "next")
     (comint-send-input)
     (with-current-buffer main-buffer
-      (dape-test--should
-       (and (= (line-number-at-pos)
-               (dape-test--line-at-regex "second line"))
-            (eq dape--state 'stopped))))
+      (dape-test--should (= (line-number-at-pos)
+                            (dape-test--line-at-regex "second line"))))
+    (dape-test--should (eq dape--state 'stopped))
     (insert "next")
     (comint-send-input)
+    (dape-test--should (eq dape--state 'stopped))
     (with-current-buffer main-buffer
-      (dape-test--should
-       (and (= (line-number-at-pos)
-               (dape-test--line-at-regex "third line"))
-            (eq dape--state 'stopped))))
+      (dape-test--should (= (line-number-at-pos) (dape-test--line-at-regex "third line"))))
     (insert "a = 99")
     (comint-send-input)
     (with-current-buffer (dape-test--should
@@ -593,14 +577,12 @@ Expects line with string \"breakpoint\" in source."
                       :program (buffer-file-name main-buffer)
                       :cwd default-directory)
     ;; at breakpoint and stopped
-    (dape-test--should
-     (eq dape--state 'stopped))
+    (dape-test--should (eq dape--state 'stopped))
     (dape--info-buffer 'dape-info-modules-mode)
     ;; contents
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-modules-mode))
-      (dape-test--should
-       (dape-test--line-at-regex "^__main__ of main.py")))))
+      (dape-test--should (dape-test--line-at-regex "^__main__ of main.py")))))
 
 (ert-deftest dape-test-sources-buffer ()
   "Sources buffer contents and commands."
@@ -620,15 +602,13 @@ Expects line with string \"breakpoint\" in source."
                       :program (buffer-file-name index-buffer)
                       :cwd default-directory)
     ;; stopped
-    (dape-test--should
-     (eq dape--state 'stopped))
+    (dape-test--should (eq dape--state 'stopped))
     (dape--info-buffer 'dape-info-sources-mode)
     ;; contents
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-sources-mode))
-      (dape-test--should
-       (and (dape-test--line-at-regex "^os ")
-            (dape-test--line-at-regex "index.js"))))
+      (dape-test--should (dape-test--line-at-regex "^os "))
+      (dape-test--should (dape-test--line-at-regex "index.js")))
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-sources-mode))
       (dape-test--apply-to-match "^os " 'dape-info-sources-goto))
