@@ -111,7 +111,6 @@ Helper for `dape-test--with-files'."
         (dape-test--should
          (not (process-list)))
         (advice-remove 'yes-or-no-p 'always-yes)
-        (setq dape--state nil)
         ;; clean up buffers
         (dolist (buffer buffers)
           (kill-buffer buffer))
@@ -542,7 +541,7 @@ Expects line with string \"breakpoint\" in source."
     (with-current-buffer main-buffer
       (dape-test--should (= (line-number-at-pos)
                             (dape-test--line-at-regex "breakpoint"))))
-    (dape-test--should (eq dape--state 'stopped))
+    (dape-test--should (dape--stopped-threads))
     (dape-test--should (get-buffer "*dape-repl*"))
     (pop-to-buffer "*dape-repl*")
     (insert "next")
@@ -553,7 +552,7 @@ Expects line with string \"breakpoint\" in source."
     (dape-test--should (eq dape--state 'stopped))
     (insert "next")
     (comint-send-input)
-    (dape-test--should (eq dape--state 'stopped))
+    (dape-test--should (dape--stopped-threads))
     (with-current-buffer main-buffer
       (dape-test--should (= (line-number-at-pos) (dape-test--line-at-regex "third line"))))
     (insert "a = 99")
