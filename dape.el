@@ -391,6 +391,10 @@ Example value:
   "Hook to run on session stopped."
   :type 'hook)
 
+(defcustom dape-on-terminated-hooks '()
+  "Hook to run on dape processes termination."
+  :type 'hook)
+
 (defcustom dape-update-ui-hooks '(dape-info-update)
   "Hook to run on ui update."
   :type 'hook)
@@ -859,6 +863,7 @@ If EXTENDED end of line is after newline."
   (when (hash-table-p dape--timers)
     (dolist (timer (hash-table-values dape--timers))
       (cancel-timer timer)))
+  (run-hooks 'dape-on-terminated-hooks)
   (ignore-errors
     (and dape--process
          (delete-process dape--process))
