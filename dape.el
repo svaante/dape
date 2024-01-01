@@ -1808,7 +1808,7 @@ Starts a new process as per request of the debug adapter."
     (dape dape--config))
    ((user-error "Unable to derive session to restart, run `dape'"))))
 
-(defun dape-kill (&optional cb with-disconnect)
+(defun dape-kill (&optional process cb with-disconnect)
   "Kill debug session.
 CB will be called after adapter termination.
 With WITH-DISCONNECT use disconnect instead of terminate
@@ -1817,35 +1817,40 @@ used internally as a fallback to terminate."
   (when (hash-table-p dape--timers)
     (dolist (timer (hash-table-values dape--timers))
       (cancel-timer timer)))
-  (cond
-   ((and (not with-disconnect)
-         (dape--live-process t)
-         (plist-get dape--capabilities
-                    :supportsTerminateRequest))
-    (dape-request dape--process
-                  "terminate"
-                  nil
-                  (dape--callback
-                   (if (not success)
-                       (dape-kill cb 'with-disconnect)
+  (let ((process
+         (or process
+             (and (process-live-p dape--parent-process)
+                  dape--parent-process)
+             (dape--live-process t))))
+    (cond
+     ((and (not with-disconnect)
+           process
+           (plist-get dape--capabilities
+                      :supportsTerminateRequest))
+      (dape-request dape--process
+                    "terminate"
+                    nil
+                    (dape--callback
+                     (if (not success)
+                         (dape-kill cb 'with-disconnect)
+                       (dape--kill-processes)
+                       (when cb
+                         (funcall cb nil))))))
+     (process
+      (dape-request dape--process
+                    "disconnect"
+                    `(:restart nil .
+                               ,(when (plist-get dape--capabilities
+                                                 :supportTerminateDebuggee)
+                                  (list :terminateDebuggee t)))
+                    (dape--callback
                      (dape--kill-processes)
                      (when cb
-                       (funcall cb nil))))))
-   ((dape--live-process t)
-    (dape-request dape--process
-                  "disconnect"
-                  `(:restart nil .
-                    ,(when (plist-get dape--capabilities
-                                      :supportTerminateDebuggee)
-                       (list :terminateDebuggee t)))
-                  (dape--callback
-                   (dape--kill-processes)
-                   (when cb
-                     (funcall cb nil)))))
-   (t
-    (dape--kill-processes)
-    (when cb
-      (funcall cb nil)))))
+                       (funcall cb nil)))))
+     (t
+      (dape--kill-processes)
+      (when cb
+        (funcall cb nil))))))
 
 (defun dape-disconnect-quit ()
   "Kill adapter but try to keep debuggee live.
@@ -1864,8 +1869,8 @@ This will leave a decoupled debuggee process with no debugge
   "Kill debug session and kill related dape buffers."
   (interactive)
   (dape--kill-buffers 'skip-process-buffers)
-  (dape-kill (dape--callback
-              (dape--kill-buffers))))
+  (dape-kill nil (dape--callback
+                  (dape--kill-buffers))))
 
 (defun dape-breakpoint-toggle ()
   "Add or remove breakpoint at current line.
@@ -2032,7 +2037,7 @@ Executes alist key `launch' in `dape-configs' with :program as \"bin\".
 
 Use SKIP-COMPILE to skip compilation."
   (interactive (list (dape--read-config)))
-  (dape--with dape-kill ()
+  (dape--with dape-kill (nil)
     (when-let ((fn (plist-get config 'fn))
                (fns (or (and (functionp fn) (list fn))
                         (and (listp fn) fn))))
@@ -3734,7 +3739,7 @@ See `eldoc-documentation-functions', for more infomation."
 (add-hook 'kill-emacs-hook
           (defun dape-kill-busy-wait ()
             (let (done)
-              (dape-kill
+              (dape-kill nil
                (dape--callback
                 (setq done t)))
               ;; Busy wait for response at least 2 seconds
