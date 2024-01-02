@@ -95,7 +95,7 @@ Helper for `dape-test--with-files'."
               (make-hash-table :test 'equal))
         (setq dape--watched nil)
         (dape-test--should
-         (not dape--process) 10)
+         (not dape--connection) 10)
         (dape-test--should
          (not (seq-find (lambda (buffer)
                           (string-match-p "\\*dape-.+\\*"
