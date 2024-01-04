@@ -21,7 +21,7 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + Memory viewer with ~hexl~
 + ~compile~ integration
 + Debug adapter configuration ergonomics
-+ No dependencies
++ No dependencies (except for jsonrpc which is part of emacs but needed version is not part of latest stable emacs release 29.1-1 but available on elpa)
 
 [[https://raw.githubusercontent.com/svaante/dape/resources/c-light-left.png]]
 And with ~(setq dape-buffer-window-arrangement 'gud)~ + ~corfu~ as ~completion-in-region-function~.
@@ -145,14 +145,9 @@ If you find a working configuration for any other debug adapter please submit a 
 
 See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]] for other adapters, your mileage will vary.
 
-* Roadmap
-+ More options for indicator placement
-+ Improving completion in REPL
-+ Usage of "setVariable" inside of ~*dape-info*~ buffer
-+ Improve memory reader with auto reload and write functionality
-+ Individual thread controls
-+ Variable values displayed in source buffer, this seams to require integration with lsp-mode and eglot
-
 * Bugs and issues
-Before reporting any issues take a look at ~*dape-debug*~ buffer with all debug messages enabled.
-~(setq dape--debug-on '(io info error std-server))~.
+Before reporting any issues take a look at ~*dape-repl*~ buffer. Master is used is for all case and purposes a development branch still and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.  
+
+
+* Acknowledgements
+ Big thanks to João Távora for input and jsonrpc, the project wouldn't be at the stage for João.

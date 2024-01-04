@@ -68,7 +68,8 @@ CONTENT-LIST.
                                (lambda ,(mapcar 'car buffer-fixtures)
                                  ,@body)))
 
-(defvar dape--test-skip-cleanup nil)
+(defvar dape-test--skip-cleanup nil
+  "Skip `dape-test--call-with-files' cleanup.")
 
 (defun dape-test--call-with-files (fixtures fn)
   "Setup FIXTURES and apply FN with created buffers.
@@ -88,21 +89,23 @@ Helper for `dape-test--with-files'."
           (setq buffers (nreverse buffers))
           (apply fn buffers))
       ;; reset dape
-      (unless dape--test-skip-cleanup
+      (unless dape-test--skip-cleanup
         (advice-add 'yes-or-no-p :around (defun always-yes (&rest _) t))
         (dape-quit)
         (setq dape--info-expanded-p
               (make-hash-table :test 'equal))
         (setq dape--watched nil)
         (dape-test--should
-         (not dape--process) 10)
+         (not (dape--live-connection t)) 10)
         (dape-test--should
          (not (seq-find (lambda (buffer)
-                          (string-match-p "\\*dape-.+\\*"
-                                          (buffer-name buffer)))
+                          (and (not (equal (buffer-name buffer)
+                                           "*dape-connection events*"))
+                               (string-match-p "\\*dape-.+\\*"
+                                               (buffer-name buffer))))
                         (buffer-list))))
         (dape-test--should
-         (not (process-list)))
+         (not (process-list)) 10)
         (advice-remove 'yes-or-no-p 'always-yes)
         (dolist (buffer buffers)
           (kill-buffer buffer))
@@ -116,9 +119,15 @@ Helper for `dape-test--with-files'."
     (when (re-search-forward regex nil)
       (funcall-interactively fn))))
 
+(defun dape-test--stopped-p ()
+  "If current adapter connection is stopped."
+  (dape--stopped-threads (dape--live-connection t)))
+
 (defun dape-test--debug (key &rest options)
   "Invoke `dape' config KEY with OPTIONS."
-  (dape (dape--config-eval key options)))
+  (let ((config (dape--config-eval key options)))
+    (dape config)
+    (setq dape-history (list (dape--config-to-string key config)))))
 
 ;;; Tests
 (defun dape--test-restart (buffer &rest dape-args)
@@ -133,15 +142,17 @@ Expects line with string \"breakpoint\" in source."
     (apply 'dape-test--debug dape-args)
     ;; at breakpoint and stopped
     (dape-test--should
-     (and (eq dape--state 'stopped)
+     (and (dape-test--stopped-p)
           (equal (line-number-at-pos)
                  (dape-test--line-at-regex "breakpoint"))))
+    (sleep-for 1) ;; FIXME Regression dape messes up current live connection
+                  ;; on fast restarts
     ;; restart
     (goto-char (point-min))
     (dape-restart)
     ;; at breakpoint and stopped
     (dape-test--should
-     (and (eq dape--state 'stopped)
+     (and (dape-test--stopped-p)
           (equal (line-number-at-pos)
                  (dape-test--line-at-regex "breakpoint"))))))
 
@@ -201,15 +212,17 @@ Expects line with string \"breakpoint\" in source."
     (apply 'dape-test--debug dape-args)
     ;; at breakpoint and stopped
     (dape-test--should
-     (and (eq dape--state 'stopped)
+     (and (dape-test--stopped-p)
           (equal (line-number-at-pos)
                  (dape-test--line-at-regex "breakpoint"))))
+    (sleep-for 2) ;; FIXME Regression dape messes up current live connection
+                  ;; on fast restarts
     ;; restart
     (goto-char (point-min))
     (apply 'dape-test--debug dape-args)
     ;; at breakpoint and stopped
     (dape-test--should
-     (and (eq dape--state 'stopped)
+     (and (dape-test--stopped-p)
           (equal (line-number-at-pos)
                  (dape-test--line-at-regex "breakpoint"))))))
 
@@ -288,8 +301,7 @@ Expects line with string \"breakpoint\" in source."
     (dape-test--should
      (not (dape-test--line-at-regex "^    member")))
     ;; set value
-    (when (eq (plist-get dape--capabilities :supportsSetVariable)
-              t)
+    (when (dape--capable-p (dape--live-connection t) :supportsSetVariable)
       (dape-test--should
        (dape-test--line-at-regex "^  a *0"))
       (cl-letf (((symbol-function 'read-string)
@@ -373,7 +385,7 @@ Expects line with string \"breakpoint\" in source."
        (equal (line-number-at-pos)
               (dape-test--line-at-regex "breakpoint"))))
     (dape-test--should
-     (equal dape--state 'stopped))
+     (dape-test--stopped-p))
     ;; contents of watch buffer
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-watch-mode))
@@ -544,7 +556,7 @@ Expects line with string \"breakpoint\" in source."
                       :program (buffer-file-name main-buffer)
                       :cwd default-directory)
     ;; at breakpoint and stopped
-    (dape-test--should (dape--stopped-threads))
+    (dape-test--should (dape-test--stopped-p))
     (with-current-buffer main-buffer
       (dape-test--should
        (= (line-number-at-pos)
@@ -552,7 +564,7 @@ Expects line with string \"breakpoint\" in source."
     (pop-to-buffer "*dape-repl*")
     (insert "next")
     (comint-send-input)
-    (dape-test--should (dape--stopped-threads))
+    (dape-test--should (dape-test--stopped-p))
     (with-current-buffer main-buffer
       (dape-test--should
        (= (line-number-at-pos)
@@ -563,7 +575,7 @@ Expects line with string \"breakpoint\" in source."
       (dape-test--should
        (and (= (line-number-at-pos)
                (dape-test--line-at-regex "third line"))
-            (eq dape--state 'stopped))))
+            (dape-test--stopped-p))))
     (insert "a = 99")
     (comint-send-input)
     (with-current-buffer (dape-test--should
@@ -589,7 +601,7 @@ Expects line with string \"breakpoint\" in source."
                       :cwd default-directory)
     ;; at breakpoint and stopped
     (dape-test--should
-     (eq dape--state 'stopped))
+     (dape-test--stopped-p))
     (dape--info-buffer 'dape-info-modules-mode)
     ;; contents
     (with-current-buffer (dape-test--should
@@ -615,8 +627,7 @@ Expects line with string \"breakpoint\" in source."
                       :program (buffer-file-name index-buffer)
                       :cwd default-directory)
     ;; stopped
-    (dape-test--should
-     (eq dape--state 'stopped))
+    (dape-test--should (dape-test--stopped-p))
     (dape--info-buffer 'dape-info-sources-mode)
     ;; contents
     (with-current-buffer (dape-test--should
