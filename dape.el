@@ -3350,6 +3350,8 @@ Buffer is specified by MODE and ID."
       (if (not dape--watched)
           (dape--info-buffer-update-1 mode id :scopes scopes)
         (dolist (plist dape--watched)
+          (plist-put plist :variablesReference nil)
+          (plist-put plist :variables nil)
           (dape--with dape--evaluate-expression
               (conn
                (plist-get frame :id)
