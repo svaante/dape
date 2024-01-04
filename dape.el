@@ -551,9 +551,12 @@ The hook is run with one argument, the compilation buffer."
 ;;; Utils
 
 (defmacro dape--callback (&rest body)
-  "Create callback lambda for `dape-request' with BODY."
-  `(lambda (&optional conn body success-p msg)
-     (ignore conn body success-p msg)
+  "Create callback lambda for `dape-request' with BODY.
+Binds CONN, BODY and ERROR-MESSAGE.
+Where BODY is assumed to be response body and ERROR-MESSAGE an error
+string if the request where unsuccessfully or if the request timed out."
+  `(lambda (&optional conn body error-message)
+     (ignore conn body error-message)
      ,@body))
 
 (defmacro dape--with (request-fn args &rest body)
@@ -572,7 +575,7 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
              ,@(when (dape--capable-p conn :supportsSteppingGranularity)
                  (list :granularity
                        (symbol-name dape-stepping-granularity)))))
-        (when success-p
+        (unless error-message
           (dape--update-state conn 'running)
           (dape--remove-stack-pointers)
           (dolist (thread (dape--threads conn))
@@ -1013,15 +1016,15 @@ and success.  See `dape--callback' for signature."
                            (lambda (result)
                              (funcall cb conn
                                       (plist-get result :body)
-                                      (eq (plist-get result :success) t)
-                                      (plist-get result :message))))
+                                      (unless (eq (plist-get result :success) t)
+                                        (or (plist-get result :message) "")))))
                          :error-fn 'ignore ;; will never be called
                          :timeout-fn
                          (when (functionp cb)
                            (lambda ()
                              (dape--repl-message
                               (format "* Command %s timeout *" command) 'error)
-                             (funcall cb conn nil nil nil)))))
+                             (funcall cb conn nil "Timed out")))))
 
 (defun dape--initialize (conn)
   "Initialize and launch/attach adapter CONN."
@@ -1045,8 +1048,8 @@ and success.  See `dape--callback' for signature."
                                   :supportsStartDebuggingRequest t
                                   ;;:supportsVariableType t
                                   ))
-    (if (not success-p)
-        (dape--repl-message msg 'dape-repl-exit-code-fail)
+    (if error-message
+        (dape--repl-message error-message 'dape-repl-exit-code-fail)
       (setf (dape--capabilities conn) body)
       (dape--with dape-request
           (conn
@@ -1054,10 +1057,10 @@ and success.  See `dape--callback' for signature."
            (cl-loop for (key value) on (dape--config conn) by 'cddr
                     when (keywordp key)
                     append (list key (or value :json-false))))
-        (if success-p
-            (setf (dape--initialized-p conn) t)
-          (dape--repl-message msg 'dape-repl-exit-code-fail)
-          (dape-kill conn))))))
+        (if error-message
+            (progn (dape--repl-message error-message 'dape-repl-exit-code-fail)
+                   (dape-kill conn))
+          (setf (dape--initialized-p conn) t))))))
 
 (defun dape--set-breakpoints-in-buffer (conn buffer &optional cb)
   "Set breakpoints in BUFFER for adapter CONN.
@@ -1274,8 +1277,8 @@ See `dape--callback' for expected CB signature."
           :variablesReference ref
           :name (plist-get variable :name)
           :value value))
-      (if (not success-p)
-          (message "%s" msg)
+      (if error-message
+          (message "%s" error-message)
         (plist-put variable :variables nil)
         (cl-loop for (key value) on body by 'cddr
                  do (plist-put variable key value))
@@ -1290,8 +1293,8 @@ See `dape--callback' for expected CB signature."
                :expression (or (plist-get variable :evaluateName)
                                (plist-get variable :name))
                :value value))
-      (if (not success-p)
-          (message "%s" msg)
+      (if error-message
+          (message "%s" error-message)
         ;; FIXME: js-debug caches variables response for each stop
         ;; therefore it's not to just refresh all variables as it will
         ;; return the old value
@@ -1528,6 +1531,10 @@ Prints exit code from BODY."
   "Handle adapter CONNs terminated events.
 Killing the adapter and it's CONN."
   (dape--remove-stack-pointers)
+  (when-let ((parent (dape--parent conn)))
+    ;; Prevent double priniting of terminated, caused by
+    ;; parent termination
+    (setf (dape--state parent) 'terminated))
   (unless (eq (dape--state conn) 'terminated)
     ;; Prevent double priniting of terminated, caused by
     ;; adapter responding to `dape-kill' "disconnect" request.
@@ -1618,7 +1625,8 @@ symbol `dape-connection'."
                   (dape--repl-message (buffer-string) 'error)))
               (delete-process server-process)
               (user-error "Unable to connect to server."))
-          (dape--repl-message (format "* Connection to adapter established at %s:%s *"
+          (dape--repl-message (format "* %s to adapter established at %s:%s *"
+                                      (if parent "Child connection" "Connection")
                                       host (plist-get config 'port))))))
      ;; stdio conn
      (t
@@ -1647,10 +1655,13 @@ symbol `dape-connection'."
                        (dape--repl-message "Connection ended without successfully initializing"
                                            'error)
                        ; barf config
-                       (dape--repl-message (format "With config:\n%s"
-                                                   (pp-to-string
-                                                    (dape--config conn)))
-                                           'error)
+                       (dape--repl-message
+                        (format "With adapter request:\n%s"
+                                (pp-to-string
+                                 (cl-loop for (key value) on (dape--config conn) by 'cddr
+                                          when (keywordp key)
+                                          append (list key value))))
+                        'error)
                        ;; barf connection stderr
                        (when-let* ((proc (jsonrpc--process conn))
                                    (buffer (process-get proc 'jsonrpc-stderr)))
@@ -1711,7 +1722,7 @@ CONN is inferred for interactive invocations."
   (dape--with dape-request (conn
                             "continue"
                             (dape--thread-id-object conn))
-    (when success-p
+    (unless error-message
       (dape--update-state conn 'running)
       (dape--remove-stack-pointers)
       (dolist (thread (dape--threads conn))
@@ -1760,10 +1771,10 @@ terminate.  CONN is inferred for interactive invocations."
                   "terminate"
                   nil
                   (dape--callback
-                   (if (not success-p)
+                   (if error-message
                        (dape-kill cb 'with-disconnect)
                      (jsonrpc-shutdown conn)
-                     (funcall cb nil)))))
+                     (funcall cb)))))
    ((and conn
          (jsonrpc-running-p conn))
     (dape-request conn
@@ -1773,7 +1784,7 @@ terminate.  CONN is inferred for interactive invocations."
                                 (list :terminateDebuggee t)))
                   (dape--callback
                    (jsonrpc-shutdown conn)
-                   (funcall cb nil))))
+                   (funcall cb))))
    (t (funcall cb))))
 
 (defun dape-disconnect-quit (conn)
@@ -2212,9 +2223,8 @@ See `dape--callback' for expected CB signature."
          (source-reference (plist-get source :sourceReference))
          (buffer (plist-get dape--source-buffers source-reference)))
     (cond
-     ((not conn)
-      (funcall cb))
-     ((or (and path (file-exists-p (dape--path conn path 'local)))
+     ((or (not conn)
+          (and path (file-exists-p (dape--path conn path 'local)))
           (and buffer (buffer-live-p buffer)))
       (funcall cb conn))
      ((and (numberp source-reference) (> source-reference 0))
@@ -2223,8 +2233,8 @@ See `dape--callback' for expected CB signature."
                                 (list
                                  :source source
                                  :sourceReference source-reference))
-        (unless success-p
-          (dape--repl-message (format "%s" msg) 'warning))
+        (when error-message
+          (dape--repl-message (format "%s" error-message) 'warning))
         (when-let ((content (plist-get body :content))
                    (buffer
                     (generate-new-buffer (format "*dape-source %s*"
@@ -2362,12 +2372,12 @@ Send INPUT to DUMMY-PROCESS."
              (plist-get (dape--current-stack-frame conn) :id)
              (substring-no-properties input)
              "repl")
-          (when success-p
+          (unless error-message
             (dape--update conn nil t))
           (dape--repl-message (concat
-                               (if success-p
-                                   (plist-get body :result)
-                                 msg)))))))))
+                               (if error-message
+                                   error-message
+                                   (plist-get body :result))))))))))
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
@@ -3360,7 +3370,7 @@ Buffer is specified by MODE and ID."
                (plist-get frame :id)
                (plist-get plist :name)
                "watch")
-            (when success-p
+            (unless error-message
               (cl-loop for (key value) on body by 'cddr
                        do (plist-put plist key value)))
             (setq responses (1+ responses))
@@ -3613,7 +3623,7 @@ See `dape--config-mode-p' how \"valid\" is defined."
 
 (defun dape-hover-function (cb)
   "Hook function to produce doc strings for `eldoc'.
-On success calles CB with the doc string.
+On success calls CB with the doc string.
 See `eldoc-documentation-functions', for more infomation."
   (and-let* ((conn (dape--live-connection t))
              ((dape--capable-p conn :supportsEvaluateForHovers))
@@ -3623,7 +3633,7 @@ See `eldoc-documentation-functions', for more infomation."
          (plist-get (dape--current-stack-frame conn) :id)
          (substring-no-properties symbol)
          "hover")
-      (when success-p
+      (unless error-message
         (funcall cb
                  (dape--variable-string
                   (plist-put body :name symbol))))))
