@@ -3189,6 +3189,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
   "Local keymap for dape scope buffers.")
 
 ;; TODO Add bindings for adding data breakpoint
+;; FIXME Empty header line when adapter is killed
 
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
   "Major mode for Dape info scope."
