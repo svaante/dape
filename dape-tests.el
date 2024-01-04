@@ -215,7 +215,7 @@ Expects line with string \"breakpoint\" in source."
      (and (dape-test--stopped-p)
           (equal (line-number-at-pos)
                  (dape-test--line-at-regex "breakpoint"))))
-    (sleep-for 1) ;; FIXME Regression dape messes up current live connection
+    (sleep-for 2) ;; FIXME Regression dape messes up current live connection
                   ;; on fast restarts
     ;; restart
     (goto-char (point-min))
