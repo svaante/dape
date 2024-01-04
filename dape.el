@@ -1534,7 +1534,7 @@ Prints exit code from BODY."
 Killing the adapter and it's CONN."
   (dape--remove-stack-pointers)
   (when-let ((parent (dape--parent conn)))
-    ;; Prevent double priniting of terminated, caused by
+    ;; Prevent double printing of terminated, caused by
     ;; parent termination
     (setf (dape--state parent) 'terminated))
   (unless (eq (dape--state conn) 'terminated)
