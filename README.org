@@ -148,6 +148,5 @@ See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/]
 * Bugs and issues
 Before reporting any issues take a look at ~*dape-repl*~ buffer. Master is used is for all case and purposes a development branch still and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.  
 
-
 * Acknowledgements
- Big thanks to João Távora for input and jsonrpc, the project wouldn't be at the stage for João.
+Big thanks to João Távora for the input and jsonrpc; the project wouldn't be where it is without João.
