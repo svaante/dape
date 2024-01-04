@@ -1049,7 +1049,9 @@ and success.  See `dape--callback' for signature."
                                   ;;:supportsVariableType t
                                   ))
     (if error-message
-        (dape--repl-message error-message 'dape-repl-exit-code-fail)
+        (progn
+          (dape--repl-message error-message 'dape-repl-exit-code-fail)
+          (dape-kill conn))
       (setf (dape--capabilities conn) body)
       (dape--with dape-request
           (conn
