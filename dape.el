@@ -8,7 +8,7 @@
 ;; License: GPL-3.0-or-later
 ;; Version: 0.3.0
 ;; Homepage: https://github.com/svaante/dape
-;; Package-Requires: ((emacs "29.1") (jsonrpc "1.0.19"))
+;; Package-Requires: ((emacs "29.1") (jsonrpc "1.0.21"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -1781,9 +1781,10 @@ terminate.  CONN is inferred for interactive invocations."
          (jsonrpc-running-p conn))
     (dape-request conn
                   "disconnect"
-                  `(:restart :json-false .
-                             ,(when (dape--capable-p conn :supportTerminateDebuggee)
-                                (list :terminateDebuggee t)))
+                  `(:restart
+                    :json-false
+                    ,@(when (dape--capable-p conn :supportTerminateDebuggee)
+                        (list :terminateDebuggee t)))
                   (dape--callback
                    (jsonrpc-shutdown conn)
                    (funcall cb))))
@@ -3727,9 +3728,7 @@ See `eldoc-documentation-functions', for more infomation."
               (cl-loop with max-iterations = 20
                        for i from 1 to max-iterations
                        until done
-                       do (accept-process-output nil 0.1)
-                       finally (when (and (not done) dape--connection)
-                                 (jsonrpc-shutdown dape--connection))))))
+                       do (accept-process-output nil 0.1)))))
 
 (provide 'dape)
 
