@@ -3295,7 +3295,9 @@ Buffer is specified by MODE and ID."
               ;;       have shrunk since last update and current
               ;;       scope buffer should be killed and replaced if
               ;;       if visible
-              (scope (nth id scopes)))
+              (scope (nth id scopes))
+              ;; Check for stopped threads to reduce flickering
+              ((dape--stopped-threads conn)))
     (dape--with dape--variables (conn scope)
       (dape--with dape--variables-recursive
           (conn
