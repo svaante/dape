@@ -775,21 +775,27 @@ Replaces symbol and string occurences of \"autoport\"."
                         (plist-put 'command-args command-args)))))
 
 (defun dape-config-tramp (config)
-  "Apply tramp file prefix on CONFIG if started in tramp context."
-  (if-let* (((and (not (plist-get config 'prefix-local))
-                  (not (plist-get config 'prefix-remote))
-                  (plist-get config 'command)))
-            (default-directory (or (plist-get config 'command-cwd)
-                                   default-directory))
-            ((tramp-tramp-file-p default-directory))
-            (parts (tramp-dissect-file-name default-directory))
-            (tramp-prefix
-             (tramp-completion-make-tramp-file-name (tramp-file-name-method parts)
-                                                    (tramp-file-name-user parts)
-                                                    (tramp-file-name-host parts)
-                                                    "")))
-      (plist-put config 'prefix-local tramp-prefix)
-    config))
+  "Infer `prefix-local' and `host' on CONFIG if in tramp context."
+  (when-let* ((default-directory
+               (or (plist-get config 'command-cwd)
+                   default-directory))
+              ((tramp-tramp-file-p default-directory))
+              (parts (tramp-dissect-file-name default-directory)))
+    (when (and (not (plist-get config 'prefix-local))
+               (not (plist-get config 'prefix-remote))
+               (plist-get config 'command))
+      (plist-put config 'prefix-local
+                 (tramp-completion-make-tramp-file-name
+                  (tramp-file-name-method parts)
+                  (tramp-file-name-user parts)
+                  (tramp-file-name-host parts)
+                  "")))
+    (when (and (plist-get config 'command)
+               (plist-get config 'port)
+               (not (plist-get config 'host))
+               (equal (tramp-file-name-method parts) "ssh"))
+      (plist-put config 'host (file-remote-p default-directory 'host))))
+  config)
 
 (defun dape-ensure-command (config)
   "Ensure that `command' from CONFIG exist system."
