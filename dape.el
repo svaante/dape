@@ -1386,13 +1386,20 @@ Starts a new adapter CONNs from ARGUMENTS."
 (cl-defmethod dape-handle-request (conn (_command (eql startDebugging)) arguments)
   "Handle adapter CONNs startDebugging requests with ARGUMENTS.
 Starts a new adapter connection as per request of the debug adapter."
-  (let ((config (plist-get arguments :configuration)))
+  (let ((config (plist-get arguments :configuration))
+        (request (plist-get arguments :request)))
     (cl-loop for (key value) on (dape--config conn) by 'cddr
              unless (or (keywordp key)
                         (eq key 'command))
              do (plist-put config key value))
-    (setq dape--connection (dape--create-connection config conn))
-    (dape--start-debugging dape--connection))
+    (when request
+      (plist-put config :request request))
+    (let ((new-connection
+           (dape--create-connection config (or (dape--parent conn)
+                                               conn))))
+      (unless (dape--thread-id conn)
+        (setq dape--connection new-connection))
+      (dape--start-debugging new-connection)))
   nil)
 
 
@@ -1538,35 +1545,31 @@ Prints exit code from BODY."
 (cl-defmethod dape-handle-event (conn (_event (eql terminated)) _body)
   "Handle adapter CONNs terminated events.
 Killing the adapter and it's CONN."
-  (dape--remove-stack-pointers)
-  (when-let ((parent (dape--parent conn)))
-    ;; Prevent double printing of terminated, caused by
-    ;; parent termination
-    (setf (dape--state parent) 'terminated))
-  (unless (eq (dape--state conn) 'terminated)
-    ;; Prevent double priniting of terminated, caused by
-    ;; adapter responding to `dape-kill' "disconnect" request.
-    (dape--repl-message "* Session terminated *"))
   (dape--update-state conn 'terminated)
-  (unless (dape--restart-in-progress-p conn)
-    (dape-kill conn)))
+  (let ((child-conn-p (dape--parent conn)))
+    (dape-kill conn
+               (and (not child-conn-p)
+                    (lambda ()
+                      (dape--repl-message "* Session terminated *")))
+               nil
+               child-conn-p)))
 
 
 ;;; Startup/Setup
 
 (defun dape--start-debugging (conn)
   "Preform some cleanup and start debugging with CONN."
-  (dape--remove-stack-pointers)
-  ;; FIXME Cleanup source buffers in a nicer way
-  (cl-loop for (_ buffer) on dape--source-buffers by 'cddr
-           do (when (buffer-live-p buffer)
-                (kill-buffer buffer)))
-  (setq dape--connection conn
-        dape--source-buffers nil
-        dape--repl-insert-text-guard nil
-        dape--mode-line-active t)
-  (dape--update-state conn 'starting)
-  (run-hook-with-args 'dape-update-ui-hooks conn)
+  (unless (dape--parent conn)
+    (dape--remove-stack-pointers)
+    ;; FIXME Cleanup source buffers in a nicer way
+    (cl-loop for (_ buffer) on dape--source-buffers by 'cddr
+             do (when (buffer-live-p buffer)
+                  (kill-buffer buffer)))
+    (setq dape--source-buffers nil
+          dape--repl-insert-text-guard nil
+          dape--mode-line-active t)
+    (dape--update-state conn 'starting)
+    (run-hook-with-args 'dape-update-ui-hooks conn))
   (dape--initialize conn))
 
 (defun dape--create-connection (config &optional parent)
@@ -1682,16 +1685,15 @@ symbol `dape-connection'."
                            (dape--repl-message (buffer-string)
                                                'error))))
                      ;; cleanup server process
-                     (when-let ((server-process
-                                 (dape--server-process conn)))
-                       (delete-process server-process)
-                       (while (process-live-p server-process)
-                         (accept-process-output nil nil 0.1)))
-                     ;; cleanup parent
-                     (when-let ((parent (dape--parent conn)))
-                       (jsonrpc-shutdown parent))
+                     (if-let ((parent (dape--parent conn)))
+                         (setq dape--connection parent)
+                       (dape--remove-stack-pointers)
+                       (when-let ((server-process
+                                   (dape--server-process conn)))
+                         (delete-process server-process)
+                         (while (process-live-p server-process)
+                           (accept-process-output nil nil 0.1))))
                      ;; ui
-                     (dape--remove-stack-pointers)
                      (run-with-timer 1 nil (lambda ()
                                              (when (eq dape--connection conn)
                                                (setq dape--mode-line-active nil)
@@ -1764,7 +1766,7 @@ CONN is inferred for interactive invocations."
     (dape (apply 'dape--config-eval (dape--config-from-string (car dape-history)))))
    ((user-error "Unable to derive session to restart, run `dape'"))))
 
-(cl-defun dape-kill (conn &optional (cb 'ignore) with-disconnect)
+(defun dape-kill (conn &optional cb with-disconnect skip-shutdown)
   "Kill debug session.
 CB will be called after adapter termination.  With WITH-DISCONNECT use
 disconnect instead of terminate used internally as a fallback to
@@ -1781,8 +1783,10 @@ terminate.  CONN is inferred for interactive invocations."
                   (dape--callback
                    (if error-message
                        (dape-kill cb 'with-disconnect)
-                     (jsonrpc-shutdown conn)
-                     (funcall cb)))))
+                     (unless skip-shutdown
+                       (jsonrpc-shutdown conn))
+                     (when (functionp cb)
+                       (funcall cb))))))
    ((and conn
          (jsonrpc-running-p conn))
     (dape-request conn
@@ -1792,9 +1796,13 @@ terminate.  CONN is inferred for interactive invocations."
                     ,@(when (dape--capable-p conn :supportTerminateDebuggee)
                         (list :terminateDebuggee t)))
                   (dape--callback
-                   (jsonrpc-shutdown conn)
-                   (funcall cb))))
-   (t (funcall cb))))
+                   (unless skip-shutdown
+                     (jsonrpc-shutdown conn))
+                   (when (functionp cb)
+                     (funcall cb)))))
+   (t
+    (when (functionp cb)
+      (funcall cb)))))
 
 (defun dape-disconnect-quit (conn)
   "Kill adapter but try to keep debuggee live.
@@ -2009,11 +2017,9 @@ Use SKIP-COMPILE to skip compilation."
     (dape--config-ensure config t)
     (if (and (not skip-compile) (plist-get config 'compile))
         (dape--compile config)
-      (when-let ((buffer (get-buffer "*dape-debug*")))
-        (with-current-buffer buffer
-          (let ((inhibit-read-only t))
-            (erase-buffer))))
-      (dape--start-debugging (dape--create-connection config)))))
+      (setq dape--connection
+            (dape--create-connection config))
+      (dape--start-debugging dape--connection))))
 
 
 ;;; Compile
