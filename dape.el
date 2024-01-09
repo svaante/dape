@@ -405,6 +405,10 @@ Each element should look like (MIME-TYPE . MODE) where
   "Hide mode line in dape info buffers."
   :type 'boolean)
 
+(defcustom dape-info-variable-table-aligned nil
+  "Align columns in variable tables."
+  :type 'boolean)
+
 (defcustom dape-info-variable-table-row-config `((name . 20)
                                                  (value . 50)
                                                  (type . 20))
@@ -3299,7 +3303,10 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
                  (type  . ,type)
                  (value . ,value))))
     (setcar row (concat prefix (car row)))
-    (gdb-table-add-row table row
+    (gdb-table-add-row table
+                       (if dape-info-variable-table-aligned
+                           row
+                         (list (mapconcat 'identity row " ")))
                        (list 'dape--info-variable object
                              'dape--info-path path
                              'dape--info-ref ref))
@@ -3344,7 +3351,8 @@ Buffer is specified by MODE and ID."
         (dape--info-group-2-related-buffers scopes))
   (cl-loop with table = (make-gdb-table)
            for object in (plist-get scope :variables)
-           initially (setf (gdb-table-right-align table) t)
+           initially (setf (gdb-table-right-align table)
+                           dape-info-variable-table-aligned)
            do
            (dape--info-scope-add-variable table
                                           object
@@ -3410,7 +3418,8 @@ Buffer is specified by MODE and ID."
       (insert "No watched variable.")
     (cl-loop with table = (make-gdb-table)
              for watch in dape--watched
-             initially (setf (gdb-table-right-align table) t)
+             initially (setf (gdb-table-right-align table)
+                             dape-info-variable-table-aligned)
              do
              (dape--info-scope-add-variable table watch
                                             'watch
