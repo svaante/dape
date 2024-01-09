@@ -1843,7 +1843,7 @@ Expressions within `{}` are interpolated."
   (when-let ((prev-log-breakpoint (seq-find (lambda (ov)
                                               (overlay-get ov 'dape-log-message))
                                             (dape--breakpoints-at-point))))
-    (dape--breakpoint-remove prev-log-breakpoint t))
+    (dape--breakpoint-remove prev-log-breakpoint))
   (unless (string-empty-p log-message)
     (dape--breakpoint-place log-message)))
 
@@ -1862,7 +1862,7 @@ When EXPR-MESSAGE is evaluated as true threads will pause at current line."
               (seq-find (lambda (ov)
                           (overlay-get ov 'dape-expr-message))
                         (dape--breakpoints-at-point))))
-    (dape--breakpoint-remove prev-expr-breakpoint t))
+    (dape--breakpoint-remove prev-expr-breakpoint))
   (unless (string-empty-p expr-message)
     (dape--breakpoint-place nil expr-message)))
 
