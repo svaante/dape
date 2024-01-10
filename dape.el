@@ -506,12 +506,17 @@ The hook is run with one argument, the compilation buffer."
        :height 0.85 :box (:line-width -1)))
   "Face used to display conditional breakpoints.")
 
+(defface dape-exception-description-face
+  '((t :inherit (warning)
+       :height 0.85 :box (:line-width -1)))
+  "Face used to display exception descriptions inline.")
+
 (defface dape-breakpoint-face
   '((t :inherit (font-lock-keyword-face)))
   "Face used to display breakpoint overlays.")
 
 (defface dape-stack-trace
-  '((t :inherit (highlight) :extend t))
+  '((t :inherit (default) :extend t))
   "Face used to display stack trace overlays.")
 
 (defface dape-stack-trace-pointer
@@ -957,6 +962,9 @@ If NOWARN does not error on no active process."
    (state
     :accessor dape--state :initform nil
     :documentation "Session state.")
+   (exception-description
+    :accessor dape--exception-description :initform nil
+    :documentation "Exception description.")
    (initialized-p
     :accessor dape--initialized-p :initform nil
     :documentation "If connection has been initialized.")
@@ -1507,14 +1515,14 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
                         (plist-get body :allThreadsStopped)
                         (dape--callback
                          (dape--update conn)))
-  (when-let ((texts
+  (if-let (((equal "exception" (plist-get body :reason)))
+             (texts
               (seq-filter 'stringp
                           (list (plist-get body :text)
                                 (plist-get body :description)))))
-    (dape--repl-message (mapconcat 'identity texts "\n")
-                        (when (equal "exception"
-                                     (plist-get body :reason))
-                          'error)))
+      (setf (dape--exception-description conn)
+            (mapconcat 'identity texts ": "))
+    (setf (dape--exception-description conn) nil))
   (run-hooks 'dape-on-stopped-hooks))
 
 (cl-defmethod dape-handle-event (conn (_event (eql continued)) body)
@@ -2281,11 +2289,16 @@ See `dape--callback' for expected CB signature."
 (defvar dape--stack-position (make-marker)
   "Dape stack position for marker `overlay-arrow-variable-list'.")
 
+(defvar dape--stack-position-overlay nil
+  "Dape stack position overlay.")
+
 (defun dape--remove-stack-pointers ()
   "Remove stack pointer marker."
   (when-let ((buffer (marker-buffer dape--stack-position)))
     (with-current-buffer buffer
       (dape--remove-eldoc-hook)))
+  (when (overlayp dape--stack-position-overlay)
+    (delete-overlay dape--stack-position-overlay))
   (set-marker dape--stack-position nil))
 
 (defun dape--update-stack-pointers (conn &optional skip-stack-pointer-flash)
@@ -2304,6 +2317,20 @@ If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line."
           (dape--add-eldoc-hook)
           (save-excursion
             (goto-char (marker-position marker))
+            (setq dape--stack-position-overlay
+                  (let ((ov
+                         (make-overlay (line-beginning-position)
+                                       (line-beginning-position 2))))
+                    (overlay-put ov 'face 'dape-stack-trace)
+                    (when-let ((exception-description
+                                (dape--exception-description conn)))
+                      (overlay-put ov 'after-string
+                                   (concat
+                                    (propertize exception-description
+                                                'face
+                                                'dape-exception-description-face)
+                                    "\n")))
+                    ov))
             (set-marker dape--stack-position
                         (line-beginning-position))))))))
 
