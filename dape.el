@@ -1680,10 +1680,9 @@ symbol `dape-connection'."
                        ; barf config
                        (dape--repl-message
                         (format "With adapter request:\n%s"
-                                (pp-to-string
-                                 (cl-loop for (key value) on (dape--config conn) by 'cddr
-                                          when (keywordp key)
-                                          append (list key value))))
+                                (cl-loop for (key value) on (dape--config conn) by 'cddr
+                                         when (keywordp key)
+                                         concat (format "%s %S\n" key value)))
                         'error)
                        ;; barf connection stderr
                        (when-let* ((proc (jsonrpc--process conn))
