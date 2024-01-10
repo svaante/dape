@@ -3595,36 +3595,52 @@ If SIGNAL is non nil raises an `user-error'."
 
 (defun dape--config-completion-at-point ()
   "Function for `completion-at-point' fn for `dape--read-config'."
-  (pcase-let ((`(,key . ,args) (ignore-errors
-                                 (read (format "(%s)" (thing-at-point 'line)))))
-              (symbol-bounds (bounds-of-thing-at-point 'symbol))
-              (line-bounds (bounds-of-thing-at-point 'line))
-              (whitespace-bounds (bounds-of-thing-at-point 'whitespace)))
+  (let (key args args-bounds last-p)
+    (save-excursion
+      (goto-char (minibuffer-prompt-end))
+      (setq key
+            (ignore-errors (read (current-buffer))))
+      (ignore-errors
+        (while t
+          (setq last-p (point))
+          (push (read (current-buffer))
+                args)
+          (push (cons last-p (point))
+                args-bounds))))
+    (setq args (nreverse args)
+          args-bounds (nreverse args-bounds))
     (cond
      ;; Complete config key
      ((or (not key)
-          (and (not args) symbol-bounds))
-      (let ((bounds (or line-bounds (cons (point) (point)))))
-        (list (car bounds) (cdr bounds)
+          (and (not args)
+               (thing-at-point 'symbol)))
+      (pcase-let ((`(,start . ,end)
+                   (or (bounds-of-thing-at-point 'symbol)
+                       (cons (point) (point)))))
+        (list start end
               (mapcar (lambda (suggestion) (format "%s " suggestion))
                       dape--minibuffer-suggestions))))
      ;; Complete config args
      ((and (alist-get key dape-configs)
-           (or (and (not (dape--plistp args))
-                    symbol-bounds)
-               (and (dape--plistp args)
-                    whitespace-bounds)))
-      (let ((args (if symbol-bounds
-                      (nreverse (cdr (nreverse args)))
-                    args))
-            (bounds (or symbol-bounds (cons (point) (point))))
-            (base-config (append (alist-get key dape-configs)
-                                 (cons 'compile nil))))
-        (list (car bounds) (cdr bounds)
-              (cl-loop for (key _) on base-config by 'cddr
-                       unless (plist-member args key)
-                       when (or (eq key 'compile) (keywordp key))
-                       collect (format "%s " key))))))))
+           (or (and (plistp args)
+                    (thing-at-point 'whitespace))
+               (cl-loop with p = (point)
+                        for ((start . end) _) on args-bounds by 'cddr
+                        when (and (<= start p) (<= p end))
+                        return t
+                        finally return nil)))
+      (pcase-let ((`(,start . ,end)
+                   (or (bounds-of-thing-at-point 'symbol)
+                       (cons (point) (point)))))
+        (list start end
+              (cl-loop with plist = (append (alist-get key dape-configs)
+                                            '(compile nil))
+                       for (key _) on plist by 'cddr
+                       collect (format "%s " key)))))
+     (t
+      (list (point) (point)
+            nil
+            :exclusive 'no)))))
 
 (defun dape--read-config ()
   "Read config from minibuffer.
@@ -3659,8 +3675,11 @@ See `dape--config-mode-p' how \"valid\" is defined."
     (minibuffer-with-setup-hook
         (lambda ()
           (setq-local dape--minibuffer-suggestions
-                      (append from-dape-commands suggested-configs))
+                      (append from-dape-commands suggested-configs)
+                      comint-completion-addsuffix nil)
           (set-syntax-table emacs-lisp-mode-syntax-table)
+          (add-hook 'completion-at-point-functions
+                    'comint-filename-completion nil t)
           (add-hook 'completion-at-point-functions
                     #'dape--config-completion-at-point nil t))
       (pcase-let* ((str
@@ -3669,7 +3688,7 @@ See `dape--config-mode-p' how \"valid\" is defined."
                                             initial-contents
                                             (let ((map (make-sparse-keymap)))
                                               (set-keymap-parent map minibuffer-local-map)
-                                              (define-key map "C-M-i" #'completion-at-point)
+                                              (define-key map (kbd "C-M-i") #'completion-at-point)
                                               (define-key map "\t" #'completion-at-point)
                                               map)
                                             nil 'dape-history initial-contents)))
