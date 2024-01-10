@@ -3051,11 +3051,13 @@ Buffer is specified by MODE and ID."
 (cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-stack-mode)) id)
   "Fetches data for `dape-info-stack-mode' and updates buffer.
 Buffer is specified by MODE and ID."
-  (let ((stack-frames (plist-get (dape--current-thread conn) :stackFrames))
-        (current-stack-frame (dape--current-stack-frame conn)))
-    (dape--info-buffer-update-1 mode id
-                                :current-stack-frame current-stack-frame
-                                :stack-frames stack-frames)))
+  (if (dape--stopped-threads conn)
+      (let ((stack-frames (plist-get (dape--current-thread conn) :stackFrames))
+            (current-stack-frame (dape--current-stack-frame conn)))
+        (dape--info-buffer-update-1 mode id
+                                    :current-stack-frame current-stack-frame
+                                    :stack-frames stack-frames))
+    (dape--info-buffer-update-1 mode id)))
 
 (cl-defmethod dape--info-buffer-update-contents
   (&context (major-mode dape-info-stack-mode) &key current-stack-frame stack-frames)
@@ -3065,7 +3067,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
   (cond
    ((or (not current-stack-frame)
         (not stack-frames))
-    (insert "No stopped thread."))
+    (insert "No stopped threads."))
    (t
     (cl-loop with table = (make-gdb-table)
              for frame in stack-frames
