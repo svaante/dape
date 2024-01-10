@@ -2793,38 +2793,50 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
   (dolist (buffer (dape--info-buffer-list))
     (dape--info-update conn buffer)))
 
-(defun dape-info ()
-  "Update and display *dape-info* buffers."
-  (interactive)
-  ;; Open breakpoints if not group-1 buffer displayed
-  (unless (seq-find (lambda (buffer)
-                      (and (get-buffer-window buffer)
-                           (with-current-buffer buffer
+(defun dape-info (&optional maybe-close)
+  "Update and display *dape-info* buffers.
+When called interactively MAYBE-CLOSE is non nil.
+When optional MAYBE-CLOSE is non nil close buffers if all *dape-info*
+buffers are already displayed."
+  (interactive (list t))
+  (let (buffer-displayed-p)
+    ;; Open breakpoints if not group-1 buffer displayed
+    (unless (seq-find (lambda (buffer)
+                        (and (get-buffer-window buffer)
+                             (with-current-buffer buffer
                                (or (dape--info-buffer-p 'dape-info-breakpoints-mode)
                                    (dape--info-buffer-p 'dape-info-threads-mode)))))
-                    (dape--info-buffer-list))
-    (dape--display-buffer
-     (dape--info-buffer 'dape-info-breakpoints-mode 'skip-update)))
-  ;; Open and update stack buffer
-  (unless (seq-find (lambda (buffer)
-                      (and (get-buffer-window buffer)
-                           (with-current-buffer buffer
+                      (dape--info-buffer-list))
+      (setq buffer-displayed-p t)
+      (dape--display-buffer
+       (dape--info-buffer 'dape-info-breakpoints-mode 'skip-update)))
+    ;; Open and update stack buffer
+    (unless (seq-find (lambda (buffer)
+                        (and (get-buffer-window buffer)
+                             (with-current-buffer buffer
                                (or (dape--info-buffer-p 'dape-info-stack-mode)
                                    (dape--info-buffer-p 'dape-info-modules-mode)
                                    (dape--info-buffer-p 'dape-info-sources-mode)))))
-                    (dape--info-buffer-list))
-    (dape--display-buffer
-     (dape--info-buffer 'dape-info-stack-mode 'skip-update)))
-  ;; Open stack 0 if not group-2 buffer displayed
-  (unless (seq-find (lambda (buffer)
-                      (and (get-buffer-window buffer)
-                           (with-current-buffer buffer
-                             (or (dape--info-buffer-p 'dape-info-scope-mode)
-                                 (dape--info-buffer-p 'dape-info-watch-mode)))))
-                    (dape--info-buffer-list))
-    (dape--display-buffer
-     (dape--info-buffer 'dape-info-scope-mode 0 'skip-update)))
-  (dape-info-update (dape--live-connection t)))
+                      (dape--info-buffer-list))
+      (setq buffer-displayed-p t)
+      (dape--display-buffer
+       (dape--info-buffer 'dape-info-stack-mode 'skip-update)))
+    ;; Open stack 0 if not group-2 buffer displayed
+    (unless (seq-find (lambda (buffer)
+                        (and (get-buffer-window buffer)
+                             (with-current-buffer buffer
+                               (or (dape--info-buffer-p 'dape-info-scope-mode)
+                                   (dape--info-buffer-p 'dape-info-watch-mode)))))
+                      (dape--info-buffer-list))
+      (setq buffer-displayed-p t)
+      (dape--display-buffer
+       (dape--info-buffer 'dape-info-scope-mode 0 'skip-update)))
+    (dape-info-update (dape--live-connection t))
+    (when (and maybe-close (not buffer-displayed-p))
+      (dolist (buffer (buffer-list))
+        (when (with-current-buffer buffer
+                (derived-mode-p 'dape-info-parent-mode))
+          (kill-buffer buffer))))))
 
 
 ;;; Info breakpoints buffer
