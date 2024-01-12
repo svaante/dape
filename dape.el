@@ -547,14 +547,18 @@ The hook is run with one argument, the compilation buffer."
   "List of watched expressions.")
 (defvar dape--connection nil
   "Debug adapter connection.")
-(defvar dape--mode-line-active nil
-  "If mode line is showing.")
 
 (defvar-local dape--source nil
   "Store source plist in fetched source buffer.")
 
 (defvar dape--repl-insert-text-guard nil
   "Guard var for *dape-repl* buffer text updates.")
+
+(define-minor-mode dape-active-mode
+  "On when dape debuggin session is active.
+Non interactive global minor mode."
+  :global t
+  :interactive nil)
 
 
 ;;; Utils
@@ -1578,8 +1582,9 @@ Killing the adapter and it's CONN."
              do (when (buffer-live-p buffer)
                   (kill-buffer buffer)))
     (setq dape--source-buffers nil
-          dape--repl-insert-text-guard nil
-          dape--mode-line-active t)
+          dape--repl-insert-text-guard nil)
+    (unless dape-active-mode
+      (dape-active-mode +1))
     (dape--update-state conn 'starting)
     (run-hook-with-args 'dape-update-ui-hooks conn))
   (dape--initialize conn))
@@ -1707,7 +1712,7 @@ symbol `dape-connection'."
                      ;; ui
                      (run-with-timer 1 nil (lambda ()
                                              (when (eq dape--connection conn)
-                                               (setq dape--mode-line-active nil)
+                                               (dape-active-mode -1)
                                                (force-mode-line-update t)))))
                    :request-dispatcher 'dape-handle-request
                    :notification-dispatcher 'dape-handle-event
@@ -3748,7 +3753,7 @@ See `eldoc-documentation-functions', for more infomation."
            'face 'font-lock-doc-face)))
 
 (add-to-list 'mode-line-misc-info
-             `(dape--mode-line-active
+             `(dape-active-mode
                (" [" (:eval (dape--mode-line-format)) "] ")))
 
 
