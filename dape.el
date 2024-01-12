@@ -2051,7 +2051,7 @@ Using BUFFER and STR."
     (run-hook-with-args 'dape-compile-compile-hooks buffer)
     (dape dape--compile-config 'skip-compile))
    (t
-    (dape--repl-message (format "* Compilation failed %s *" str)))))
+    (dape--repl-message (format "* Compilation failed %s *" (string-trim-right str))))))
 
 (defun dape--compile (config)
   "Start compilation for CONFIG."
