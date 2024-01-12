@@ -1605,7 +1605,7 @@ symbol `dape-connection'."
       ;; start server
       (when (plist-get config 'command)
         (let ((stderr-buffer
-               (generate-new-buffer "*dape-server stderr*"))
+               (get-buffer-create "*dape-server stderr*"))
               (command
                (cons (plist-get config 'command)
                      (cl-map 'list 'identity
