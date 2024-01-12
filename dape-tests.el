@@ -92,25 +92,30 @@ Helper for `dape-test--with-files'."
       (unless dape-test--skip-cleanup
         (advice-add 'yes-or-no-p :around (defun always-yes (&rest _) t))
         (dape-quit)
-        (setq dape--info-expanded-p
-              (make-hash-table :test 'equal))
-        (setq dape--watched nil)
-        (dape-test--should
-         (not (dape--live-connection t)) 10)
-        (dape-test--should
-         (not (seq-find (lambda (buffer)
-                          (and (not (equal (buffer-name buffer)
-                                           "*dape-connection events*"))
-                               (string-match-p "\\*dape-.+\\*"
-                                               (buffer-name buffer))))
-                        (buffer-list))))
-        (dape-test--should
-         (not (process-list)) 10)
-        (advice-remove 'yes-or-no-p 'always-yes)
-        (dolist (buffer buffers)
-          (kill-buffer buffer))
-        ;; clean up files
-        (delete-directory temp-dir t)))))
+        (unwind-protect
+            ;; Post test asserts
+            (progn
+              (dape-test--should
+               (not (dape--live-connection t)) 10)
+              (dape-test--should
+               (not (seq-find (lambda (buffer)
+                                (and (not (equal (buffer-name buffer)
+                                                 "*dape-connection events*"))
+                                     (string-match-p "\\*dape-.+\\*"
+                                                     (buffer-name buffer))))
+                              (buffer-list))))
+              (dape-test--should
+               (not (process-list)) 10))
+          (advice-remove 'yes-or-no-p 'always-yes)
+          (setq dape--info-expanded-p
+                (make-hash-table :test 'equal))
+          (setq dape--watched nil)
+          (dolist (process (process-list))
+            (delete-process process))
+          (dolist (buffer buffers)
+            (kill-buffer buffer))
+          ;; clean up files
+          (delete-directory temp-dir t))))))
 
 (defun dape-test--apply-to-match (regex fn)
   "Apply FN to match of REGEX in the current buffer."
@@ -215,7 +220,7 @@ Expects line with string \"breakpoint\" in source."
      (and (dape-test--stopped-p)
           (equal (line-number-at-pos)
                  (dape-test--line-at-regex "breakpoint"))))
-    (sleep-for 2) ;; FIXME Regression dape messes up current live connection
+    (sleep-for 3) ;; FIXME Regression dape messes up current live connection
                   ;; on fast restarts
     ;; restart
     (goto-char (point-min))
