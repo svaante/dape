@@ -516,7 +516,7 @@ The hook is run with one argument, the compilation buffer."
   "Face used to display breakpoint overlays.")
 
 (defface dape-stack-trace
-  '((t :inherit (default) :extend t))
+  '((t :extend t))
   "Face used to display stack trace overlays.")
 
 (defface dape-stack-trace-pointer
