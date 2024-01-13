@@ -70,6 +70,7 @@
 (defcustom dape-configs
   `(,@(let ((codelldb
              `(ensure dape-ensure-command
+               command-cwd dape-command-cwd
                command ,(file-name-concat dape-adapter-dir
                                           "codelldb"
                                           "extension"
@@ -79,28 +80,29 @@
                fn dape-config-autoport
                :type "lldb"
                :request "launch"
-               :cwd dape-cwd
-               :program ,(defun dape--rust-program ()
-                           (let ((root (dape-cwd)))
-                             (file-name-concat root "target" "debug"
-                                               (thread-first root
-                                                             (directory-file-name)
-                                                             (file-name-split)
-                                                             (last)
-                                                             (car)))))
+               :cwd "."
                :args [])))
         `((codelldb-cc
            modes (c-mode c-ts-mode c++-mode c++-ts-mode)
            command-args ("--port" :autoport)
-           ,@codelldb)
+           ,@codelldb
+           :program "a.out")
           (codelldb-rust
            modes (rust-mode rust-ts-mode)
            command-args ("--port" :autoport
                          "--settings" "{\"sourceLanguages\":[\"rust\"]}")
-           ,@codelldb)))
+           ,@codelldb
+           :program ,(defun dape--rust-program ()
+                       (file-name-concat "target" "debug"
+                                         (thread-first (dape-cwd)
+                                                       (directory-file-name)
+                                                       (file-name-split)
+                                                       (last)
+                                                       (car)))))))
     (cpptools
      modes (c-mode c-ts-mode c++-mode c++-ts-mode)
      ensure dape-ensure-command
+     command-cwd dape-command-cwd
      command ,(file-name-concat dape-adapter-dir
                                 "cpptools"
                                 "extension"
@@ -109,7 +111,7 @@
                                 "OpenDebugAD7")
      :type "cppdbg"
      :request "launch"
-     :cwd dape-cwd
+     :cwd "."
      :program "a.out"
      :MIMode ,(seq-find 'executable-find '("lldb" "gdb")))
     (debugpy
@@ -125,11 +127,10 @@
      fn (dape-config-autoport dape-config-tramp)
      command "python"
      command-args ("-m" "debugpy.adapter" "--host" "0.0.0.0" "--port" :autoport)
-     command-cwd dape-command-cwd
      port :autoport
      :request "launch"
      :type "executable"
-     :cwd dape-cwd
+     :cwd dape-command-cwd
      :program dape-buffer-default
      :justMyCode nil
      :console "integratedTerminal"
@@ -145,8 +146,8 @@
      port :autoport
      :request "launch"
      :type "debug"
-     :cwd dape-cwd
-     :program dape-cwd)
+     :cwd "."
+     :program ".")
     (flutter
      ensure dape-ensure-command
      modes (dart-mode)
@@ -154,7 +155,7 @@
      command-args ("debug_adapter")
      command-cwd dape-command-cwd
      :type "dart"
-     :cwd dape-cwd
+     :cwd "."
      :program "lib/main.dart"
      :toolArgs ["-d" "all"])
     (godot
@@ -201,9 +202,10 @@
     (lldb-vscode
      modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode)
      ensure dape-ensure-command
+     command-cwd dape-command-cwd
      command "lldb-vscode"
      :type "lldb-vscode"
-     :cwd dape-cwd
+     :cwd "."
      :program "a.out")
     (netcoredbg
      modes (csharp-mode csharp-ts-mode)
@@ -212,7 +214,14 @@
      command-args ["--interpreter=vscode"]
      :request "launch"
      :cwd dape-cwd
-     :program ".dll"
+     :program ,(defun dape--netcoredbg-program ()
+                 (let ((dlls
+                        (file-expand-wildcards
+                         (file-name-concat "bin" "Debug" "*" "*.dll"))))
+                   (if dlls
+                       (file-relative-name (car dlls))
+                     ".dll"
+                     (dape-cwd))))
      :stopAtEntry nil)
     (rdbg
      modes (ruby-mode ruby-ts-mode)
@@ -280,7 +289,7 @@
          `(:filePath
            ,(defun dape--jdtls-file-path ()
               (or (resolve-main-class :filePath)
-                  (dape-buffer-default)))
+                  (expand-file-name (dape-buffer-default))))
            :mainClass
            ,(defun dape--jdtls-main-class ()
               (or (resolve-main-class :mainClass) ""))
@@ -3487,6 +3496,7 @@ Buffer is specified by MODE and ID."
               dape-command-cwd
               dape-buffer-default
               dape--rust-program
+              dape--netcoredbg-program
               dape--rdbg-c
               dape--jdtls-file-path
               dape--jdtls-main-class

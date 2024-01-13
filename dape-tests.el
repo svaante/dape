@@ -128,14 +128,17 @@ Helper for `dape-test--with-files'."
   "If current adapter connection is stopped."
   (dape--stopped-threads (dape--live-connection t)))
 
-(defun dape-test--debug (key &rest options)
-  "Invoke `dape' config KEY with OPTIONS."
-  (let ((config (dape--config-eval key options)))
-    (dape config)
-    (setq dape-history (list (dape--config-to-string key config)))))
+(defun dape-test--debug (buffer key &rest args)
+  "Invoke `dape' interactivly with KEY and ARGS."
+  (cl-letf (((symbol-function 'read-from-minibuffer)
+             (lambda (&rest _)
+               (concat (format "%s " key)
+                       (mapconcat (lambda (o) (format "%S" o)) args " ")))))
+    (with-current-buffer buffer
+      (call-interactively 'dape))))
 
 ;;; Tests
-(defun dape--test-restart (buffer &rest dape-args)
+(defun dape--test-restart (buffer key &rest args)
   "Helper for ert test `dape-test-restart'.
 Expects line with string \"breakpoint\" in source."
   (with-current-buffer buffer
@@ -144,7 +147,7 @@ Expects line with string \"breakpoint\" in source."
       (save-excursion
         (dape-test--goto-line line)
         (dape-breakpoint-toggle)))
-    (apply 'dape-test--debug dape-args)
+    (apply 'dape-test--debug buffer key args)
     ;; at breakpoint and stopped
     (dape-test--should
      (and (dape-test--stopped-p)
@@ -164,46 +167,33 @@ Expects line with string \"breakpoint\" in source."
 (ert-deftest dape-test-restart ()
   "Restart with restart."
   (dape-test--with-files
-      ((main-buffer
-        "main.py"
-        ("pass"
-         "pass # breakpoint")))
-    (dape--test-restart main-buffer
-                        'debugpy
-                        :program (buffer-file-name main-buffer)
-                        :cwd default-directory))
+   ((main-buffer
+     "main.py"
+     ("pass"
+      "pass # breakpoint")))
+   (dape--test-restart main-buffer 'debugpy))
   (dape-test--with-files
-      ((index-buffer
-        "index.js"
-        ("()=>{};"
-         "()=>{}; // breakpoint")))
-    (dape--test-restart index-buffer
-                        'js-debug-node
-                        :program (buffer-file-name index-buffer)
-                        :cwd default-directory))
+   ((index-buffer
+     "index.js"
+     ("()=>{};"
+      "()=>{}; // breakpoint")))
+   (dape--test-restart index-buffer 'js-debug-node))
   (dape-test--with-files
-      ((index-buffer
-        "main.c"
-        ("int main() {"
-         "  return 0; // breakpoint"
-         "}")))
-    (dape--test-restart index-buffer
-                        'codelldb-cc
-                        :program
-                        (file-name-concat default-directory "./a.out")
-                        :cwd default-directory
-                        'compile "gcc -g -o a.out main.c"))
+   ((index-buffer
+     "main.c"
+     ("int main() {"
+      "  return 0; // breakpoint"
+      "}")))
+   (dape--test-restart index-buffer
+                       'codelldb-cc
+                       'compile "gcc -g -o a.out main.c"))
   (dape-test--with-files
-      ((main-buffer
-        "main.rb"
-        ("puts \"\""
-         "puts \"\""
-         "0 # breakpoint")))
-    (dape--test-restart main-buffer
-                        'rdbg
-                        'command-cwd default-directory
-                        '-c (format "ruby \"%s\""
-                                    (buffer-file-name main-buffer)))))
+   ((main-buffer
+     "main.rb"
+     ("puts \"\""
+      "puts \"\""
+      "0 # breakpoint")))
+   (dape--test-restart main-buffer 'rdbg)))
 
 (defun dape--test-restart-with-dape (buffer &rest dape-args)
   "Helper for ert test `dape-test-restart-with-dape'.
@@ -214,7 +204,7 @@ Expects line with string \"breakpoint\" in source."
       (save-excursion
         (dape-test--goto-line line)
         (dape-breakpoint-toggle)))
-    (apply 'dape-test--debug dape-args)
+    (apply 'dape-test--debug buffer dape-args)
     ;; at breakpoint and stopped
     (dape-test--should
      (and (dape-test--stopped-p)
@@ -224,7 +214,7 @@ Expects line with string \"breakpoint\" in source."
                   ;; on fast restarts
     ;; restart
     (goto-char (point-min))
-    (apply 'dape-test--debug dape-args)
+    (apply 'dape-test--debug buffer dape-args)
     ;; at breakpoint and stopped
     (dape-test--should
      (and (dape-test--stopped-p)
@@ -238,30 +228,20 @@ Expects line with string \"breakpoint\" in source."
         "main.py"
         ("pass"
          "pass # breakpoint")))
-    (dape--test-restart-with-dape main-buffer
-                                  'debugpy
-                                  :program (buffer-file-name main-buffer)
-                                  :cwd default-directory))
+    (dape--test-restart-with-dape main-buffer 'debugpy))
   (dape-test--with-files
       ((index-buffer
         "index.js"
         ("()=>{};"
          "()=>{}; // breakpoint")))
-    (dape--test-restart-with-dape index-buffer
-                                  'js-debug-node
-                                  :program (buffer-file-name index-buffer)
-                                  :cwd default-directory))
+    (dape--test-restart-with-dape index-buffer 'js-debug-node))
   (dape-test--with-files
       ((main-buffer
         "main.c"
         ("int main() {"
          "  return 0; // breakpoint"
          "}")))
-    (dape--test-restart-with-dape main-buffer
-                                  'codelldb-cc
-                                  :program
-                                  (file-name-concat default-directory "./a.out")
-                                  :cwd default-directory
+    (dape--test-restart-with-dape main-buffer 'codelldb-cc
                                   'compile "gcc -g -o a.out main.c"))
   (dape-test--with-files
       ((main-buffer
@@ -269,10 +249,7 @@ Expects line with string \"breakpoint\" in source."
         ("puts \"\""
          "puts \"\""
          "0 # breakpoint")))
-    (dape--test-restart-with-dape main-buffer
-                                  'rdbg
-                                  'command-cwd default-directory
-                                  '-c (format "ruby \"%s\"" (buffer-file-name main-buffer)))))
+    (dape--test-restart-with-dape main-buffer 'rdbg)))
 
 (defun dape--test-scope-buffer (buffer &rest dape-args)
   "Helper for ert test `dape-test-scope-buffer-contents'.
@@ -285,7 +262,7 @@ Expects line with string \"breakpoint\" in source."
       (save-excursion
         (dape-test--goto-line line)
         (dape-breakpoint-toggle))))
-  (apply 'dape-test--debug dape-args)
+  (apply 'dape-test--debug buffer dape-args)
   ;; we are at breakpoint and stopped
   (with-current-buffer buffer
     (dape-test--should
@@ -331,20 +308,14 @@ Expects line with string \"breakpoint\" in source."
          "a = 0"
          "b = B()"
          "pass # breakpoint")))
-    (dape--test-scope-buffer main-buffer
-                             'debugpy
-                             :program (buffer-file-name main-buffer)
-                             :cwd default-directory))
+    (dape--test-scope-buffer main-buffer 'debugpy))
   (dape-test--with-files
       ((index-buffer
         "index.js"
         ("var a = 0;"
          "var b = {'member': 0};"
          "()=>{}; // breakpoint")))
-    (dape--test-scope-buffer index-buffer
-                             'js-debug-node
-                             :program (buffer-file-name index-buffer)
-                             :cwd default-directory))
+    (dape--test-scope-buffer index-buffer 'js-debug-node))
   (dape-test--with-files
       ((main
         "main.c"
@@ -354,11 +325,7 @@ Expects line with string \"breakpoint\" in source."
          "  return 0; // breakpoint"
          "}")))
     (ignore main)
-    (dape--test-scope-buffer main
-                             'codelldb-cc
-                             :program
-                             (file-name-concat default-directory "./a.out")
-                             :cwd default-directory
+    (dape--test-scope-buffer main 'codelldb-cc
                              'compile "gcc -g -o a.out main.c")))
 
 (ert-deftest dape-test-watch-buffer()
@@ -381,9 +348,7 @@ Expects line with string \"breakpoint\" in source."
           (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape-test--debug 'debugpy
-                      :program (buffer-file-name main-buffer)
-                      :cwd default-directory)
+    (dape-test--debug main-buffer 'debugpy)
     ;; at breakpoint and stopped
     (with-current-buffer main-buffer
       (dape-test--should
@@ -437,9 +402,7 @@ Expects line with string \"breakpoint\" in source."
           (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape-test--debug 'debugpy
-                      :program (buffer-file-name main-buffer)
-                      :cwd default-directory)
+    (dape-test--debug main-buffer 'debugpy)
     ;; at breakpoint and stopped
     (with-current-buffer main-buffer
       (dape-test--should
@@ -492,9 +455,7 @@ Expects line with string \"breakpoint\" in source."
           (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape-test--debug 'debugpy
-                      :program (buffer-file-name main-buffer)
-                      :cwd default-directory)
+    (dape-test--debug main-buffer 'debugpy)
     ;; at breakpoint and stopped
     (with-current-buffer main-buffer
       (dape-test--should
@@ -557,9 +518,7 @@ Expects line with string \"breakpoint\" in source."
           (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape-test--debug 'debugpy
-                      :program (buffer-file-name main-buffer)
-                      :cwd default-directory)
+    (dape-test--debug main-buffer 'debugpy)
     ;; at breakpoint and stopped
     (dape-test--should (dape-test--stopped-p))
     (with-current-buffer main-buffer
@@ -601,9 +560,7 @@ Expects line with string \"breakpoint\" in source."
           (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape-test--debug 'debugpy
-                      :program (buffer-file-name main-buffer)
-                      :cwd default-directory)
+    (dape-test--debug main-buffer 'debugpy)
     ;; at breakpoint and stopped
     (dape-test--should
      (dape-test--stopped-p))
@@ -611,8 +568,8 @@ Expects line with string \"breakpoint\" in source."
     ;; contents
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-modules-mode))
-      (dape-test--should
-       (dape-test--line-at-regex "^__main__ of main.py")))))
+      (dape-test--should ;; Regression .* symlinks are now handled differently
+       (dape-test--line-at-regex "^__main__ of .*main.py")))))
 
 (ert-deftest dape-test-sources-buffer ()
   "Sources buffer contents and commands."
@@ -628,9 +585,7 @@ Expects line with string \"breakpoint\" in source."
           (dape-test--goto-line line)
           (dape-breakpoint-toggle))))
     ;; start debugging
-    (dape-test--debug 'js-debug-node
-                      :program (buffer-file-name index-buffer)
-                      :cwd default-directory)
+    (dape-test--debug index-buffer 'js-debug-node)
     ;; stopped
     (dape-test--should (dape-test--stopped-p))
     (dape--info-buffer 'dape-info-sources-mode)
