@@ -359,14 +359,14 @@
                          ((const :tag "Adapter type" :type) string)
                          ((const :tag "Request type launch/attach" :request) string)))))
 
-(defcustom dape-commands nil
-  "Default commands for `dape' completion.
+(defcustom dape-command nil
+  "Initial contents for `dape' completion.
 Sometimes it is useful for files or directories to supply local values
 for this variable.
 
 Example value:
-\((codelldb-cc :program \"/home/user/project/a.out\"))"
-  :type '(repeat sexp))
+\(codelldb-cc :program \"/home/user/project/a.out\")"
+  :type 'sexp)
 
 ;; TODO Add more defaults, don't know which adapters support
 ;;      sourceReference
@@ -3786,11 +3786,7 @@ Initial contents defaults to valid configuration if there is only one
 or last mode valid history item from this session.
 
 See `dape--config-mode-p' how \"valid\" is defined."
-  (let* ((from-dape-commands
-          (cl-loop for (key . config) in dape-commands
-                   when (dape--config-ensure config)
-                   collect (dape--config-to-string key config)))
-         (suggested-configs
+  (let* ((suggested-configs
           (cl-loop for (key . config) in dape-configs
                    when (and (dape--config-mode-p config)
                              (dape--config-ensure config))
@@ -3798,7 +3794,9 @@ See `dape--config-mode-p' how \"valid\" is defined."
          (initial-contents
           (or
            ;; Take `dape-command' if exist
-           (car from-dape-commands)
+           (when dape-command
+             (dape--config-to-string (car dape-command)
+                                     (cdr dape-command)))
            ;; Take first valid history item
            (seq-find (lambda (str)
                        (ignore-errors
@@ -3814,8 +3812,7 @@ See `dape--config-mode-p' how \"valid\" is defined."
           dape--minibuffer-cache nil)
     (minibuffer-with-setup-hook
         (lambda ()
-          (setq-local dape--minibuffer-suggestions
-                      (append from-dape-commands suggested-configs)
+          (setq-local dape--minibuffer-suggestions suggested-configs
                       comint-completion-addsuffix nil
                       resize-mini-windows t
                       max-mini-window-height 0.5
