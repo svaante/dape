@@ -742,43 +742,20 @@ If PULSE pulse on after opening file."
   "Use `dape-cwd-fn' to guess current working directory."
   (funcall dape-cwd-fn))
 
-(defun dape-find-file (&optional default)
-  "Read filename without any ignored extensions at project root.
-DEFAULT specifies which file to return on empty input."
-  (let* ((completion-ignored-extensions nil)
-         (default-directory (funcall dape-cwd-fn))
-         (file
-          (expand-file-name
-           (read-file-name (if default
-                               (format "Program (default %s): " default)
-                             "Program: ")
-                           default-directory
-                           default t))))
-    (if (tramp-tramp-file-p file)
-        (tramp-file-name-localname (tramp-dissect-file-name file))
-      file)))
-
 (defun dape-buffer-default ()
-  (let ((path (buffer-file-name)))
-    (if (tramp-tramp-file-p path)
-        (tramp-file-name-localname (tramp-dissect-file-name path))
-      path)))
+  (file-name-nondirectory (buffer-file-name)))
 
-(defun dape-read-pid ()
-  "Read pid of active processes if possible."
-  (if-let ((pids (list-system-processes)))
-      (let ((collection
-             (mapcar (lambda (pid)
-                       (let ((args (alist-get 'args (process-attributes pid))))
-                         (cons (concat
-                                (format "%d" pid)
-                                (when args
-                                  (format ": %s" args)))
-                               pid)))
-                     pids)))
-        (alist-get (completing-read "Pid: " collection)
-                   collection nil nil 'equal))
-    (read-number "Pid: ")))
+(defun dape--guess-root (config)
+  "Guess adapter path root from CONFIG."
+  ;; FIXME We need some property on the adapter telling us how it
+  ;;       decided on root
+  (let ((cwd (plist-get config :cwd))
+        (command-cwd (plist-get config 'command-cwd)))
+    (cond
+     ((and cwd (stringp cwd) (file-name-absolute-p cwd))
+      cwd)
+     ((stringp command-cwd) command-cwd)
+     (t default-directory))))
 
 (defun dape-config-autoport (config)
   "Replace :autoport in CONFIG keys `command-args' and `port'.
@@ -878,8 +855,7 @@ If EXTENDED end of line is after newline."
                (or (and-let* ((parent (dape--parent conn)))
                      (dape--config parent))
                    (dape--config conn))))
-         (root-guess (or (plist-get config :cwd)
-                         (plist-get config 'command-cwd))))
+         (root-guess (dape--guess-root config)))
     (concat
      (string-truncate-left (file-relative-name file root-guess)
                            dape-info-file-name-max)
@@ -2077,7 +2053,7 @@ Using BUFFER and STR."
 
 (defun dape--compile (config)
   "Start compilation for CONFIG."
-  (let ((default-directory (plist-get config :cwd))
+  (let ((default-directory (dape--guess-root config))
         (command (plist-get config 'compile)))
     (setq dape--compile-config config)
     (add-hook 'compilation-finish-functions #'dape--compile-compilation-finish)
@@ -3523,17 +3499,26 @@ Buffer is specified by MODE and ID."
     (let ((str
            (string-trim (buffer-substring (minibuffer-prompt-end)
                                           (point-max))))
-          use-cache error-message hint-key hint-config hint-rows)
+          use-cache use-ensure-cache error-message hint-key hint-config hint-rows)
 
       (ignore-errors
           (pcase-setq `(,hint-key ,hint-config) (dape--config-from-string str t)))
-      (setq use-cache
+      (setq default-directory
+            (dape--guess-root hint-config)
+            use-cache
             (pcase-let ((`(,key ,config)
                          dape--minibuffer-cache))
               (and (equal hint-key key)
                    (equal hint-config config)))
+            use-ensure-cache
+            (pcase-let ((`(,key config ,error-message)
+                         dape--minibuffer-cache))
+              ;; FIXME ensure is expensive so we are a bit cheap
+              ;; here, correct would be to use `use-cache'
+              (and (equal hint-key key)
+                   (not error-message)))
             error-message
-            (if use-cache
+            (if use-ensure-cache
                 (pcase-let ((`(key config ,error-message)
                              dape--minibuffer-cache))
                   error-message)
@@ -3559,7 +3544,9 @@ Buffer is specified by MODE and ID."
                                 (propertize
                                  (format "%S"
                                          (with-current-buffer dape--minibuffer-last-buffer
-                                           (dape--config-eval-value value nil nil t)))
+                                           (condition-case _
+                                               (dape--config-eval-value value nil nil t)
+                                             (error 'error))))
                                  'face (when (equal value (plist-get base-config key))
                                          'shadow)))))
             dape--minibuffer-cache
@@ -3822,7 +3809,8 @@ See `dape--config-mode-p' how \"valid\" is defined."
                       comint-completion-addsuffix nil
                       resize-mini-windows t
                       max-mini-window-height 0.5
-                      dape--minibuffer-hint-overlay (make-overlay (point) (point)))
+                      dape--minibuffer-hint-overlay (make-overlay (point) (point))
+                      default-directory (dape-command-cwd))
           (set-syntax-table emacs-lisp-mode-syntax-table)
           (add-hook 'completion-at-point-functions
                     'comint-filename-completion nil t)
