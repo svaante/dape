@@ -1517,6 +1517,7 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
 `dape--update'."
   (dape--update-state conn 'stopped)
   (setf (dape--thread-id conn) (plist-get body :threadId))
+  (setf (dape--stack-id conn) nil)
   (dape--update-threads conn
                         (plist-get body :threadId)
                         (plist-get body :allThreadsStopped)
