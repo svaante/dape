@@ -476,6 +476,10 @@ left-to-right display order of the properties."
   "Max length of file name in dape info buffers."
   :type 'integer)
 
+(defcustom dape-breakpoint-margin-string "B"
+  "String to display breakpoint in margin."
+  :type 'string)
+
 (defcustom dape-repl-use-shorthand t
   "Dape `dape-repl-commands' can be invokend with first char of command."
   :type 'boolean)
@@ -2227,7 +2231,7 @@ If EXPRESSION place conditional breakpoint."
                                               'face 'dape-expression-face))))
      (t
       (dape--overlay-icon breakpoint
-                          "●"
+                          dape-breakpoint-margin-string
                           'large-circle
                           'dape-breakpoint-face)))
     (overlay-put breakpoint 'modification-hooks '(dape--breakpoint-freeze))
