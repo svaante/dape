@@ -1858,7 +1858,9 @@ Will remove log or expression breakpoint at line added with
   (interactive)
   (if (dape--breakpoints-at-point '(dape-log-message dape-expr-message))
       (dape-breakpoint-remove-at-point '(dape-log-message dape-expr-message))
-    (dape--breakpoint-place)))
+    (dape--breakpoint-place))
+  (when-let ((conn (dape--live-connection t)))
+    (dape--update-stack-pointers conn t t)))
 
 (defun dape-breakpoint-log (log-message)
   "Add log breakpoint at line.
@@ -1915,7 +1917,9 @@ SKIP-TYPES is a list of overlay properties to skip removal of."
         (dolist (breakpoint breakpoints)
           (dape--breakpoint-remove breakpoint t))
         (when-let ((conn (dape--live-connection t)))
-          (dape--set-breakpoints-in-buffer conn buffer))))))
+          (dape--set-breakpoints-in-buffer conn buffer)))))
+  (when-let ((conn (dape--live-connection t)))
+    (dape--update-stack-pointers conn t t)))
 
 (defun dape-select-thread (conn thread-id)
   "Select currrent thread for adapter CONN by THREAD-ID."
@@ -2151,26 +2155,37 @@ Using BUFFER and STR."
         (when-let ((window (get-buffer-window buffer)))
           (set-window-buffer window buffer))))))
 
-(defun dape--overlay-icon (overlay string bitmap face)
-  "Put STRING or BITMAP on OVERLAY with FACE."
+(defun dape--overlay-icon (overlay string bitmap face &optional in-margin)
+  "Put STRING or BITMAP on OVERLAY with FACE.
+If IN-MARGING put STRING in margin, otherwise put overlay over buffer
+contents."
   (when-let ((buffer (overlay-buffer overlay)))
-    (let (before-string)
-      (cond
-       ((and (window-system) ;; running in term
-             (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
-        (setq before-string
-              (propertize " " 'display
-                          `(left-fringe ,bitmap ,face))))
-       (t
-        (with-current-buffer buffer
-          (unless dape--original-margin
-            (setq-local dape--original-margin left-margin-width)
-            (setq left-margin-width 2)
-            (when-let ((window (get-buffer-window)))
-              (set-window-buffer window buffer))))
-        (setq before-string
-              (propertize " " 'display `((margin left-margin)
-                                         ,(propertize string 'face face))))))
+    (let ((before-string
+           (cond
+            ((and (window-system) ;; running in term
+                  (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
+             (propertize " " 'display
+                         `(left-fringe ,bitmap ,face)))
+            (in-margin
+             (with-current-buffer buffer
+               (unless dape--original-margin
+                 (setq-local dape--original-margin left-margin-width)
+                 (setq left-margin-width 2)
+                 (when-let ((window (get-buffer-window)))
+                   (set-window-buffer window buffer))))
+             (propertize " " 'display `((margin left-margin)
+                                        ,(propertize string 'face face))))
+            (t
+             (move-overlay overlay
+                           (overlay-start overlay)
+                           (+ (overlay-start overlay)
+                              (min
+                               (length string)
+                               (with-current-buffer (overlay-buffer overlay)
+                                 (goto-char (overlay-start overlay))
+                                 (- (line-end-position) (overlay-start overlay))))))
+             (overlay-put overlay 'display "")
+             (propertize string 'face face)))))
       (overlay-put overlay 'before-string before-string))))
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
@@ -2230,10 +2245,12 @@ If EXPRESSION place conditional breakpoint."
                                               (format "Break: %s" expression)
                                               'face 'dape-expression-face))))
      (t
+      (overlay-put breakpoint 'dape-breakpoint t)
       (dape--overlay-icon breakpoint
                           dape-breakpoint-margin-string
                           'large-circle
-                          'dape-breakpoint-face)))
+                          'dape-breakpoint-face
+                          'in-margin)))
     (overlay-put breakpoint 'modification-hooks '(dape--breakpoint-freeze))
     (push breakpoint dape--breakpoints))
   (when-let ((conn (dape--live-connection t)))
@@ -2300,32 +2317,34 @@ See `dape--callback' for expected CB signature."
 
 ;;; Stack pointers
 
-(defvar dape--stack-position (make-marker)
-  "Dape stack position for marker `overlay-arrow-variable-list'.")
+(defvar dape--stack-position (make-overlay 0 0)
+  "Dape stack position overlay for arrow.")
 
 (defvar dape--stack-position-overlay nil
-  "Dape stack position overlay.")
+  "Dape stack position overlay for line.")
 
 (defun dape--remove-stack-pointers ()
   "Remove stack pointer marker."
-  (when-let ((buffer (marker-buffer dape--stack-position)))
+  (when-let ((buffer (overlay-buffer dape--stack-position)))
     (with-current-buffer buffer
       (dape--remove-eldoc-hook)))
   (when (overlayp dape--stack-position-overlay)
     (delete-overlay dape--stack-position-overlay))
-  (set-marker dape--stack-position nil))
+  (delete-overlay dape--stack-position))
 
-(defun dape--update-stack-pointers (conn &optional skip-stack-pointer-flash)
+(defun dape--update-stack-pointers (conn &optional
+                                         skip-stack-pointer-flash skip-goto)
   "Update stack pointer marker for adapter CONN.
 If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line."
   (dape--remove-stack-pointers)
   (when-let ((frame (dape--current-stack-frame conn)))
     (dape--with dape--source-ensure (conn frame)
-      (dape--goto-source frame
-                         ;; jsonrpc messes with set-buffer
-                         (with-current-buffer (car (buffer-list))
-                           (memq major-mode '(dape-repl-mode)))
-                         (not skip-stack-pointer-flash))
+      (unless skip-goto
+        (dape--goto-source frame
+                           ;; jsonrpc messes with set-buffer
+                           (with-current-buffer (car (buffer-list))
+                             (memq major-mode '(dape-repl-mode)))
+                           (not skip-stack-pointer-flash)))
       (when-let ((marker (dape--object-to-marker frame)))
         (with-current-buffer (marker-buffer marker)
           (dape--add-eldoc-hook)
@@ -2345,10 +2364,26 @@ If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line."
                                                 'dape-exception-description-face)
                                     "\n")))
                     ov))
-            (set-marker dape--stack-position
-                        (line-beginning-position))))))))
-
-(add-to-list 'overlay-arrow-variable-list 'dape--stack-position)
+            ;; HACK I don't believe that it's defined
+            ;;      behavior in which order fringe bitmaps
+            ;;      are displayed in, maybe it's the order
+            ;;      of overlay creation?
+            (setq dape--stack-position
+                  (make-overlay (line-beginning-position)
+                                (line-beginning-position)))
+            (dape--overlay-icon dape--stack-position
+                                overlay-arrow-string
+                                'right-triangle
+                                (cond
+                                 ((seq-find (lambda (ov)
+                                              (overlay-get ov 'dape-breakpoint))
+                                            (overlays-at (line-beginning-position)))
+                                  'dape-breakpoint-face)
+                                 ((eq frame (car (plist-get (dape--current-thread conn)
+                                                            :stackFrames)))
+                                  'default)
+                                 (t
+                                  'shadow)))))))))
 
 
 ;;; REPL buffer
