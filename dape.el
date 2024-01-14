@@ -2870,9 +2870,23 @@ buffers are already displayed."
   (dape--breakpoint-remove dape--info-breakpoint)
   (dape--display-buffer (dape--info-buffer 'dape-info-breakpoints-mode)))
 
+(dape--info-buffer-command dape-info-breakpoint-log-edit (dape--info-breakpoint)
+  "Edit breakpoint at line in dape info buffer."
+  (let ((edit-fn
+         (cond ((overlay-get dape--info-breakpoint 'dape-log-message)
+                'dape-breakpoint-log)
+               ((overlay-get dape--info-breakpoint 'dape-expr-message)
+                'dape-breakpoint-expression)
+               ((user-error "Unable to edit breakpoint on line without log or expression breakpoint")))))
+    (when-let* ((buffer (overlay-buffer dape--info-breakpoint)))
+      (with-selected-window (display-buffer buffer dape-display-source-buffer-action)
+        (goto-char (overlay-start dape--info-breakpoint))
+        (call-interactively edit-fn)))))
+
 (dape--info-buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
   (define-key map "D" 'dape-info-breakpoint-delete)
-  (define-key map "d" 'dape-info-breakpoint-delete))
+  (define-key map "d" 'dape-info-breakpoint-delete)
+  (define-key map "e" 'dape-info-breakpoint-log-edit))
 
 (dape--info-buffer-command dape-info-exceptions-toggle (dape--info-exception)
   "Toggle exception at line in dape info buffer."
