@@ -622,7 +622,7 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
           (dape--remove-stack-pointers)
           (dolist (thread (dape--threads conn))
             (plist-put thread :status "running"))
-          (run-hook-with-args 'dape-update-ui-hooks conn)))
+          (run-hooks 'dape-update-ui-hooks)))
     (user-error "No stopped threads")))
 
 (defun dape--thread-id-object (conn)
@@ -1173,7 +1173,7 @@ See `dape--callback' for expected CB signature."
                 (plist-get (dape--capabilities conn)
                            :exceptionBreakpointFilters)))
   (dape--with dape--set-exception-breakpoints (conn)
-    (run-hook-with-args 'dape-update-ui-hooks conn)
+    (run-hooks 'dape-update-ui-hooks)
     (funcall cb conn)))
 
 (defun dape--set-breakpoints (conn cb)
@@ -1313,7 +1313,7 @@ See `dape--callback' for expected CB signature."
         (plist-put variable :variables nil)
         (cl-loop for (key value) on body by 'cddr
                  do (plist-put variable key value))
-        (run-hook-with-args 'dape-update-ui-hooks conn))))
+        (run-hooks 'dape-update-ui-hooks))))
    ((and (dape--capable-p conn :supportsSetExpression)
          (or (plist-get variable :evaluateName)
              (plist-get variable :name)))
@@ -1373,7 +1373,7 @@ If SKIP-STACK-POINTER-FLASH skip flashing after placing stack pointer."
     (dape--with dape--stack-trace (conn current-thread)
       (dape--update-stack-pointers conn skip-stack-pointer-flash)
       (dape--with dape--scopes (conn (dape--current-stack-frame conn))
-        (run-hook-with-args 'dape-update-ui-hooks conn)))))
+        (run-hooks 'dape-update-ui-hooks)))))
 
 
 ;;; Incoming requests
@@ -1513,7 +1513,7 @@ Stores `dape--thread-id' and updates/adds thread in
   ;; Select thread if we don't have any thread selected
   (unless (dape--thread-id conn)
     (setf (dape--thread-id conn) (plist-get body :threadId)))
-  (run-hook-with-args 'dape-update-ui-hooks conn))
+  (run-hooks 'dape-update-ui-hooks))
 
 (cl-defmethod dape-handle-event (conn (_event (eql stopped)) body)
   "Handle adapter CONNs stopped events.
@@ -1593,7 +1593,7 @@ Killing the adapter and it's CONN."
     (unless dape-active-mode
       (dape-active-mode +1))
     (dape--update-state conn 'starting)
-    (run-hook-with-args 'dape-update-ui-hooks conn))
+    (run-hooks 'dape-update-ui-hooks))
   (dape--initialize conn))
 
 (defun dape--create-connection (config &optional parent)
@@ -1760,7 +1760,7 @@ CONN is inferred for interactive invocations."
       (dape--remove-stack-pointers)
       (dolist (thread (dape--threads conn))
         (plist-put thread :status "running"))
-      (run-hook-with-args 'dape-update-ui-hooks conn))))
+      (run-hooks 'dape-update-ui-hooks))))
 
 (defun dape-pause (conn)
   "Pause execution.
@@ -1990,7 +1990,7 @@ Optional argument SKIP-REMOVE limits usage to only adding watched vars."
             dape--watched)
       ;; FIXME don't want to have a depency on info ui in core commands
       (dape--display-buffer (dape--info-buffer 'dape-info-watch-mode))))
-  (run-hook-with-args 'dape-update-ui-hooks (dape--live-connection t)))
+  (run-hooks 'dape-update-ui-hooks))
 
 (defun dape-evaluate-expression (conn expression)
   "Evaluate EXPRESSION.
@@ -2199,7 +2199,7 @@ If SKIP-TYPES overlays with properties in SKIP-TYPES are filtered."
       (setq dape--breakpoints (delq breakpoint dape--breakpoints)))
   (when-let ((conn (dape--live-connection t)))
     (dape--set-breakpoints-in-buffer conn (current-buffer))))
-  (run-hook-with-args 'dape-update-ui-hooks (dape--live-connection t)))
+  (run-hooks 'dape-update-ui-hooks))
 
 (defun dape--breakpoint-place (&optional log-message expression)
   "Place breakpoint at current line.
@@ -2237,7 +2237,7 @@ If EXPRESSION place conditional breakpoint."
   (when-let ((conn (dape--live-connection t)))
     (dape--set-breakpoints-in-buffer conn (current-buffer)))
   (add-hook 'kill-buffer-hook 'dape--breakpoint-buffer-kill-hook nil t)
-  (run-hook-with-args 'dape-update-ui-hooks (dape--live-connection t)))
+  (run-hooks 'dape-update-ui-hooks))
 
 (defun dape--breakpoint-remove (overlay &optional skip-update)
   "Remove OVERLAY breakpoint from buffer and session.
@@ -2247,7 +2247,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
              (conn (dape--live-connection t)))
     (dape--set-breakpoints-in-buffer conn (overlay-buffer overlay)))
   (dape--margin-cleanup (overlay-buffer overlay))
-  (run-hook-with-args 'dape-update-ui-hooks (dape--live-connection t))
+  (run-hooks 'dape-update-ui-hooks)
   (delete-overlay overlay))
 
 
@@ -2800,10 +2800,12 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
        ,@body
        map)))
 
-(defun dape-info-update (conn)
+(defun dape-info-update (&optional conn)
   "Update and display `dape-info-*' buffers for adapter CONN."
   (dolist (buffer (dape--info-buffer-list))
-    (dape--info-update conn buffer)))
+    (dape--info-update (or conn
+                           (dape--live-connection t))
+                       buffer)))
 
 (defun dape-info (&optional maybe-close)
   "Update and display *dape-info* buffers.
