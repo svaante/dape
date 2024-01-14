@@ -2905,18 +2905,15 @@ buffers are already displayed."
 
 (cl-defmethod dape--info-buffer-update-contents
   (&context (major-mode dape-info-breakpoints-mode))
-  (let ((table (make-gdb-table))
-        (table-line 0))
-    (gdb-table-add-row table '("Num" "Type" "On" "Where" "What"))
+  (let ((table (make-gdb-table)))
+    (gdb-table-add-row table '("Type" "On" "Where" "What"))
     (dolist (breakpoint (reverse dape--breakpoints))
       (when-let* ((buffer (overlay-buffer breakpoint))
                   (line (with-current-buffer buffer
                           (line-number-at-pos (overlay-start breakpoint)))))
-        (setq table-line (1+ table-line))
         (gdb-table-add-row
          table
          (list
-          (format "%d" table-line)
           (cond
            ((overlay-get breakpoint 'dape-log-message)
             "log")
@@ -2939,10 +2936,8 @@ buffers are already displayed."
           'mouse-face 'highlight
           'help-echo "mouse-2, RET: visit breakpoint"))))
     (dolist (exception dape--exceptions)
-      (setq table-line (1+ table-line))
       (gdb-table-add-row table
                          (list
-                          (format "%d" table-line)
                           "exception"
                           (if (plist-get exception :enabled)
                               (propertize "y" 'font-lock-face
@@ -3098,12 +3093,10 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
    (t
     (cl-loop with table = (make-gdb-table)
              for frame in stack-frames
-             for line from 1
              do
              (gdb-table-add-row
               table
               (list
-               (format "%d" line)
                "in"
                (concat
                 (plist-get frame :name)
