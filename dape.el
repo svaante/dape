@@ -548,10 +548,6 @@ The hook is run with one argument, the compilation buffer."
   '((t :extend t))
   "Face used to display stack trace overlays.")
 
-(defface dape-stack-trace-pointer
-  '((t :inherit (bold default) :extend t))
-  "Face used to display stack trace overlays.")
-
 (defface dape-repl-exit-code-exit
   '((t :inherit compilation-mode-line-exit :extend t))
   "Face used in repl for exit code 0.")
