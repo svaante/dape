@@ -2337,52 +2337,54 @@ See `dape--callback' for expected CB signature."
 If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line."
   (dape--remove-stack-pointers)
   (when-let ((frame (dape--current-stack-frame conn)))
-    (dape--with dape--source-ensure (conn frame)
-      (unless skip-goto
-        (dape--goto-source frame
-                           ;; jsonrpc messes with set-buffer
-                           (with-current-buffer (car (buffer-list))
-                             (memq major-mode '(dape-repl-mode)))
-                           (not skip-stack-pointer-flash)))
-      (when-let ((marker (dape--object-to-marker frame)))
-        (with-current-buffer (marker-buffer marker)
-          (dape--add-eldoc-hook)
-          (save-excursion
-            (goto-char (marker-position marker))
-            (setq dape--stack-position-overlay
-                  (let ((ov
-                         (make-overlay (line-beginning-position)
-                                       (line-beginning-position 2))))
-                    (overlay-put ov 'face 'dape-stack-trace)
-                    (when-let ((exception-description
-                                (dape--exception-description conn)))
-                      (overlay-put ov 'after-string
-                                   (concat
-                                    (propertize exception-description
-                                                'face
-                                                'dape-exception-description-face)
-                                    "\n")))
-                    ov))
-            ;; HACK I don't believe that it's defined
-            ;;      behavior in which order fringe bitmaps
-            ;;      are displayed in, maybe it's the order
-            ;;      of overlay creation?
-            (setq dape--stack-position
-                  (make-overlay (line-beginning-position)
-                                (line-beginning-position)))
-            (dape--overlay-icon dape--stack-position
-                                overlay-arrow-string
-                                'right-triangle
-                                (cond
-                                 ((seq-find (lambda (ov)
-                                              (overlay-get ov 'dape-breakpoint))
-                                            (overlays-at (line-beginning-position)))
-                                  'dape-breakpoint-face)
-                                 ((eq frame (car (plist-get (dape--current-thread conn)
-                                                            :stackFrames)))
-                                  'default)
-                                 (t
-                                  'shadow)))))))))
+    (let ((deepest-p (eq frame (car (plist-get (dape--current-thread conn)
+                                               :stackFrames)))))
+      (dape--with dape--source-ensure (conn frame)
+        (unless skip-goto
+          (dape--goto-source frame
+                             ;; jsonrpc messes with set-buffer
+                             (with-current-buffer (car (buffer-list))
+                               (memq major-mode '(dape-repl-mode)))
+                             (not skip-stack-pointer-flash)))
+        (when-let ((marker (dape--object-to-marker frame)))
+          (with-current-buffer (marker-buffer marker)
+            (dape--add-eldoc-hook)
+            (save-excursion
+              (goto-char (marker-position marker))
+              (setq dape--stack-position-overlay
+                    (let ((ov
+                           (make-overlay (line-beginning-position)
+                                         (line-beginning-position 2))))
+                      (overlay-put ov 'face 'dape-stack-trace)
+                      (when deepest-p
+                        (when-let ((exception-description
+                                    (dape--exception-description conn)))
+                          (overlay-put ov 'after-string
+                                       (concat
+                                        (propertize exception-description
+                                                    'face
+                                                    'dape-exception-description-face)
+                                        "\n"))))
+                      ov))
+              ;; HACK I don't believe that it's defined
+              ;;      behavior in which order fringe bitmaps
+              ;;      are displayed in, maybe it's the order
+              ;;      of overlay creation?
+              (setq dape--stack-position
+                    (make-overlay (line-beginning-position)
+                                  (line-beginning-position)))
+              (dape--overlay-icon dape--stack-position
+                                  overlay-arrow-string
+                                  'right-triangle
+                                  (cond
+                                   ((seq-find (lambda (ov)
+                                                (overlay-get ov 'dape-breakpoint))
+                                              (overlays-at (line-beginning-position)))
+                                    'dape-breakpoint-face)
+                                   (deepest-p
+                                    'default)
+                                   (t
+                                    'shadow))))))))))
 
 
 ;;; REPL buffer
