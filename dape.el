@@ -1623,7 +1623,7 @@ symbol `dape-connection'."
                      (cl-map 'list 'identity
                              (plist-get config 'command-args)))))
           (setq server-process
-                (make-process :name "Dape adapter"
+                (make-process :name "dape adapter"
                               :command command
                               :filter (lambda (_process string)
                                         (dape--repl-message string))
