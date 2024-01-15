@@ -82,9 +82,9 @@ Dape takes a slightly different approach to configuration.
 In theory all debug adapters should be compatible with =Dape=.
 
 ** Javascript - vscode-js-*
-1. Install `node`
-2. Visit https://github.com/microsoft/vscode-js-debug/releases/ and download the asset `js-debug-dap-<version>.tar.gz`
-3. Unpack `mkdir -p ~/.emacs.d/debug-adapters && tar -xvzf js-debug-dap-<version>.tar.gz -C ~/.emacs.d/debug-adapters`
+1. Install =node=
+2. Visit https://github.com/microsoft/vscode-js-debug/releases/ and download the asset =js-debug-dap-<version>.tar.gz=
+3. Unpack =mkdir -p ~/.emacs.d/debug-adapters && tar -xvzf js-debug-dap-<version>.tar.gz -C ~/.emacs.d/debug-adapters=
 
 For more information see [[https://github.com/microsoft/vscode-js-debug/blob/main/OPTIONS.md][OPTIONS.md]].
 
@@ -93,23 +93,23 @@ See [[https://github.com/go-delve/delve/tree/master/Documentation/installation][
 For more information see [[https://github.com/go-delve/delve/blob/master/Documentation/usage/dlv_dap.md][documentation]].
 
 ** C, C++ and Rust - codelldb
-1. Download latest ~vsix~ [[https://github.com/vadimcn/codelldb/releases][release]] for your platform `codelldb-<platform>-<os>.vsix`
-2. Unpack `mkdir -p ~/.emacs.d/debug-adapters && unzip codelldb-<platform>-<os>.vsix -d ~/.emacs.d/debug-adapters/codelldb`
+1. Download latest ~vsix~ [[https://github.com/vadimcn/codelldb/releases][release]] for your platform =codelldb-<platform>-<os>.vsix=
+2. Unpack =mkdir -p ~/.emacs.d/debug-adapters && unzip codelldb-<platform>-<os>.vsix -d ~/.emacs.d/debug-adapters/codelldb=
 
 See [[https://github.com/vadimcn/codelldb/blob/v1.10.0/MANUAL.md][manual]] for more information.
 
 ** C and C++ - cpptools
 Download latesnd unpack ~vsix~ file with your favorite unzipper.
 
-1. Download latest ~vsix~ [[https://github.com/microsoft/vscode-cpptools/releases][release]] for your platform `cpptools-<platform>-<os>.vsix`
-2. Unpack `mkdir -p ~/.emacs.d/debug-adapters && unzip cpptools-<os>-<platform>.vsix -d ~/.emacs.d/debug-adapters/cpptools`
-3. Then `chmod +x ~/.emacs.d/debug-adapters/cpptools/extension/debugAdapters/bin/OpenDebugAD7`
-4. And `chmod +x ~/.emacs.d/debug-adapters/cpptools/extension/debugAdapters/lldb-mi/bin/lldb-mi`
+1. Download latest ~vsix~ [[https://github.com/microsoft/vscode-cpptools/releases][release]] for your platform =cpptools-<platform>-<os>.vsix=
+2. Unpack =mkdir -p ~/.emacs.d/debug-adapters && unzip cpptools-<os>-<platform>.vsix -d ~/.emacs.d/debug-adapters/cpptools=
+3. Then =chmod +x ~/.emacs.d/debug-adapters/cpptools/extension/debugAdapters/bin/OpenDebugAD7=
+4. And =chmod +x ~/.emacs.d/debug-adapters/cpptools/extension/debugAdapters/lldb-mi/bin/lldb-mi=
 
 See [[https://code.visualstudio.com/docs/cpp/launch-json-reference][options]].
 
 ** Python - debugpy
-Install debugpy with pip `pip install debugpy`
+Install debugpy with pip =pip install debugpy=
 
 See [[https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings][options]].
 
@@ -146,7 +146,7 @@ If you find a working configuration for any other debug adapter please submit a 
 See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]] for other adapters, your mileage will vary.
 
 * Bugs and issues
-Before reporting any issues take a look at ~*dape-repl*~ buffer. Master is used is for all case and purposes a development branch still and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.  
+Before reporting any issues take a look at ~*dape-repl*~ buffer. Master is used is for all case and purposes a development branch still and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.
 
 * Acknowledgements
 Big thanks to João Távora for the input and jsonrpc; the project wouldn't be where it is without João.
