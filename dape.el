@@ -879,10 +879,10 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                                (string-match-p "\\*dape-.+\\*" (buffer-name buffer)))))
                (seq-do (lambda (buffer)
                          (condition-case err
-                             (progn
-                               (when-let ((window (get-buffer-window buffer)))
-                                 (delete-window window))
-                               (kill-buffer buffer))
+                             (let ((window (get-buffer-window buffer)))
+                               (kill-buffer buffer)
+                               (when (window-live-p window)
+                                 (delete-window window)))
                            (error
                             (message (error-message-string err))))))))
 
