@@ -1053,7 +1053,7 @@ and success.  See `dape--callback' for signature."
                            (lambda ()
                              (dape--repl-message
                               (format "* Command %s timeout *" command) 'error)
-                             (funcall cb conn nil "Timed out")))))
+                             (funcall cb conn nil "timeout")))))
 
 (defun dape--initialize (conn)
   "Initialize and launch/attach adapter CONN."
@@ -1079,7 +1079,9 @@ and success.  See `dape--callback' for signature."
                                   ))
     (if error-message
         (progn
-          (dape--repl-message error-message 'dape-repl-exit-code-fail)
+          (dape--repl-message (format "Initialize failed due to: %s"
+                                      error-message)
+                              'dape-repl-exit-code-fail)
           (dape-kill conn))
       (setf (dape--capabilities conn) body)
       (dape--with dape-request
@@ -1690,14 +1692,13 @@ symbol `dape-connection'."
                    (lambda (conn)
                      ;; error prints
                      (unless (dape--initialized-p conn)
-                       (dape--repl-message "Connection ended without successfully initializing"
+                       (dape--repl-message "Adapter connection shutdown without successfully initializing"
                                            'error)
                        ; barf config
                        (dape--repl-message
-                        (format "With adapter request:\n%s"
+                        (format "Configuration:\n%s"
                                 (cl-loop for (key value) on (dape--config conn) by 'cddr
-                                         when (keywordp key)
-                                         concat (format "%s %S\n" key value)))
+                                         concat (format "  %s %S\n" key value)))
                         'error)
                        ;; barf connection stderr
                        (when-let* ((proc (jsonrpc--process conn))
