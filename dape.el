@@ -219,7 +219,8 @@
                         (file-expand-wildcards
                          (file-name-concat "bin" "Debug" "*" "*.dll"))))
                    (if dlls
-                       (file-relative-name (car dlls))
+                       (file-relative-name
+                        (file-relative-name (car dlls)))
                      ".dll"
                      (dape-cwd))))
      :stopAtEntry nil)
@@ -245,7 +246,10 @@
      ;; bundle exec ruby foo.rb
      ;; bundle exec rake test
      -c ,(defun dape--rdbg-c ()
-           (format "ruby %s" (file-relative-name (or (dape-buffer-default) "") (dape-cwd)))))
+           (format "ruby %s"
+                   (thread-first (or (dape-buffer-default) "")
+                                 (file-relative-name (dape-cwd))
+                                 (tramp-file-local-name)))))
     (jdtls
      modes (java-mode java-ts-mode)
      ensure (lambda (config)
@@ -740,10 +744,7 @@ If PULSE pulse on after opening file."
 
 (defun dape-cwd ()
   "Use `dape-cwd-fn' to guess current working as local path."
-  (let ((root (funcall dape-cwd-fn)))
-    (if (tramp-tramp-file-p root)
-        (tramp-file-name-localname (tramp-dissect-file-name root))
-      root)))
+  (tramp-file-local-name (funcall dape-cwd-fn)))
 
 (defun dape-command-cwd ()
   "Use `dape-cwd-fn' to guess current working directory."
@@ -751,7 +752,7 @@ If PULSE pulse on after opening file."
 
 (defun dape-buffer-default ()
   "Return current buffers file name."
-  (file-name-nondirectory (buffer-file-name)))
+  (file-name-nondirectory (tramp-file-local-name (buffer-file-name))))
 
 (defun dape--guess-root (config)
   "Guess adapter path root from CONFIG."
