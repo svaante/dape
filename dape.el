@@ -1963,6 +1963,26 @@ SKIP-TYPES is a list of overlay properties to skip removal of."
   (setf (dape--stack-id conn) stack-id)
   (dape--update conn t))
 
+(defun dape-stack-select-up (conn n)
+  "Select N stacks above current selected stack for adapter CONN."
+  (interactive (list (dape--live-connection) 1))
+  (if (dape--stopped-threads conn)
+      (let* ((current-stack (dape--current-stack-frame conn))
+             (stacks (plist-get (dape--current-thread conn) :stackFrames))
+             (i (cl-loop for i upfrom 0
+                         for stack in stacks
+                         when (equal stack current-stack)
+                         return (+ i n))))
+        (if (not (and (<= 0 i) (< i (length stacks))))
+            (message "Index %s out of range" i)
+          (dape-select-stack conn (plist-get (nth i stacks) :id))))
+    (message "No stopped threads")))
+
+(defun dape-stack-select-down (conn n)
+  "Select N stacks below current selected stack for adapter CONN."
+  (interactive (list (dape--live-connection) 1))
+  (dape-stack-select-up conn (* n -1)))
+
 (defun dape-watch-dwim (expression &optional skip-add skip-remove)
   "Add or remove watch for EXPRESSION.
 Watched symbols are displayed in *`dape-info' Watch* buffer.
@@ -3964,6 +3984,8 @@ See `eldoc-documentation-functions', for more infomation."
     (define-key map "B" #'dape-breakpoint-remove-all)
     (define-key map "t" #'dape-select-thread)
     (define-key map "S" #'dape-select-stack)
+    (define-key map (kbd "C-i") #'dape-stack-select-down)
+    (define-key map (kbd "C-o") #'dape-stack-select-up)
     (define-key map "w" #'dape-watch-dwim)
     (define-key map "D" #'dape-disconnect-quit)
     (define-key map "q" #'dape-quit)
@@ -3980,6 +4002,8 @@ See `eldoc-documentation-functions', for more infomation."
                dape-breakpoint-expression
                dape-breakpoint-toggle
                dape-breakpoint-remove-all
+               dape-stack-select-up
+               dape-stack-select-down
                dape-watch-dwim))
   (put cmd 'repeat-map 'dape-global-map))
 
