@@ -1604,8 +1604,9 @@ If started by an startDebugging request expects PARENT to
 symbol `dape-connection'."
   (run-hooks 'dape-on-start-hooks)
   (dape--repl-message "\n")
-  (let ((default-directory (or (plist-get config 'command-cwd)
-                               default-directory))
+  (unless (plist-get config 'command-cwd)
+    (plist-put config 'command-cwd default-directory))
+  (let ((default-directory (plist-get config 'command-cwd))
         (retries 30)
         process server-process)
     (cond
