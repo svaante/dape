@@ -539,8 +539,7 @@ The hook is run with one argument, the compilation buffer."
   "Face used to display conditional breakpoints.")
 
 (defface dape-exception-description-face
-  '((t :inherit (warning)
-       :height 0.85 :box (:line-width -1)))
+  '((t :inherit (error tooltip)))
   "Face used to display exception descriptions inline.")
 
 (defface dape-breakpoint-face
@@ -1531,8 +1530,9 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
               (seq-filter 'stringp
                           (list (plist-get body :text)
                                 (plist-get body :description)))))
-      (setf (dape--exception-description conn)
-            (mapconcat 'identity texts ": "))
+      (let ((str (mapconcat 'identity texts ":\n\t")))
+        (setf (dape--exception-description conn) str)
+        (dape--repl-message str 'dape-repl-exit-code-fail))
     (setf (dape--exception-description conn) nil))
   (run-hooks 'dape-on-stopped-hooks))
 
