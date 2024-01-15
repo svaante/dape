@@ -304,44 +304,44 @@
      :console "integratedConsole"
      :internalConsoleOptions "neverOpen"))
    "This variable holds the Dape configurations as an alist.
- In this alist, the car element serves as a symbol identifying each
- configuration.  Each configuration, in turn, is a property list (plist)
- where keys can be symbols or keywords.
+In this alist, the car element serves as a symbol identifying each
+configuration.  Each configuration, in turn, is a property list (plist)
+where keys can be symbols or keywords.
 
- Symbol Keys (Used by Dape):
- - fn: Function or list of functions, takes config and returns config.
-   If list functions are applied in order.  Used for hiding unnecessary
-   configuration details from config history.
- - ensure: Function to ensure that adapter is available.
- - command: Shell command to initiate the debug adapter.
- - command-args: List of string arguments for the command.
- - command-cwd: Working directory for the command.
- - prefix-local: Defines the source path prefix, accessible from Emacs.
- - prefix-remote: Defines the source path prefix, accessible by the adapter.
- - host: Host of the debug adapter.
- - port: Port of the debug adapter.
- - modes: List of modes where the configuration is active in `dape'
-   completions.
- - compile: Executes a shell command with `dape-compile-fn'.
+Symbol Keys (Used by Dape):
+- fn: Function or list of functions, takes config and returns config.
+  If list functions are applied in order.  Used for hiding unnecessary
+  configuration details from config history.
+- ensure: Function to ensure that adapter is available.
+- command: Shell command to initiate the debug adapter.
+- command-args: List of string arguments for the command.
+- command-cwd: Working directory for the command.
+- prefix-local: Defines the source path prefix, accessible from Emacs.
+- prefix-remote: Defines the source path prefix, accessible by the adapter.
+- host: Host of the debug adapter.
+- port: Port of the debug adapter.
+- modes: List of modes where the configuration is active in `dape'
+  completions.
+- compile: Executes a shell command with `dape-compile-fn'.
 
- Debug adapter conn in configuration:
- - If only command is specified (without host and port), Dape
-   will communicate with the debug adapter through stdin/stdout.
- - If both host and port are specified, Dape will connect to the
-   debug adapter.  If `command is specified, Dape will wait until the
-   command is initiated before it connects with host and port.
+Debug adapter conn in configuration:
+- If only command is specified (without host and port), Dape
+  will communicate with the debug adapter through stdin/stdout.
+- If both host and port are specified, Dape will connect to the
+  debug adapter.  If `command is specified, Dape will wait until the
+  command is initiated before it connects with host and port.
 
- Keywords in configuration:
-   Keywords are transmitted to the adapter during the initialize and
-   launch/attach requests.  Refer to `json-serialize' for detailed
-   information on how Dape serializes these keyword elements.  Dape
-   uses nil as false.
+Keywords in configuration:
+  Keywords are transmitted to the adapter during the initialize and
+  launch/attach requests.  Refer to `json-serialize' for detailed
+  information on how Dape serializes these keyword elements.  Dape
+  uses nil as false.
 
- Functions and symbols in configuration:
-  If a value in a key is a function, the function's return value will
-  replace the key's value before execution.
-  If a value in a key is a symbol, the symbol will recursively resolve
-  at runtime."
+Functions and symbols in configuration:
+ If a value in a key is a function, the function's return value will
+ replace the key's value before execution.
+ If a value in a key is a symbol, the symbol will recursively resolve
+ at runtime."
    :type '(alist :key-type (symbol :tag "Name")
                  :value-type
                  (plist :options
@@ -750,6 +750,7 @@ If PULSE pulse on after opening file."
   (funcall dape-cwd-fn))
 
 (defun dape-buffer-default ()
+  "Return current buffers file name."
   (file-name-nondirectory (buffer-file-name)))
 
 (defun dape--guess-root (config)
@@ -1659,7 +1660,7 @@ symbol `dape-connection'."
                 (with-current-buffer buffer
                   (dape--repl-message (buffer-string) 'error)))
               (delete-process server-process)
-              (user-error "Unable to connect to server."))
+              (user-error "Unable to connect to server"))
           (dape--repl-message (format "* %s to adapter established at %s:%s *"
                                       (if parent "Child connection" "Connection")
                                       host (plist-get config 'port))))))
@@ -2354,7 +2355,8 @@ See `dape--callback' for expected CB signature."
 (defun dape--update-stack-pointers (conn &optional
                                          skip-stack-pointer-flash skip-goto)
   "Update stack pointer marker for adapter CONN.
-If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line."
+If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line.
+If SKIP-GOTO is non nil refrain from going to selected stack."
   (dape--remove-stack-pointers)
   (when-let ((frame (dape--current-stack-frame conn)))
     (let ((deepest-p (eq frame (car (plist-get (dape--current-thread conn)
@@ -2682,7 +2684,7 @@ Uses `dape--info-buffer-identifier' as IDENTIFIER."
 REVERSED selects previous."
   (interactive)
   (unless dape--info-buffer-related
-    (user-error "No related buffers for current buffer."))
+    (user-error "No related buffers for current buffer"))
   (pcase-let* ((order-fn (if reversed 'reverse 'identity))
                (`(,mode ,id)
                 (thread-last (append dape--info-buffer-related
@@ -2761,7 +2763,7 @@ Updates buffer identified with MODE and ID contents with by calling
       (let ((dape--info-buffer-in-redraw t))
         (with-current-buffer buffer
           (unless (derived-mode-p 'dape-info-parent-mode)
-            (error "Trying to update non info buffer."))
+            (error "Trying to update non info buffer"))
           ;; Would be nice with replace-buffer-contents
           ;; But it seams to messes up string properties
           (let ((line (line-number-at-pos (point) t))
@@ -3196,7 +3198,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
   "Goto source."
   (if-let ((path (plist-get dape--info-module :path)))
       (pop-to-buffer (find-file-noselect path))
-    (user-error "No path associated with module.")))
+    (user-error "No path associated with module")))
 
 (dape--info-buffer-map dape-info-module-line-map dape-info-modules-goto)
 
@@ -3250,7 +3252,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
     (if-let ((marker
               (dape--object-to-marker (list :source dape--info-source))))
         (pop-to-buffer (marker-buffer marker))
-      (user-error "Unable to get source."))))
+      (user-error "Unable to get source"))))
 
 (dape--info-buffer-map dape-info-sources-line-map dape-info-sources-goto)
 
