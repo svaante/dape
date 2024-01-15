@@ -383,8 +383,7 @@ Each element should look like (MIME-TYPE . MODE) where
   :type 'key-sequence)
 
 (defcustom dape-display-source-buffer-action
-  '(display-buffer-reuse-window
-    display-buffer-same-window)
+  '(display-buffer-same-window)
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
