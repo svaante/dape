@@ -758,6 +758,8 @@ If PULSE pulse on after opening file."
   "Guess adapter path root from CONFIG."
   ;; FIXME We need some property on the adapter telling us how it
   ;;       decided on root
+  ;; FIXME Is this function meant to return root emacs world (with tramp)
+  ;;       or adapter world w/o tramp?
   (let ((cwd (plist-get config :cwd))
         (command-cwd (plist-get config 'command-cwd)))
     (cond
@@ -864,7 +866,10 @@ If EXTENDED end of line is after newline."
                (or (and-let* ((parent (dape--parent conn)))
                      (dape--config parent))
                    (dape--config conn))))
-         (root-guess (dape--guess-root config)))
+         (root-guess (dape--guess-root config))
+         ;; Normalize paths for `file-relative-name'
+         (file (tramp-file-local-name file))
+         (root-guess (tramp-file-local-name root-guess)))
     (concat
      (string-truncate-left (file-relative-name file root-guess)
                            dape-info-file-name-max)
