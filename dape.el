@@ -130,7 +130,7 @@
      port :autoport
      :request "launch"
      :type "executable"
-     :cwd dape-command-cwd
+     :cwd dape-cwd
      :program dape-buffer-default
      :justMyCode nil
      :console "integratedTerminal"
