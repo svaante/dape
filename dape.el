@@ -3986,6 +3986,7 @@ See `eldoc-documentation-functions', for more infomation."
     (define-key map "S" #'dape-select-stack)
     (define-key map (kbd "C-i") #'dape-stack-select-down)
     (define-key map (kbd "C-o") #'dape-stack-select-up)
+    (define-key map "E" #'dape-evaluate-expression)
     (define-key map "w" #'dape-watch-dwim)
     (define-key map "D" #'dape-disconnect-quit)
     (define-key map "q" #'dape-quit)
