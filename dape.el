@@ -2029,18 +2029,17 @@ Optional argument SKIP-REMOVE limits usage to only adding watched vars."
   (run-hooks 'dape-update-ui-hooks))
 
 (defun dape-evaluate-expression (conn expression)
-  "Evaluate EXPRESSION.
+  "Evaluate EXPRESSION, if region is active evaluate region.
 EXPRESSION can be an expression or adapter command, as it's evaluated in
 repl context.  CONN is inferred for interactive invocations."
   (interactive
    (list
     (dape--live-connection)
-    (string-trim
-     (read-string "Evaluate: "
-                  (or (and (region-active-p)
-                           (buffer-substring (region-beginning)
-                                             (region-end)))
-                      (thing-at-point 'symbol))))))
+    (if (region-active-p)
+        (buffer-substring (region-beginning)
+                          (region-end))
+      (read-string "Evaluate: "
+                   (thing-at-point 'symbol)))))
   (dape--with dape--evaluate-expression
       (conn
        (plist-get (dape--current-stack-frame conn) :id)
@@ -3999,7 +3998,7 @@ See `eldoc-documentation-functions', for more infomation."
     (define-key map "S" #'dape-select-stack)
     (define-key map (kbd "C-i") #'dape-stack-select-down)
     (define-key map (kbd "C-o") #'dape-stack-select-up)
-    (define-key map "E" #'dape-evaluate-expression)
+    (define-key map "x" #'dape-evaluate-expression)
     (define-key map "w" #'dape-watch-dwim)
     (define-key map "D" #'dape-disconnect-quit)
     (define-key map "q" #'dape-quit)
