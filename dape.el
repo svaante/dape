@@ -903,7 +903,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
         (cons '(display-buffer-in-side-window)
               (pcase mode
                 ('dape-repl-mode '((side . bottom) (slot . -1)))
-                ('shell-mode '((side . bottom) (slot . 1)))
+                ('shell-mode '((side . bottom) (slot . 0)))
                 ((or 'dape-info-scope-mode 'dape-info-watch-mode)
                  `((side . ,dape-buffer-window-arrangement) (slot . -1)))
                 ((or 'dape-info-stack-mode 'dape-info-modules-mode
