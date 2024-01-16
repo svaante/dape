@@ -3668,6 +3668,7 @@ Buffer is specified by MODE and ID."
               (cl-loop with base-config = (alist-get hint-key dape-configs)
                        for (key value) on hint-config by 'cddr
                        unless (or (memq key dape-minibuffer-hint-ignore-properties)
+                                  (and (eq key 'port) (eq value :autoport))
                                   (eq key 'ensure))
                        collect (concat
                                 (propertize (format "%s" key)
