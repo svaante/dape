@@ -531,24 +531,23 @@ The hook is run with one argument, the compilation buffer."
 
 
 ;;; Face
+(defface dape-breakpoint-face
+  '((t :inherit (font-lock-keyword-face)))
+  "Face used to display breakpoint overlays.")
 
 (defface dape-log-face
-  '((t :inherit (font-lock-doc-face)
+  '((t :inherit (font-lock-string-face)
        :height 0.85 :box (:line-width -1)))
   "Face used to display log breakpoints.")
 
 (defface dape-expression-face
-  '((t :inherit (font-lock-warning-face)
+  '((t :inherit (dape-breakpoint-face)
        :height 0.85 :box (:line-width -1)))
   "Face used to display conditional breakpoints.")
 
 (defface dape-exception-description-face
   '((t :inherit (error tooltip)))
   "Face used to display exception descriptions inline.")
-
-(defface dape-breakpoint-face
-  '((t :inherit (font-lock-keyword-face)))
-  "Face used to display breakpoint overlays.")
 
 (defface dape-stack-trace
   '((t :extend t))
@@ -2260,20 +2259,47 @@ If EXPRESSION place conditional breakpoint."
     (cond
      (log-message
       (overlay-put breakpoint 'dape-log-message log-message)
-      ;; TODO Add keybinds for removal and change of log message
-      (overlay-put breakpoint 'after-string (concat
-                                             " "
-                                             (propertize
-                                              (format "Log: %s" log-message)
-                                              'face 'dape-log-face))))
+      (overlay-put breakpoint 'after-string
+                   (concat
+                    " "
+                    (propertize (format "Log: %s" log-message)
+                                'face 'dape-log-face
+                                'mouse-face 'highlight
+                                'help-echo "mouse-1: edit log message"
+                                'keymap
+                                (let ((map (make-sparse-keymap)))
+                                  (define-key map [mouse-1]
+                                              (lambda (event)
+                                                (interactive "e")
+                                                (save-selected-window
+                                                  (let ((start (event-start event)))
+                                                    (select-window (posn-window start))
+                                                    (save-excursion
+                                                      (goto-char (posn-point start))
+                                                      (call-interactively 'dape-breakpoint-log))))))
+                                  map)))))
      (expression
       (overlay-put breakpoint 'dape-expr-message expression)
-      ;; TODO Add keybinds for removal and change of expression message
-      (overlay-put breakpoint 'after-string (concat
-                                             " "
-                                             (propertize
-                                              (format "Break: %s" expression)
-                                              'face 'dape-expression-face))))
+      (overlay-put breakpoint 'after-string
+                   (concat
+                    " "
+                    (propertize
+                     (format "Break: %s" expression)
+                     'face 'dape-expression-face
+                     'mouse-face 'highlight
+                     'help-echo "mouse-1: edit break expression"
+                     'keymap
+                     (let ((map (make-sparse-keymap)))
+                       (define-key map [mouse-1]
+                                   (lambda (event)
+                                     (interactive "e")
+                                     (save-selected-window
+                                       (let ((start (event-start event)))
+                                         (select-window (posn-window start))
+                                         (save-excursion
+                                           (goto-char (posn-point start))
+                                           (call-interactively 'dape-breakpoint-expression))))))
+                       map)))))
      (t
       (overlay-put breakpoint 'dape-breakpoint t)
       (dape--overlay-icon breakpoint
