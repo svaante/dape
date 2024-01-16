@@ -189,9 +189,11 @@
                            (unless (file-exists-p js-debug-file)
                              (user-error "File %S does not exist" js-debug-file))))
                command "node"
-               command-cwd ,(file-name-concat dape-adapter-dir
-                                              "js-debug")
-               command-args (,(file-name-concat "src" "dapDebugServer.js")
+               command-args (,(expand-file-name
+                               (file-name-concat dape-adapter-dir
+                                                 "js-debug"
+                                                 "src"
+                                                 "dapDebugServer.js"))
                              :autoport)
                port :autoport
                fn dape-config-autoport)))
