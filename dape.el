@@ -68,7 +68,21 @@
   :type 'string)
 
 (defcustom dape-configs
-  `(,@(let ((codelldb
+  `((attach
+     modes nil
+     ensure (lambda (config)
+              (unless (plist-get config 'port)
+                (user-error "Missing `port' property")))
+     host "localhost"
+     :request "attach")
+    (launch
+     modes nil
+     command-cwd dape-command-cwd
+     ensure (lambda (config)
+              (unless (plist-get config 'command)
+                (user-error "Missing `command' property")))
+     :request "launch")
+    ,@(let ((codelldb
              `(ensure dape-ensure-command
                command-cwd dape-command-cwd
                command ,(file-name-concat dape-adapter-dir
