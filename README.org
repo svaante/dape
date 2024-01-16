@@ -67,8 +67,6 @@ Currently =Dape= does not come with any debug adapter configuration.
 #+end_src
 
 * Differences with dap-mode
-[[https://github.com/emacs-lsp/dap-mode][dap-mode]] is the most popular alternative and is of course much more mature and probably more feature rich (have not used ~dap-mode~ extensively).
-
 Dape has no dependencies outside of packages included in emacs, and tries to use get as much out of them possible.
 
 Dape takes a slightly different approach to configuration.
