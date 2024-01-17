@@ -17,7 +17,7 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + Variable watch
 + Variable hover with ~eldoc~
 + REPL
-+ gdb-mi like interface
++ gdb-mi.el like interface
 + Memory viewer with ~hexl~
 + ~compile~ integration
 + Debug adapter configuration ergonomics
