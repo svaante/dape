@@ -23,7 +23,7 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + Debug adapter configuration ergonomics
 + No dependencies (except for jsonrpc which is part of emacs but needed version is not part of latest stable emacs release 29.1-1 but available on elpa)
 
-With =(setq dape-buffer-window-arrangement 'left)=:
+With =(setq dape-buffer-window-arrangement 'right)=:
 [[https://github.com/svaante/dape/blob/resources/dape_0_4_0_right.png]]
 And with =(setq dape-buffer-window-arrangement 'gud)= + =corfu= as =completion-in-region-function=:
 [[https://github.com/svaante/dape/blob/resources/dape_0_4_0_gud.png]]
