@@ -2055,12 +2055,19 @@ repl context.  CONN is inferred for interactive invocations."
                           (region-end))
       (read-string "Evaluate: "
                    (thing-at-point 'symbol)))))
-  (dape--with dape--evaluate-expression
-      (conn
-       (plist-get (dape--current-stack-frame conn) :id)
-       (substring-no-properties expression)
-       "repl")
-      (message "%s" (plist-get body :result))))
+  (let ((interactive-p (called-interactively-p 'any)))
+    (dape--with dape--evaluate-expression
+        (conn
+         (plist-get (dape--current-stack-frame conn) :id)
+         (substring-no-properties expression)
+         "repl")
+      (when interactive-p
+        (let ((result (plist-get body :result)))
+          (message "%s"
+                   (or (and (stringp result)
+                            (not (string-empty-p result))
+                            result)
+                       "Evaluation done")))))))
 
 ;;;###autoload
 (defun dape (config &optional skip-compile)
