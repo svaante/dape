@@ -2417,7 +2417,8 @@ See `dape--callback' for expected CB signature."
 If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line.
 If SKIP-GOTO is non nil refrain from going to selected stack."
   (dape--remove-stack-pointers)
-  (when-let ((frame (dape--current-stack-frame conn)))
+  (when-let (((dape--stopped-threads conn))
+             (frame (dape--current-stack-frame conn)))
     (let ((deepest-p (eq frame (car (plist-get (dape--current-thread conn)
                                                :stackFrames)))))
       (dape--with dape--source-ensure (conn frame)
