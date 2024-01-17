@@ -1890,13 +1890,14 @@ CONN is inferred for interactive invocations."
     (dape--kill-buffers)))
 
 (defun dape-breakpoint-toggle ()
-  "Add or remove breakpoint at current line.
-Will remove log or expression breakpoint at line added with
-`dape-breakpoint-log' and/or `dape-breakpoint-expression'."
+  "Add or remove breakpoint at current line."
   (interactive)
-  (if (dape--breakpoints-at-point '(dape-log-message dape-expr-message))
-      (dape-breakpoint-remove-at-point '(dape-log-message dape-expr-message))
+  (cond
+   ((not (dape--breakpoints-at-point '(dape-log-message dape-expr-message)))
+    (dape-breakpoint-remove-at-point 'skip-update)
     (dape--breakpoint-place))
+   (t
+    (dape-breakpoint-remove-at-point)))
   (when-let ((conn (dape--live-connection t)))
     (dape--update-stack-pointers conn t t)))
 
@@ -1912,12 +1913,14 @@ Expressions within `{}` are interpolated."
                                          (overlay-get ov 'dape-log-message))
                                        (dape--breakpoints-at-point))))
                    (overlay-get prev-log-breakpoint 'dape-log-message)))))
-  (when-let ((prev-log-breakpoint (seq-find (lambda (ov)
-                                              (overlay-get ov 'dape-log-message))
-                                            (dape--breakpoints-at-point))))
-    (dape--breakpoint-remove prev-log-breakpoint))
-  (unless (string-empty-p log-message)
+  (cond
+   ((string-empty-p log-message)
+    (dape-breakpoint-remove-at-point))
+   (t
+    (dape-breakpoint-remove-at-point 'skip-update)
     (dape--breakpoint-place log-message)))
+  (when-let ((conn (dape--live-connection t)))
+    (dape--update-stack-pointers conn t t)))
 
 (defun dape-breakpoint-expression (expr-message)
   "Add expression breakpoint at current line.
@@ -1930,32 +1933,32 @@ When EXPR-MESSAGE is evaluated as true threads will pause at current line."
                                          (overlay-get ov 'dape-expr-message))
                                        (dape--breakpoints-at-point))))
                    (overlay-get prev-expr-breakpoint 'dape-expr-message)))))
-  (when-let ((prev-expr-breakpoint
-              (seq-find (lambda (ov)
-                          (overlay-get ov 'dape-expr-message))
-                        (dape--breakpoints-at-point))))
-    (dape--breakpoint-remove prev-expr-breakpoint))
-  (unless (string-empty-p expr-message)
+  (cond
+   ((string-empty-p expr-message)
+    (dape-breakpoint-remove-at-point))
+   (t
+    (dape-breakpoint-remove-at-point 'skip-update)
     (dape--breakpoint-place nil expr-message)))
+  (when-let ((conn (dape--live-connection t)))
+    (dape--update-stack-pointers conn t t)))
 
-(defun dape-breakpoint-remove-at-point (&optional skip-types)
+(defun dape-breakpoint-remove-at-point (&optional skip-update)
   "Remove breakpoint, log breakpoint and expression at current line.
-SKIP-TYPES is a list of overlay properties to skip removal of."
+When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (interactive)
-  (dolist (breakpoint (dape--breakpoints-at-point skip-types))
-    (dape--breakpoint-remove breakpoint)))
+  (dolist (breakpoint (dape--breakpoints-at-point))
+    (dape--breakpoint-remove breakpoint skip-update)))
 
 (defun dape-breakpoint-remove-all ()
   "Remove all breakpoints."
   (interactive)
-  (let ((buffers-breakpoints (seq-group-by 'overlay-buffer
-                                           dape--breakpoints)))
-    (dolist (buffer-breakpoints buffers-breakpoints)
-      (pcase-let ((`(,buffer . ,breakpoints) buffer-breakpoints))
-        (dolist (breakpoint breakpoints)
-          (dape--breakpoint-remove breakpoint t))
-        (when-let ((conn (dape--live-connection t)))
-          (dape--set-breakpoints-in-buffer conn buffer)))))
+  (let ((buffers-breakpoints
+         (seq-group-by 'overlay-buffer dape--breakpoints)))
+    (pcase-dolist (`(,buffer . ,breakpoints) buffers-breakpoints)
+      (dolist (breakpoint breakpoints)
+        (dape--breakpoint-remove breakpoint t))
+      (when-let ((conn (dape--live-connection t)))
+        (dape--set-breakpoints-in-buffer conn buffer))))
   (when-let ((conn (dape--live-connection t)))
     (dape--update-stack-pointers conn t t)))
 
