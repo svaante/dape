@@ -263,9 +263,7 @@
      ;; bundle exec rake test
      -c ,(defun dape--rdbg-c ()
            (format "ruby %s"
-                   (thread-first (or (dape-buffer-default) "")
-                                 (file-relative-name (dape-cwd))
-                                 (tramp-file-local-name)))))
+                   (or (dape-buffer-default) ""))))
     (jdtls
      modes (java-mode java-ts-mode)
      ensure (lambda (config)
@@ -309,7 +307,7 @@
          `(:filePath
            ,(defun dape--jdtls-file-path ()
               (or (resolve-main-class :filePath)
-                  (expand-file-name (dape-buffer-default))))
+                  (expand-file-name (dape-buffer-default) (dape-cwd))))
            :mainClass
            ,(defun dape--jdtls-main-class ()
               (or (resolve-main-class :mainClass) ""))
@@ -767,7 +765,8 @@ If PULSE pulse on after opening file."
 
 (defun dape-buffer-default ()
   "Return current buffers file name."
-  (file-name-nondirectory (tramp-file-local-name (buffer-file-name))))
+  (tramp-file-local-name
+   (file-relative-name (buffer-file-name) (dape-command-cwd))))
 
 (defun dape--guess-root (config)
   "Guess adapter path root from CONFIG."
