@@ -2553,8 +2553,9 @@ Send INPUT to DUMMY-PROCESS."
   "Completion at point function for *dape-repl* buffer."
   (when (or (symbol-at-point)
             (member (buffer-substring-no-properties (1- (point)) (point))
-                    (or (plist-get (dape--capabilities (dape--live-connection t))
-                                   :completionTriggerCharacters)
+                    (or (append (plist-get (dape--capabilities (dape--live-connection t))
+                                           :completionTriggerCharacters)
+                                nil)
                         '("."))))
     (let* ((bounds (save-excursion
                      (cons (and (skip-chars-backward "^\s")
