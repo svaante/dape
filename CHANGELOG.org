@@ -2,6 +2,29 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.4
+- Switched to jsonrpc.el for parsing DAP messages
+- Add support for modules and loaded sources
+- Added jdtls (java-debug) as a supported adapter
+- Handle subprocess creation for =debugpy= processes (fix =startDebugging= handling)
+- Add option to align variables buffer =dape-info-variable-table-aligned= (unaligned per default)
+- Add overlay for inline exception stoppage description
+- Rework dape debugging printouts (removed =*dape-debug*= buffer) in =*dape-repl*=
+- =dape-info= now toggles buffers on interactive calls
+- Add file name completion for interactive calls of =dape=
+- New global non interactive mode for =dape-active-mode= for adding bindings
+- Added hints in minibuffer controlled by =dape-minibuffer-hint=, =dape-minibuffer-hint-ignore-properties=
+- Rework of =dape-configs=; remove usage of =read-*= functions and guess default values instead.
+- Add =dape-command= as an analog to =compile-command=
+- Rework in buffer stack pointers to be able to display breakpoints and arrow at same line
+- Change defaults of =dape-display-source-buffer-action=
+- Add commands for moving up and down the stack =C-o=, =C-i=
+- Add mouse bindings for adding, changing and removing =dape-breakpoints-*=
+- Add generic =dape-config= entries for exploring adapters =launch=, =attach=
+- Improve usability of =dape-evaluate-expression=, if sends region if active
+- Rework =dape-breakpoints=*= =dape= incorrectly allowed for multiple breakpoints on same line
+- Minor bugfixes and improvements
+
 * Version 0.3
 - Add support for source by sourceReference by =dape-mime-mode-alist=
 - Support stepping granularity with =dape-stepping-granularity=
