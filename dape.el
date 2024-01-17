@@ -944,6 +944,18 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
           (_ (error "Unable to display buffer of mode `%s'" mode))))
        (_ (user-error "Invalid value of `dape-buffer-window-arrangement'"))))))
 
+(defmacro dape--mouse-command (name doc command)
+  "Create mouse command with NAME, DOC which runs COMMANDS."
+  (declare (indent 1))
+  `(defun ,name (event)
+     ,doc
+     (interactive "e")
+     (save-selected-window
+       (let ((start (event-start event)))
+         (select-window (posn-window start))
+         (save-excursion
+           (goto-char (posn-point start))
+           (call-interactively ',command))))))
 
 
 ;;; Connection
@@ -2166,20 +2178,26 @@ Using BUFFER and STR."
 
 ;;; Breakpoints
 
-(defun dape-mouse-breakpoint-toggle (event)
-  "Toggle breakpoint at EVENT."
-  (interactive "e")
-  (save-selected-window
-    (let ((start (event-start event)))
-      (select-window (posn-window start))
-      (save-excursion
-        (goto-char (posn-point start))
-        (dape-breakpoint-toggle)))))
+(dape--mouse-command dape-mouse-breakpoint-toggle
+  "Toggle breakpoint at line."
+  dape-breakpoint-toggle)
+
+(dape--mouse-command dape-mouse-breakpoint-expression
+  "Add log expression at line."
+  dape-breakpoint-expression)
+
+(dape--mouse-command dape-mouse-breakpoint-log
+  "Add log breakpoint at line."
+  dape-breakpoint-log)
 
 (defvar dape-breakpoint-global-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map [left-fringe mouse-1] 'dape-mouse-breakpoint-toggle)
     (define-key map [left-margin mouse-1] 'dape-mouse-breakpoint-toggle)
+    (define-key map [left-fringe mouse-2] 'dape-mouse-breakpoint-expression)
+    (define-key map [left-margin mouse-2] 'dape-mouse-breakpoint-expression)
+    (define-key map [left-fringe mouse-3] 'dape-mouse-breakpoint-log)
+    (define-key map [left-margin mouse-3] 'dape-mouse-breakpoint-log)
     map)
   "Keymap for `dape-breakpoint-global-mode'.")
 
@@ -2291,15 +2309,7 @@ If EXPRESSION place conditional breakpoint."
                                 'help-echo "mouse-1: edit log message"
                                 'keymap
                                 (let ((map (make-sparse-keymap)))
-                                  (define-key map [mouse-1]
-                                              (lambda (event)
-                                                (interactive "e")
-                                                (save-selected-window
-                                                  (let ((start (event-start event)))
-                                                    (select-window (posn-window start))
-                                                    (save-excursion
-                                                      (goto-char (posn-point start))
-                                                      (call-interactively 'dape-breakpoint-log))))))
+                                  (define-key map [mouse-1] #'dape-mouse-breakpoint-log)
                                   map)))))
      (expression
       (overlay-put breakpoint 'dape-expr-message expression)
@@ -2313,15 +2323,7 @@ If EXPRESSION place conditional breakpoint."
                      'help-echo "mouse-1: edit break expression"
                      'keymap
                      (let ((map (make-sparse-keymap)))
-                       (define-key map [mouse-1]
-                                   (lambda (event)
-                                     (interactive "e")
-                                     (save-selected-window
-                                       (let ((start (event-start event)))
-                                         (select-window (posn-window start))
-                                         (save-excursion
-                                           (goto-char (posn-point start))
-                                           (call-interactively 'dape-breakpoint-expression))))))
+                       (define-key map [mouse-1] #'dape-mouse-breakpoint-expression)
                        map)))))
      (t
       (overlay-put breakpoint 'dape-breakpoint t)
