@@ -2420,7 +2420,8 @@ See `dape--callback' for expected CB signature."
   "Update stack pointer marker for adapter CONN.
 If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line.
 If SKIP-GOTO is non nil refrain from going to selected stack."
-  (dape--remove-stack-pointers)
+  (when (eq conn dape--connection)
+    (dape--remove-stack-pointers))
   (when-let (((dape--stopped-threads conn))
              (frame (dape--current-stack-frame conn)))
     (let ((deepest-p (eq frame (car (plist-get (dape--current-thread conn)
