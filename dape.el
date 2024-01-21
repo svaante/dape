@@ -1465,8 +1465,8 @@ BODY is an plist of adapter capabilities."
   (setf (dape--capabilities conn) (plist-get body :capabilities))
   (dape--configure-exceptions conn (dape--callback nil)))
 
-(cl-defmethod dape-handle-event (conn (_event (eql breakpoint)) body)
-  "Handle adapter CONNs breakpoint events.
+(cl-defmethod dape-handle-event (_conn (_event (eql breakpoint)) body)
+  "Handle breakpoint events.
 Update `dape--breakpoints' according to BODY."
   (when-let* ((breakpoint (plist-get body :breakpoint))
               (id (plist-get breakpoint :id))
@@ -2385,26 +2385,23 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                   (new-line (plist-get breakpoint :line)))
         (unless (and (= old-line new-line)
                      (eq old-buffer new-buffer))
-          (let (breakpoint-exists-at-line-p)
-            (with-current-buffer new-buffer
-              (save-excursion
-                (goto-char (point-min))
-                (forward-line (1- new-line))
-                (setq breakpoint-exists-at-line-p
-                      (dape--breakpoints-at-point))
-                (dape-breakpoint-remove-at-point)
-                (pcase-let ((`(,beg ,end) (dape--overlay-region)))
-                  (move-overlay overlay beg end new-buffer))
-                (pulse-momentary-highlight-region (line-beginning-position)
-                                                  (line-beginning-position 2)
-                                                  'next-error)))
-            (dape--repl-message
-             (format "* Breakpoint in %s moved from line %s to %s *"
-                     old-buffer
-                     old-line
-                     new-line))
-            (dape--update-stack-pointers conn t t)
-            (run-hooks 'dape-update-ui-hooks)))))))
+          (with-current-buffer new-buffer
+            (save-excursion
+              (goto-char (point-min))
+              (forward-line (1- new-line))
+              (dape-breakpoint-remove-at-point)
+              (pcase-let ((`(,beg ,end) (dape--overlay-region)))
+                (move-overlay overlay beg end new-buffer))
+              (pulse-momentary-highlight-region (line-beginning-position)
+                                                (line-beginning-position 2)
+                                                'next-error)))
+          (dape--repl-message
+           (format "* Breakpoint in %s moved from line %s to %s *"
+                   old-buffer
+                   old-line
+                   new-line))
+          (dape--update-stack-pointers conn t t)
+          (run-hooks 'dape-update-ui-hooks))))))
 
 
 ;;; Source buffers
