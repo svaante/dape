@@ -1721,8 +1721,9 @@ symbol `dape-connection'."
                    :config config
                    :parent parent
                    :server-process server-process
-                   :events-buffer-config `(:size ,(if dape-debug nil 0)
-                                                 :format full)
+                   ;; FIXME needs to update jsonrcp
+                   ;; :events-buffer-config `(:size ,(if dape-debug nil 0)
+                   ;;                               :format full)
                    :on-shutdown
                    (lambda (conn)
                      ;; error prints
