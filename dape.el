@@ -4034,14 +4034,23 @@ See `dape--config-mode-p' how \"valid\" is defined."
           (dape--minibuffer-hint))
       (pcase-let* ((str
                     (let ((history-add-new-input nil))
-                      (read-from-minibuffer "Run adapter: "
-                                            initial-contents
-                                            (let ((map (make-sparse-keymap)))
-                                              (set-keymap-parent map minibuffer-local-map)
-                                              (define-key map (kbd "C-M-i") #'completion-at-point)
-                                              (define-key map "\t" #'completion-at-point)
-                                              map)
-                                            nil 'dape-history initial-contents)))
+                      (read-from-minibuffer
+                       "Run adapter: "
+                       initial-contents
+                       (let ((map (make-sparse-keymap)))
+                         (set-keymap-parent map minibuffer-local-map)
+                         (define-key map (kbd "C-M-i") #'completion-at-point)
+                         (define-key map "\t" #'completion-at-point)
+                         (define-key map (kbd "C-c C-k")
+                                     (lambda ()
+                                       (interactive)
+                                       (pcase-let* ((str (buffer-substring (minibuffer-prompt-end)
+                                                                           (point-max)))
+                                                    (`(,key) (dape--config-from-string str t)))
+                                         (delete-region (minibuffer-prompt-end) (point-max))
+                                         (insert (format "%s" key) " "))))
+                         map)
+                       nil 'dape-history initial-contents)))
                    (`(,key ,config)
                     (dape--config-from-string (substring-no-properties str) t))
                    (evaled-config (dape--config-eval key config)))
