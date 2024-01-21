@@ -543,6 +543,10 @@ The hook is run with one argument, the compilation buffer."
   "Show hints in mini buffer."
   :type 'boolean)
 
+(defcustom dape-debug nil
+  "Print debug info in *dape-repl* and *dape-connection events*."
+  :type 'boolean)
+
 
 ;;; Face
 (defface dape-breakpoint-face
@@ -1467,7 +1471,7 @@ Update `dape--breakpoints' according to BODY."
   (when-let* ((breakpoint (plist-get body :breakpoint))
               (id (plist-get breakpoint :id))
               (overlay (seq-find (lambda (ov)
-                                   (= (overlay-get ov 'dape-id) id))
+                                   (equal (overlay-get ov 'dape-id) id))
                                  dape--breakpoints)))
     (dape--breakpoint-update overlay breakpoint)))
 
@@ -1656,9 +1660,10 @@ symbol `dape-connection'."
                               :file-handler t
                               :stderr stderr-buffer))
           (process-put server-process 'stderr-buffer stderr-buffer)
-          (dape--repl-message (format "* Adapter server started with %S *"
-                                      (mapconcat 'identity
-                                                 command " "))))
+          (when dape-debug
+            (dape--repl-message (format "* Adapter server started with %S *"
+                                        (mapconcat 'identity
+                                                   command " ")))))
         ;; FIXME Why do I need this?
         (when (file-remote-p default-directory)
           (sleep-for 0 300)))
@@ -1690,9 +1695,11 @@ symbol `dape-connection'."
                   (dape--repl-message (buffer-string) 'error)))
               (delete-process server-process)
               (user-error "Unable to connect to server"))
-          (dape--repl-message (format "* %s to adapter established at %s:%s *"
-                                      (if parent "Child connection" "Connection")
-                                      host (plist-get config 'port))))))
+          (when dape-debug
+            (dape--repl-message
+             (format "* %s to adapter established at %s:%s *"
+                     (if parent "Child connection" "Connection")
+                     host (plist-get config 'port)))))))
      ;; stdio conn
      (t
       (let ((command
@@ -1706,13 +1713,16 @@ symbol `dape-connection'."
                             :coding 'utf-8-emacs-unix
                             :noquery t
                             :file-handler t))
-        (dape--repl-message (format "* Adapter started with %S *"
-                                    (mapconcat 'identity command " "))))))
+        (when dape-debug
+          (dape--repl-message (format "* Adapter started with %S *"
+                                      (mapconcat 'identity command " ")))))))
     (make-instance 'dape-connection
                    :name "dape-connection"
                    :config config
                    :parent parent
                    :server-process server-process
+                   :events-buffer-config `(:size ,(if dape-debug nil 0)
+                                                 :format full)
                    :on-shutdown
                    (lambda (conn)
                      ;; error prints
@@ -3619,11 +3629,7 @@ Buffer is specified by MODE and ID."
 
 ;;; Info watch buffer
 
-(defvar dape-info-watch-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map "d" 'dape-info-scope-watch-dwim)
-    (define-key map "e" 'dape-info-scope-toggle)
-    map)
+(defvar dape-info-watch-mode-map (copy-keymap dape-info-scope-mode-map)
   "Local keymap for dape watch buffer.")
 
 (define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"

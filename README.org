@@ -148,7 +148,8 @@ If you find a working configuration for any other debug adapter please submit a 
 See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]] for other adapters, your mileage will vary.
 
 * Bugs and issues
-Before reporting any issues take a look at ~*dape-repl*~ buffer. Master is used is for all case and purposes a development branch still and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.
+Before reporting any issues =(setq dape-debug t)= and take a look at =*dape-repl*= buffer. Please share your =*dape-repl*= and =*dape-connection events*= in the buffer contents with the bug report.
+Master is used is for all case and purposes a development branch still and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.
 
 * Acknowledgements
 Big thanks to João Távora for the input and jsonrpc; the project wouldn't be where it is without João.
