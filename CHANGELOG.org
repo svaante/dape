@@ -2,6 +2,11 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.5
+- Use setBreakpoints response and event =breakpoint= to validate and move breakpoints
+- Add =dape-debug= custom to disable debug printouts in =*dape-repl*=
+- Fix =startDebugging= request removing stack pointer
+
 * Version 0.4
 - Switched to jsonrpc.el for parsing DAP messages
 - Add support for modules and loaded sources
