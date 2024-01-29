@@ -425,7 +425,7 @@ Each element should look like (MIME-TYPE . MODE) where
   "Hook to run on session start."
   :type 'hook)
 
-(defcustom dape-on-stopped-hooks '()
+(defcustom dape-on-stopped-hooks '(dape--emacs-grab-focus)
   "Hook to run on session stopped."
   :type 'hook)
 
@@ -940,6 +940,10 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
          (save-excursion
            (goto-char (posn-point start))
            (call-interactively ',command))))))
+
+(defun dape--emacs-grab-focus ()
+  "If `display-graphic-p' focus emacs."
+  (select-frame-set-input-focus (selected-frame)))
 
 
 ;;; Connection
