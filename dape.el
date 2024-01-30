@@ -179,7 +179,7 @@
      :type "server"
      :cwd dape-cwd)
     ,@(let ((js-debug
-             `(modes (js-mode js-ts-mode)
+             `(modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
                ensure ,(lambda (config)
                          (dape-ensure-command config)
                          (let ((js-debug-file
