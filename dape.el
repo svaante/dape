@@ -1433,7 +1433,7 @@ Starts a new adapter CONNs from ARGUMENTS."
                          buffer
                          buffer)
     (dape--display-buffer buffer)
-    nil))
+    (list :processId (process-id (get-buffer-process buffer)))))
 
 (cl-defmethod dape-handle-request (conn (_command (eql startDebugging)) arguments)
   "Handle adapter CONNs startDebugging requests with ARGUMENTS.
