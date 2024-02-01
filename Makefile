@@ -14,7 +14,12 @@ $(DEPS):
 
 %.elc: %.el
 	@echo Compiling $<
-	@${EMACS} -Q -batch -no-site-file -L . -f batch-byte-compile $<
+	@${EMACS} -Q \
+	          -batch \
+                  -no-site-file \
+                  -L . \
+                  --eval="(package-install-file \"$(JSONRPC)\")" \
+                  -f batch-byte-compile $<
 
 check: $(DEPS) $(ELCFILES)
 	@${EMACS} -Q                              \
