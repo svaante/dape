@@ -1,8 +1,8 @@
 export EMACS ?= $(shell which emacs)
 
-DEPS = jsonrpc-1.0.19/jsonrpc.el
+JSONRPC = jsonrpc-1.0.19/jsonrpc.el
 
-ELFILES = $(DEPS)  dape.el dape-tests.el
+ELFILES = dape.el dape-tests.el
 ELCFILES = $(addsuffix .elc, $(basename $(ELFILES)))
 
 all: $(ELCFILES)
@@ -20,6 +20,7 @@ check: $(DEPS) $(ELCFILES)
 	@${EMACS} -Q                              \
 		  -batch 			  \
 		  -l ert 			  \
+		  --eval="(package-install-file \"$(JSONRPC)\")" \
 		  $(foreach file, $^, -l $(file)) \
 		  -f ert-run-tests-batch-and-exit
 
