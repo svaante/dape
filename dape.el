@@ -55,6 +55,10 @@
 (require 'jsonrpc)
 (require 'eglot) ;; jdtls config
 
+(unless (package-installed-p 'jsonrpc '(1 0 21))
+  (error "dape: Requires jsonrpc version >= 1.0.21, use `list-packages'\
+ to install latest `jsonrpc' release from elpa"))
+
 
 ;;; Custom
 (defgroup dape nil
