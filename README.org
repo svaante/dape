@@ -24,11 +24,11 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + No dependencies (except for jsonrpc which is part of emacs but needed version is not part of latest stable emacs release 29.1-1 but available on elpa)
 
 With =(setq dape-buffer-window-arrangement 'right)=:
-[[https://github.com/svaante/dape/blob/resources/dape_0_4_0_right.png]]
+[[https://raw.githubusercontent.com/svaante/dape/resources/dape_0_4_0_right.png]]
 And with =(setq dape-buffer-window-arrangement 'gud)= + =corfu= as =completion-in-region-function=:
-[[https://github.com/svaante/dape/blob/resources/dape_0_4_0_gud.png]]
+[[https://raw.githubusercontent.com/svaante/dape/resources/dape_0_4_0_gud.png]]
 And with minibuffer config hints:
-[[https://github.com/svaante/dape/blob/resources/dape_0_4_0_hint.png]]
+[[https://raw.githubusercontent.com/svaante/dape/resources/dape_0_4_0_hint.png]]
 
 Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-operandi-tinted]].
 
