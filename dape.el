@@ -1449,8 +1449,7 @@ Starts a new adapter connection as per request of the debug adapter."
     (let ((new-connection
            (dape--create-connection config (or (dape--parent conn)
                                                conn))))
-      (unless (dape--thread-id conn)
-        (setq dape--connection new-connection))
+      (setq dape--connection new-connection)
       (dape--start-debugging new-connection)))
   nil)
 
@@ -1858,8 +1857,11 @@ terminate.  CONN is inferred for interactive invocations."
                        (dape-kill cb 'with-disconnect)
                      (unless skip-shutdown
                        (jsonrpc-shutdown conn))
-                     (when (functionp cb)
-                       (funcall cb))))))
+                     (if-let* (((not skip-shutdown))
+                               (parent (dape--parent conn)))
+                         (dape-kill parent cb with-disconnect skip-shutdown)
+                       (when (functionp cb)
+                         (funcall cb)))))))
    ((and conn
          (jsonrpc-running-p conn))
     (dape-request conn
@@ -1871,8 +1873,11 @@ terminate.  CONN is inferred for interactive invocations."
                   (dape--callback
                    (unless skip-shutdown
                      (jsonrpc-shutdown conn))
-                   (when (functionp cb)
-                     (funcall cb)))))
+                   (if-let* (((not skip-shutdown))
+                             (parent (dape--parent conn)))
+                       (dape-kill parent cb with-disconnect skip-shutdown)
+                     (when (functionp cb)
+                       (funcall cb))))))
    (t
     (when (functionp cb)
       (funcall cb)))))
