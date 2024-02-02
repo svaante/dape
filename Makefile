@@ -1,6 +1,6 @@
 export EMACS ?= $(shell which emacs)
 
-JSONRPC = jsonrpc-1.0.21/jsonrpc.el
+JSONRPC = jsonrpc-1.0.24/jsonrpc.el
 
 ELFILES = dape.el dape-tests.el
 ELCFILES = $(addsuffix .elc, $(basename $(ELFILES)))
@@ -8,8 +8,8 @@ ELCFILES = $(addsuffix .elc, $(basename $(ELFILES)))
 all: $(ELCFILES)
 
 $(JSONRPC):
-	@curl "https://elpa.gnu.org/packages/$(@D).tar.lz" -o $(@D).tar.lz
-	@tar -xvf $(@D).tar.lz
+	@curl "https://elpa.gnu.org/packages/$(@D).tar" -o $(@D).tar
+	@tar -xvf $(@D).tar
 	@rm $(@D).tar.lz
 
 %.elc: %.el $(JSONRPC)
