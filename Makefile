@@ -7,12 +7,12 @@ ELCFILES = $(addsuffix .elc, $(basename $(ELFILES)))
 
 all: $(ELCFILES)
 
-$(DEPS):
+$(JSONRPC):
 	@curl "https://elpa.gnu.org/packages/$(@D).tar.lz" -o $(@D).tar.lz
 	@tar -xvf $(@D).tar.lz
 	@rm $(@D).tar.lz
 
-%.elc: %.el
+%.elc: %.el $(JSONRPC)
 	@echo Compiling $<
 	@${EMACS} -Q \
 	          -batch \
@@ -21,14 +21,14 @@ $(DEPS):
                   --eval="(package-install-file \"$(JSONRPC)\")" \
                   -f batch-byte-compile $<
 
-check: $(DEPS) $(ELCFILES)
-	@${EMACS} -Q                              \
-		  -batch 			  \
-		  -l ert 			  \
+check: $(JSONRPC) $(ELCFILES)
+	@${EMACS} -Q \
+		  -batch \
+		  -l ert \
 		  --eval="(package-install-file \"$(JSONRPC)\")" \
 		  $(foreach file, $^, -l $(file)) \
 		  -f ert-run-tests-batch-and-exit
 
 clean:
 	@rm -f *.elc
-	@rm -fr $(dir $(DEPS))
+	@rm -fr $(dir $(JSONRPC))
