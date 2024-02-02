@@ -10,7 +10,7 @@ all: $(ELCFILES)
 $(JSONRPC):
 	@curl "https://elpa.gnu.org/packages/$(@D).tar" -o $(@D).tar
 	@tar -xvf $(@D).tar
-	@rm $(@D).tar.lz
+	@rm $(@D).tar
 
 %.elc: %.el $(JSONRPC)
 	@echo Compiling $<
