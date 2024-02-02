@@ -1,6 +1,6 @@
 export EMACS ?= $(shell which emacs)
 
-JSONRPC = jsonrpc-1.0.19/jsonrpc.el
+JSONRPC = jsonrpc-1.0.21/jsonrpc.el
 
 ELFILES = dape.el dape-tests.el
 ELCFILES = $(addsuffix .elc, $(basename $(ELFILES)))
