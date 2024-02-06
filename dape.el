@@ -2869,12 +2869,14 @@ REVERSED selects previous."
     (user-error "No related buffers for current buffer"))
   (pcase-let* ((order-fn (if reversed 'reverse 'identity))
                (`(,mode ,id)
-                (thread-last (append dape--info-buffer-related
-                                     dape--info-buffer-related)
-                             (funcall order-fn)
-                             (seq-drop-while (pcase-lambda (`(,mode ,id))
-                                               (not (dape--info-buffer-p mode id))))
-                             (cadr))))
+                (or
+                 (thread-last (append dape--info-buffer-related
+                                      dape--info-buffer-related)
+                              (funcall order-fn)
+                              (seq-drop-while (pcase-lambda (`(,mode ,id))
+                                                (not (dape--info-buffer-p mode id))))
+                              (cadr))
+                 (car dape--info-buffer-related))))
     (gdb-set-window-buffer
      (dape--info-buffer mode id) t)))
 
