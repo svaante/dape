@@ -96,7 +96,7 @@ Helper for `dape-test--with-files'."
             ;; Post test asserts
             (progn
               (dape-test--should
-               (not (dape--live-connection t)) 10)
+               (not (dape--live-connection 'parent t)) 10)
               (dape-test--should
                (not (seq-find (lambda (buffer)
                                 (and (not (equal (buffer-name buffer)
@@ -126,7 +126,7 @@ Helper for `dape-test--with-files'."
 
 (defun dape-test--stopped-p ()
   "If current adapter connection is stopped."
-  (dape--stopped-threads (dape--live-connection t)))
+  (dape--live-connection 'stopped t))
 
 (defun dape-test--debug (buffer key &rest args)
   "Invoke `dape' interactivly with KEY and ARGS."
@@ -283,7 +283,8 @@ Expects line with string \"breakpoint\" in source."
     (dape-test--should
      (not (dape-test--line-at-regex "^    member")))
     ;; set value
-    (when (dape--capable-p (dape--live-connection t) :supportsSetVariable)
+    (when (dape--capable-p (dape--live-connection 'parent t)
+                           :supportsSetVariable)
       (dape-test--should
        (dape-test--line-at-regex "^  a *0"))
       (cl-letf (((symbol-function 'read-string)

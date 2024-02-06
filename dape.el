@@ -668,11 +668,12 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
                    (eq (plist-get thread :id) (dape--thread-id conn)))
                  (dape--threads conn))))
 
-(defun dape--path (conn path format)
-  "Translate PATH to FORMAT from CONN config.
+(defun dape--path (path format)
+  "Translate PATH to FORMAT from config.
 Accepted FORMAT values is `local' and `remote'.
 See `dape-config' keywords `prefix-local' `prefix-remote'."
-  (if-let* ((config (and conn (dape--config conn)))
+  (if-let* (dape--connection
+            (config (dape--config dape--connection))
             ((or (plist-member config 'prefix-local)
                  (plist-member config 'prefix-remote)))
             (prefix-local (or (plist-get config 'prefix-local)
@@ -724,8 +725,7 @@ Note requires `dape--source-ensure' if source is by reference."
                               ((buffer-live-p buffer)))
                     buffer)
                   (when-let* ((path (plist-get source :path))
-                              (path (dape--path (dape--live-connection t)
-                                                path 'local))
+                              (path (dape--path path 'local))
                               ((file-exists-p path))
                               (buffer (find-file-noselect path t)))
                     buffer))))
@@ -862,7 +862,7 @@ If EXTENDED end of line is after newline."
 
 (defun dape--format-file-line (file line)
   "Formats FILE and LINE to string."
-  (let* ((conn (dape--live-connection t))
+  (let* ((conn dape--connection)
          (config
           (and conn
                ;; If child connection check parent
@@ -952,13 +952,55 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
 
 ;;; Connection
 
-(defun dape--live-connection (&optional nowarn)
-  "Get current live process.
+(defun dape--live-connection (type &optional nowarn)
+  "Get live connection which matches TYPE.
+TYPE is expected to be one of the following symbols:
+
+parent   parent connection.
+newset   last created child connection or parent.
+running  last created child connection or parent which has an active
+         thread but no stopped threads.
+stopped  last created child connection or parent which has stopped
+         threads.
+
 If NOWARN does not error on no active process."
-  (if (and dape--connection (jsonrpc-running-p dape--connection))
-      dape--connection
+  (let (conn)
+    (when-let* (dape--connection
+                (ordered-connections
+                 (append (dape--children dape--connection)
+                         (list dape--connection))))
+      (setq conn
+            (pcase type
+              ('parent
+               (when (jsonrpc-running-p dape--connection)
+                 dape--connection))
+              ('newest
+               (seq-find (lambda (conn)
+                           (and (jsonrpc-running-p conn)
+                                (dape--thread-id conn)))
+                         ordered-connections))
+              ('running
+               (seq-find (lambda (conn)
+                           (and (jsonrpc-running-p conn)
+                                (dape--thread-id conn)
+                                (not (dape--stopped-threads conn))))
+                         ordered-connections))
+              ('stopped
+               (seq-find (lambda (conn)
+                           (and (jsonrpc-running-p conn)
+                                (dape--stopped-threads conn)))
+                         ordered-connections)))))
     (unless nowarn
-      (user-error "No debug connection live"))))
+      (unless conn
+        (user-error "No %s debug connection live" type)))
+    conn))
+
+(defun dape--live-connections ()
+  "Get all live connections."
+  (when (and dape--connection (jsonrpc-running-p dape--connection))
+    (cons dape--connection
+          (seq-filter 'jsonrpc-running-p
+                      (dape--children dape--connection)))))
 
 (defclass dape-connection (jsonrpc-process-connection)
   ((last-id
@@ -967,6 +1009,9 @@ If NOWARN does not error on no active process."
    (n-sent-notifs
     :initform 0
     :documentation "Used for converting JSONRPC's `id' to DAP' `seq'.")
+   (children
+    :accessor dape--children :initarg :children :initform (list)
+    :documentation "Child connections.  Used by startDebugging adapters.")
    (parent
     :accessor dape--parent :initarg :parent :initform #'ignore
     :documentation "Parent connection.  Used by startDebugging adapters.")
@@ -1135,7 +1180,7 @@ See `dape--callback' for expected CB signature."
                        (list
                         :name (file-name-nondirectory
                                (buffer-file-name buffer))
-                        :path (dape--path conn (buffer-file-name buffer) 'remote))))))
+                        :path (dape--path (buffer-file-name buffer) 'remote))))))
     (dape--with dape-request
         (conn
          "setBreakpoints"
@@ -1157,7 +1202,7 @@ See `dape--callback' for expected CB signature."
           :lines (apply 'vector lines)))
       (cl-loop for breakpoint across (plist-get body :breakpoints)
                for overlay in overlays
-               do (dape--breakpoint-update overlay breakpoint))
+               do (dape--breakpoint-update conn overlay breakpoint))
       (when (functionp cb)
         (funcall cb conn)))))
 
@@ -1449,7 +1494,7 @@ Starts a new adapter connection as per request of the debug adapter."
     (let ((new-connection
            (dape--create-connection config (or (dape--parent conn)
                                                conn))))
-      (setq dape--connection new-connection)
+      (push new-connection (dape--children conn))
       (dape--start-debugging new-connection)))
   nil)
 
@@ -1472,7 +1517,7 @@ BODY is an plist of adapter capabilities."
   (setf (dape--capabilities conn) (plist-get body :capabilities))
   (dape--configure-exceptions conn (dape--callback nil)))
 
-(cl-defmethod dape-handle-event (_conn (_event (eql breakpoint)) body)
+(cl-defmethod dape-handle-event (conn (_event (eql breakpoint)) body)
   "Handle breakpoint events.
 Update `dape--breakpoints' according to BODY."
   (when-let* ((breakpoint (plist-get body :breakpoint))
@@ -1480,7 +1525,7 @@ Update `dape--breakpoints' according to BODY."
               (overlay (seq-find (lambda (ov)
                                    (equal (overlay-get ov 'dape-id) id))
                                  dape--breakpoints)))
-    (dape--breakpoint-update overlay breakpoint)))
+    (dape--breakpoint-update conn overlay breakpoint)))
 
 (cl-defmethod dape-handle-event (conn (_event (eql module)) body)
   "Handle adapter CONNs module events.
@@ -1608,14 +1653,14 @@ Prints exit code from BODY."
 (cl-defmethod dape-handle-event (conn (_event (eql terminated)) _body)
   "Handle adapter CONNs terminated events.
 Killing the adapter and it's CONN."
-  (dape--update-state conn 'terminated)
   (let ((child-conn-p (dape--parent conn)))
     (dape-kill conn
                (and (not child-conn-p)
                     (lambda ()
-                      (dape--repl-message "* Session terminated *")))
-               nil
-               child-conn-p)))
+                      ;; HACK remove dubble terminated print for dlv
+                      (unless (eq (dape--state conn) 'terminated)
+                        (dape--repl-message "* Session terminated *"))
+                      (dape--update-state conn 'terminated))))))
 
 
 ;;; Startup/Setup
@@ -1756,8 +1801,7 @@ symbol `dape-connection'."
                          (with-current-buffer buffer
                            (dape--repl-message (buffer-string) 'dape-repl-error))))
                      ;; cleanup server process
-                     (if-let ((parent (dape--parent conn)))
-                         (setq dape--connection parent)
+                     (unless (dape--parent conn)
                        (dape--remove-stack-pointers)
                        (when-let ((server-process
                                    (dape--server-process conn)))
@@ -1779,25 +1823,25 @@ symbol `dape-connection'."
 (defun dape-next (conn)
   "Step one line (skip functions)
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection)))
+  (interactive (list (dape--live-connection 'stopped)))
   (dape--next-like-command conn "next"))
 
 (defun dape-step-in (conn)
   "Step into function/method.  If not possible behaves like `dape-next'.
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection)))
+  (interactive (list (dape--live-connection 'stopped)))
   (dape--next-like-command conn "stepIn"))
 
 (defun dape-step-out (conn)
   "Step out of function/method.  If not possible behaves like `dape-next'.
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection)))
+  (interactive (list (dape--live-connection 'stopped)))
   (dape--next-like-command conn "stepOut"))
 
 (defun dape-continue (conn)
   "Resumes execution.
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection)))
+  (interactive (list (dape--live-connection 'stopped)))
   (unless (dape--stopped-threads conn)
     (user-error "No stopped threads"))
   (dape--with dape-request (conn
@@ -1813,7 +1857,7 @@ CONN is inferred for interactive invocations."
 (defun dape-pause (conn)
   "Pause execution.
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection)))
+  (interactive (list (dape--live-connection 'running)))
   (when (dape--stopped-threads conn)
     ;; cpptools crashes on pausing an paused thread
     (user-error "Thread already is stopped"))
@@ -1822,7 +1866,7 @@ CONN is inferred for interactive invocations."
 (defun dape-restart (&optional conn)
   "Restart debugging session.
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection t)))
+  (interactive (list (dape--live-connection 'newest t)))
   (dape--remove-stack-pointers)
   (cond
    ((and conn
@@ -1837,12 +1881,12 @@ CONN is inferred for interactive invocations."
     (dape (apply 'dape--config-eval (dape--config-from-string (car dape-history)))))
    ((user-error "Unable to derive session to restart, run `dape'"))))
 
-(defun dape-kill (conn &optional cb with-disconnect skip-shutdown)
+(defun dape-kill (conn &optional cb with-disconnect)
   "Kill debug session.
 CB will be called after adapter termination.  With WITH-DISCONNECT use
 disconnect instead of terminate used internally as a fallback to
 terminate.  CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection)))
+  (interactive (list (dape--live-connection 'parent)))
   (cond
    ((and conn
          (jsonrpc-running-p conn)
@@ -1854,13 +1898,9 @@ terminate.  CONN is inferred for interactive invocations."
                   (dape--callback
                    (if error-message
                        (dape-kill cb 'with-disconnect)
-                     (unless skip-shutdown
-                       (jsonrpc-shutdown conn))
-                     (if-let* (((not skip-shutdown))
-                               (parent (dape--parent conn)))
-                         (dape-kill parent cb with-disconnect skip-shutdown)
-                       (when (functionp cb)
-                         (funcall cb)))))))
+                     (jsonrpc-shutdown conn)
+                     (when (functionp cb)
+                       (funcall cb))))))
    ((and conn
          (jsonrpc-running-p conn))
     (dape-request conn
@@ -1870,13 +1910,9 @@ terminate.  CONN is inferred for interactive invocations."
                     ,@(when (dape--capable-p conn :supportTerminateDebuggee)
                         (list :terminateDebuggee t)))
                   (dape--callback
-                   (unless skip-shutdown
-                     (jsonrpc-shutdown conn))
-                   (if-let* (((not skip-shutdown))
-                             (parent (dape--parent conn)))
-                       (dape-kill parent cb with-disconnect skip-shutdown)
-                     (when (functionp cb)
-                       (funcall cb))))))
+                   (jsonrpc-shutdown conn)
+                   (when (functionp cb)
+                     (funcall cb)))))
    (t
     (when (functionp cb)
       (funcall cb)))))
@@ -1885,7 +1921,7 @@ terminate.  CONN is inferred for interactive invocations."
   "Kill adapter but try to keep debuggee live.
 This will leave a decoupled debugged process with no debugge
 connection.  CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection)))
+  (interactive (list (dape--live-connection 'parent)))
   (dape--kill-buffers 'skip-process-buffers)
   (dape-request conn
                 "disconnect"
@@ -1897,7 +1933,7 @@ connection.  CONN is inferred for interactive invocations."
 (defun dape-quit (&optional conn)
   "Kill debug session and kill related dape buffers.
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection t)))
+  (interactive (list (dape--live-connection 'parent t)))
   (dape--kill-buffers 'skip-process-buffers)
   (if conn
       (dape-kill conn (dape--callback
@@ -1965,55 +2001,55 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (pcase-dolist (`(,buffer . ,breakpoints) buffers-breakpoints)
       (dolist (breakpoint breakpoints)
         (dape--breakpoint-remove breakpoint t))
-      (when-let ((conn (dape--live-connection t)))
-        (dape--set-breakpoints-in-buffer conn buffer)))))
+      (dolist (conn (dape--live-connections))
+        (dape--set-breakpoints-in-buffer conn buffer))))
+  (when-let ((conn (dape--live-connection 'stopped t)))
+    (dape--update-stack-pointers conn t t)))
 
 (defun dape-select-thread (conn thread-id)
   "Select currrent thread for adapter CONN by THREAD-ID."
   (interactive
-   (list
-    (dape--live-connection)
-    (let* ((collection
-            (mapcar (lambda (thread) (cons (plist-get thread :name)
-                                           (plist-get thread :id)))
-                    (dape--threads (dape--live-connection))))
-           (thread-name
-            (completing-read
-             (format "Select thread (current %s): "
-                     (thread-first (dape--live-connection)
-                                   (dape--current-stack-frame)
-                                   (plist-get :name)))
-             collection
-             nil t)))
-      (alist-get thread-name collection nil nil 'equal))))
+   (let* ((conn (dape--live-connection 'stopped))
+          (collection
+           (mapcar (lambda (thread) (cons (plist-get thread :name)
+                                          (plist-get thread :id)))
+                   (dape--threads conn)))
+          (thread-name
+           (completing-read
+            (format "Select thread (current %s): "
+                    (thread-first conn
+                                  (dape--current-stack-frame)
+                                  (plist-get :name)))
+            collection
+            nil t)))
+     (list conn (alist-get thread-name collection nil nil 'equal))))
   (setf (dape--thread-id conn) thread-id)
   (dape--update conn t))
 
 (defun dape-select-stack (conn stack-id)
   "Selected current stack for adapter CONN by STACK-ID."
   (interactive
-   (list
-    (dape--live-connection)
-    (let* ((collection
-            (mapcar (lambda (stack) (cons (plist-get stack :name)
-                                          (plist-get stack :id)))
-                    (thread-first (dape--live-connection)
-                                  (dape--current-thread)
+   (let* ((conn (dape--live-connection 'stopped))
+          (collection
+           (mapcar (lambda (stack) (cons (plist-get stack :name)
+                                         (plist-get stack :id)))
+                   (thread-first conn
+                                 (dape--current-thread)
                                   (plist-get :stackFrames))))
            (stack-name
             (completing-read (format "Select stack (current %s): "
-                                     (thread-first (dape--live-connection)
+                                     (thread-first conn
                                                    (dape--current-stack-frame)
                                                    (plist-get :name)))
                              collection
                              nil t)))
-      (alist-get stack-name collection nil nil 'equal))))
+     (list conn (alist-get stack-name collection nil nil 'equal))))
   (setf (dape--stack-id conn) stack-id)
   (dape--update conn t))
 
 (defun dape-stack-select-up (conn n)
   "Select N stacks above current selected stack for adapter CONN."
-  (interactive (list (dape--live-connection) 1))
+  (interactive (list (dape--live-connection 'stopped) 1))
   (if (dape--stopped-threads conn)
       (let* ((current-stack (dape--current-stack-frame conn))
              (stacks (plist-get (dape--current-thread conn) :stackFrames))
@@ -2028,7 +2064,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
 
 (defun dape-stack-select-down (conn n)
   "Select N stacks below current selected stack for adapter CONN."
-  (interactive (list (dape--live-connection) 1))
+  (interactive (list (dape--live-connection 'stopped) 1))
   (dape-stack-select-up conn (* n -1)))
 
 (defun dape-watch-dwim (expression &optional skip-add skip-remove)
@@ -2070,7 +2106,8 @@ EXPRESSION can be an expression or adapter command, as it's evaluated in
 repl context.  CONN is inferred for interactive invocations."
   (interactive
    (list
-    (dape--live-connection)
+    (or (dape--live-connection 'stopped t)
+        (dape--live-connection 'newest))
     (if (region-active-p)
         (buffer-substring (region-beginning)
                           (region-end))
@@ -2107,7 +2144,7 @@ Executes alist key `launch' in `dape-configs' with :program as \"bin\".
 
 Use SKIP-COMPILE to skip compilation."
   (interactive (list (dape--read-config)))
-  (dape--with dape-kill ((dape--live-connection t))
+  (dape--with dape-kill ((dape--live-connection 'parent t))
     (dape--config-ensure config t)
     (when-let ((fn (plist-get config 'fn))
                (fns (or (and (functionp fn) (list fn))
@@ -2163,7 +2200,7 @@ Using BUFFER and STR."
                        (when-let ((number (thing-at-point 'number)))
                          (number-to-string number))))
          (read-number "Count: " dape-read-memory-default-count)))
-  (dape-request (dape--live-connection)
+  (dape-request (dape--live-connection 'stopped)
                 "readMemory"
                 (list
                  :memoryReference memory-reference
@@ -2288,7 +2325,7 @@ contents."
                                   dape--breakpoints))))
     (dolist (breakpoint breakpoints)
       (setq dape--breakpoints (delq breakpoint dape--breakpoints)))
-  (when-let ((conn (dape--live-connection t)))
+  (dolist (conn (dape--live-connections))
     (when (dape--initialized-p conn)
       (dape--set-breakpoints-in-buffer conn (current-buffer)))))
   (run-hooks 'dape-update-ui-hooks))
@@ -2345,13 +2382,14 @@ that breakpoint as DAP only supports one breakpoint per line."
                           'in-margin)))
     (overlay-put breakpoint 'modification-hooks '(dape--breakpoint-freeze))
     (push breakpoint dape--breakpoints)
-    (when-let ((conn (dape--live-connection t)))
+    (dolist (conn (dape--live-connections))
       (unless skip-update
         (dape--set-breakpoints-in-buffer conn (current-buffer)))
       ;; FIXME Update stack pointer colors should be it's own function
       ;;       it's a shame we need conn here as only the color needs to
       ;;       be updated
-      (dape--update-stack-pointers conn t t))
+      (when-let ((conn (dape--live-connection 'stopped t)))
+        (dape--update-stack-pointers conn t t)))
     (add-hook 'kill-buffer-hook 'dape--breakpoint-buffer-kill-hook nil t)
     (run-hooks 'dape-update-ui-hooks)
     breakpoint))
@@ -2362,33 +2400,33 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (setq dape--breakpoints (delq overlay dape--breakpoints))
   (let ((buffer (overlay-buffer overlay)))
     (delete-overlay overlay)
-    (when-let ((conn (dape--live-connection t)))
-      (unless skip-update
+    (unless skip-update
+      (dolist (conn (dape--live-connections))
         (dape--set-breakpoints-in-buffer conn buffer))
       ;; FIXME Update stack pointer colors should be it's own function
       ;;       it's a shame we need conn here as only the color needs to
       ;;       be updated
-      (dape--update-stack-pointers conn t t))
+      (when-let ((conn (dape--live-connection 'stopped t)))
+        (dape--update-stack-pointers conn t t)))
     (dape--margin-cleanup buffer))
   (run-hooks 'dape-update-ui-hooks))
 
-(defun dape--breakpoint-update (overlay breakpoint)
+(defun dape--breakpoint-update (conn overlay breakpoint)
   "Update breakpoint OVERLAY with BREAKPOINT plist."
   (let ((id (plist-get breakpoint :id))
         (verified (eq (plist-get breakpoint :verified) t)))
     (overlay-put overlay 'dape-id id)
     (overlay-put overlay 'dape-verified verified)
     (run-hooks 'dape-update-ui-hooks))
-  (when-let* ((conn (dape--live-connection t))
-              (old-buffer (overlay-buffer overlay))
+  (when-let* ((old-buffer (overlay-buffer overlay))
               (old-line (with-current-buffer old-buffer
                           (line-number-at-pos (overlay-start overlay))))
               (breakpoint
                (append breakpoint
-                       ;; Defualt to current overlay as `:source'
+                       ;; Default to current overlay as `:source'
                        `(:source
                          ,(or (when-let ((path (buffer-file-name old-buffer)))
-                                `(:path ,(dape--path conn path 'remote)))
+                                `(:path ,(dape--path path 'remote)))
                               (with-current-buffer old-buffer
                                 dape--source))))))
     (dape--with dape--source-ensure (conn breakpoint)
@@ -2427,7 +2465,7 @@ See `dape--callback' for expected CB signature."
          (buffer (plist-get dape--source-buffers source-reference)))
     (cond
      ((or (not conn)
-          (and path (file-exists-p (dape--path conn path 'local)))
+          (and path (file-exists-p (dape--path path 'local)))
           (and buffer (buffer-live-p buffer)))
       (funcall cb conn))
      ((and (numberp source-reference) (> source-reference 0))
@@ -2483,10 +2521,9 @@ See `dape--callback' for expected CB signature."
   "Update stack pointer marker for adapter CONN.
 If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line.
 If SKIP-DISPLAY is non nil refrain from going to selected stack."
-  (when (eq conn dape--connection)
-    (dape--remove-stack-pointers))
   (when-let (((dape--stopped-threads conn))
              (frame (dape--current-stack-frame conn)))
+    (dape--remove-stack-pointers)
     (let ((deepest-p (eq frame (car (plist-get (dape--current-thread conn)
                                                :stackFrames)))))
       (dape--with dape--source-ensure (conn frame)
@@ -2621,7 +2658,8 @@ Send INPUT to DUMMY-PROCESS."
      ;; Evaluate expression
      (t
       (dape--repl-insert-prompt)
-      (let ((conn (dape--live-connection t)))
+      (let ((conn (or (dape--live-connection 'stopped t)
+                      (dape--live-connection 'newest))))
         (dape--with dape--evaluate-expression
             (conn
              (plist-get (dape--current-stack-frame conn) :id)
@@ -2642,9 +2680,10 @@ Send INPUT to DUMMY-PROCESS."
   ;;       - compleation is done on whole line for `debugpy'
   (when (or (symbol-at-point)
             (member (buffer-substring-no-properties (1- (point)) (point))
-                    (or (append (plist-get (dape--capabilities (dape--live-connection t))
-                                           :completionTriggerCharacters)
-                                nil)
+                    (or (thread-first (dape--live-connection 'newest t)
+                                      (dape--capabilities)
+                                      (plist-get :completionTriggerCharacters)
+                                      (append nil))
                         '("."))))
     (let* ((bounds (save-excursion
                      (cons (and (skip-chars-backward "^\s")
@@ -2668,7 +2707,8 @@ Send INPUT to DUMMY-PROCESS."
        (cdr bounds)
        (completion-table-dynamic
         (lambda (_str)
-          (when-let ((conn (dape--live-connection t)))
+          (when-let ((conn (or (dape--live-connection 'stopped t)
+                               (dape--live-connection 'newest t))))
             (dape--with dape-request
                 (conn
                  "completions"
@@ -2848,7 +2888,7 @@ REVERSED selects previous."
 
 (defun dape--info-buffer-change-fn (&rest _rest)
   "Hook fn for `window-buffer-change-functions' to ensure update."
-  (dape--info-update (dape--live-connection t) (current-buffer)))
+  (dape--info-update (dape--live-connection 'newest t) (current-buffer)))
 
 (define-derived-mode dape-info-parent-mode special-mode ""
   "Generic mode to derive all other Dape gud buffer modes from."
@@ -2967,7 +3007,7 @@ If SKIP-UPDATE is non nil skip updating buffer contents."
         (setq dape--info-buffer-identifier identifier)
         (push buffer dape--info-buffers)))
     (unless skip-update
-      (dape--info-update (dape--live-connection t) buffer))
+      (dape--info-update (dape--live-connection 'newest t) buffer))
     buffer))
 
 (defmacro dape--info-buffer-command (name properties doc &rest body)
@@ -3007,7 +3047,8 @@ FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
   "Update and display `dape-info-*' buffers for adapter CONN."
   (dolist (buffer (dape--info-buffer-list))
     (dape--info-update (or conn
-                           (dape--live-connection t))
+                           (dape--live-connection 'stopped t)
+                           (dape--live-connection 'newest t))
                        buffer)))
 
 (defun dape-info (&optional maybe-kill kill)
@@ -3056,7 +3097,7 @@ When optional kill is non nil kill buffers *dape-info* buffers."
           (setq buffer-displayed-p t)
           (dape--display-buffer
            (dape--info-buffer 'dape-info-scope-mode 0 'skip-update)))
-        (dape-info-update (dape--live-connection t))
+        (dape-info-update)
         (when (and maybe-kill (not buffer-displayed-p))
           (kill-dape-info))))))
 
@@ -3102,8 +3143,9 @@ When optional kill is non nil kill buffers *dape-info* buffers."
   "Toggle exception at line in dape info buffer."
   (plist-put dape--info-exception :enabled
              (not (plist-get dape--info-exception :enabled)))
-  (dape-info-update (dape--live-connection t))
-  (dape--with dape--set-exception-breakpoints ((dape--live-connection))))
+  (dape-info-update)
+  (dolist (conn (dape--live-connections))
+    (dape--with dape--set-exception-breakpoints (conn))))
 
 (dape--info-buffer-map dape-info-exceptions-line-map dape-info-exceptions-toggle)
 
@@ -3177,7 +3219,8 @@ When optional kill is non nil kill buffers *dape-info* buffers."
 
 (dape--info-buffer-command dape-info-select-thread (dape--info-thread)
   "Select thread at line in dape info buffer."
-  (dape-select-thread (dape--live-connection) (plist-get dape--info-thread :id)))
+  (dape-select-thread (dape--live-connection 'stopped)
+                      (plist-get dape--info-thread :id)))
 
 (defvar dape--info-threads-font-lock-keywords
   (append gdb-threads-font-lock-keywords
@@ -3201,7 +3244,7 @@ When optional kill is non nil kill buffers *dape-info* buffers."
 (cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-threads-mode)) id)
   "Fetches data for `dape-info-threads-mode' and updates buffer.
 Buffer is specified by MODE and ID."
-  (if-let ((conn (or conn (dape--live-connection t)))
+  (if-let ((conn (or conn (dape--live-connection 'newest t)))
            ((dape--stopped-threads conn)))
       (dape--with dape--inactive-threads-stack-trace (conn)
         (dape--info-buffer-update-1 mode id
@@ -3239,8 +3282,7 @@ Buffer is specified by MODE and ID."
                             (path (thread-first top-stack
                                                 (plist-get :source)
                                                 (plist-get :path)))
-                            (path (dape--path (dape--live-connection t)
-                                              path 'local))
+                            (path (dape--path path 'local))
                             (line (plist-get top-stack :line)))
                   (concat " of " (dape--format-file-line path line)))
                 (when-let ((dape-info-thread-buffer-addresses)
@@ -3272,7 +3314,8 @@ Buffer is specified by MODE and ID."
 
 (dape--info-buffer-command dape-info-stack-select (dape--info-frame)
   "Select stack at line in dape info buffer."
-  (dape-select-stack (dape--live-connection) (plist-get dape--info-frame :id)))
+  (dape-select-stack (dape--live-connection 'stopped)
+                     (plist-get dape--info-frame :id)))
 
 (dape--info-buffer-map dape-info-stack-line-map dape-info-stack-select)
 
@@ -3320,8 +3363,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
                             (path (thread-first frame
                                                 (plist-get :source)
                                                 (plist-get :path)))
-                            (path (dape--path (dape--live-connection t)
-                                              path 'local)))
+                            (path (dape--path path 'local)))
                   (concat " of "
                           (dape--format-file-line path
                                                   (plist-get frame :line))))
@@ -3401,7 +3443,9 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 
 (dape--info-buffer-command dape-info-sources-goto (dape--info-source)
   "Goto source."
-  (dape--with dape--source-ensure ((dape--live-connection t)
+  ;; TODO Should be storing connection in `dape--info-source' instead of
+  ;;      guessing
+  (dape--with dape--source-ensure ((dape--live-connection 'newest t)
                                    (list :source dape--info-source))
     (if-let ((marker
               (dape--object-to-marker (list :source dape--info-source))))
@@ -3451,7 +3495,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 
 (dape--info-buffer-command dape-info-scope-toggle (dape--info-path)
   "Expand or contract variable at line in dape info buffer."
-  (unless (dape--stopped-threads (dape--live-connection))
+  (unless (dape--live-connection 'stopped)
     (user-error "No stopped threads"))
   (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
            dape--info-expanded-p)
@@ -3472,7 +3516,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 (dape--info-buffer-command dape-info-variable-edit
   (dape--info-ref dape--info-variable)
   "Edit variable value at line in dape info buffer."
-  (dape--set-variable (dape--live-connection)
+  (dape--set-variable (dape--live-connection 'stopped)
                        dape--info-ref
                        dape--info-variable
                        (read-string
@@ -3596,7 +3640,7 @@ Updates from CURRENT-STACK-FRAME STACK-FRAMES."
 (cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-scope-mode)) id)
   "Fetches data for `dape-info-scope-mode' and updates buffer.
 Buffer is specified by MODE and ID."
-  (when-let* ((conn (or conn (dape--live-connection t)))
+  (when-let* ((conn (or conn (dape--live-connection 'stopped t)))
               (frame (dape--current-stack-frame conn))
               (scopes (plist-get frame :scopes))
               ;; FIXME if scope is out of range here scope list could
@@ -4081,7 +4125,7 @@ See `dape--config-mode-p' how \"valid\" is defined."
   "Hook function to produce doc strings for `eldoc'.
 On success calls CB with the doc string.
 See `eldoc-documentation-functions', for more infomation."
-  (and-let* ((conn (dape--live-connection t))
+  (and-let* ((conn (dape--live-connection 'newest t))
              ((dape--capable-p conn :supportsEvaluateForHovers))
              (symbol (thing-at-point 'symbol)))
     (dape--with dape--evaluate-expression
@@ -4113,13 +4157,14 @@ See `eldoc-documentation-functions', for more infomation."
 
 (defun dape--mode-line-format ()
   "Format Dape mode line."
-  (concat (propertize "Dape" 'face 'font-lock-constant-face)
-          ":"
-          (propertize
-           (format "%s" (or (and dape--connection
-                                 (dape--state dape--connection))
-                         'unknown))
-           'face 'font-lock-doc-face)))
+  (let ((conn (or (dape--live-connection 'newest t)
+                  dape--connection)))
+    (concat (propertize "Dape" 'face 'font-lock-constant-face)
+            ":"
+            (propertize
+             (format "%s" (or (and conn (dape--state conn))
+                              'unknown))
+             'face 'font-lock-doc-face))))
 
 (add-to-list 'mode-line-misc-info
              `(dape-active-mode
