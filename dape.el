@@ -945,6 +945,39 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
            (goto-char (posn-point start))
            (call-interactively ',command))))))
 
+(defmacro dape--buffer-map (name fn &rest body)
+  "Helper macro to create info buffer map with NAME.
+FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
+  (declare (indent defun))
+  `(defvar ,name
+     (let ((map (make-sparse-keymap)))
+       (suppress-keymap map)
+       (define-key map "\r" ',fn)
+       (define-key map [mouse-2] ',fn)
+       (define-key map [follow-link] 'mouse-face)
+       ,@body
+       map)))
+
+(defmacro dape--command-at-line (name properties doc &rest body)
+  "Helper macro to create info command with NAME and DOC.
+Gets PROPERTIES from string properties from current line and binds
+them then executes BODY."
+  (declare (indent defun))
+  `(defun ,name (&optional event)
+     ,doc
+     (interactive (list last-input-event))
+     (if event (posn-set-point (event-end event)))
+     (let (,@properties)
+       (save-excursion
+         (beginning-of-line)
+         ,@(mapcar (lambda (property)
+                     `(setq ,property (get-text-property (point) ',property)))
+                   properties))
+       (if (and ,@properties)
+           (progn
+             ,@body)
+         (error "Not recognized as %s line" 'name)))))
+
 (defun dape--emacs-grab-focus ()
   "If `display-graphic-p' focus emacs."
   (select-frame-set-input-focus (selected-frame)))
@@ -953,7 +986,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
 ;;; Connection
 
 (defun dape--live-connection (type &optional nowarn)
-  "Get live connection which matches TYPE.
+  "Get live connection of TYPE.
 TYPE is expected to be one of the following symbols:
 
 parent   parent connection.
@@ -2581,6 +2614,866 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
                                     'default)
                                    (t
                                     'shadow))))))))))
+
+;;; Info Buffers
+
+;; TODO Because buttons where removed from info buffer
+;;      there should be a way to control execution by mouse
+
+(defvar-local dape--info-buffer-related nil
+  "List of related buffers.")
+(defvar-local dape--info-buffer-identifier nil
+  "Identifying var for buffers, used only in scope buffer.
+Used there as scope index.")
+(defvar-local dape--info-buffer-in-redraw nil
+  "Guard for buffer `dape-info-update' fn.")
+
+(defvar dape--info-buffers nil
+  "List containing `dape-info' buffers, might be un-live.")
+
+(defun dape--info-buffer-list ()
+  "Return all live `dape-info-parent-mode'."
+  (setq dape--info-buffers
+        (seq-filter 'buffer-live-p dape--info-buffers)))
+
+(defun dape--info-buffer-p (mode &optional identifier)
+  "Is buffer of MODE with IDENTIFIER.
+Uses `dape--info-buffer-identifier' as IDENTIFIER."
+  (and (eq major-mode mode)
+       (or (not identifier)
+           (equal dape--info-buffer-identifier identifier))))
+
+(defun dape--info-buffer-tab (&optional reversed)
+  "Select next related buffer in `dape-info' buffers.
+REVERSED selects previous."
+  (interactive)
+  (unless dape--info-buffer-related
+    (user-error "No related buffers for current buffer"))
+  (pcase-let* ((order-fn (if reversed 'reverse 'identity))
+               (`(,mode ,id)
+                (or
+                 (thread-last (append dape--info-buffer-related
+                                      dape--info-buffer-related)
+                              (funcall order-fn)
+                              (seq-drop-while (pcase-lambda (`(,mode ,id))
+                                                (not (dape--info-buffer-p mode id))))
+                              (cadr))
+                 (car dape--info-buffer-related))))
+    (gdb-set-window-buffer
+     (dape--info-buffer mode id) t)))
+
+(defvar dape-info-parent-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "<backtab>")
+                (lambda () (interactive) (dape--info-buffer-tab t)))
+    (define-key map "\t" 'dape--info-buffer-tab)
+    map)
+  "Keymap for `dape-info-parent-mode'.")
+
+(defun dape--info-buffer-change-fn (&rest _rest)
+  "Hook fn for `window-buffer-change-functions' to ensure update."
+  (dape--info-update (dape--live-connection 'newest t) (current-buffer)))
+
+(define-derived-mode dape-info-parent-mode special-mode ""
+  "Generic mode to derive all other Dape gud buffer modes from."
+  :interactive nil
+  (setq-local buffer-read-only t
+              truncate-lines t
+              cursor-in-non-selected-windows nil)
+  (add-hook 'window-buffer-change-functions 'dape--info-buffer-change-fn
+            nil 'local)
+  (when dape-info-hide-mode-line
+    (setq-local mode-line-format nil))
+  (buffer-disable-undo))
+
+(defun dape--info-header (name mode id help-echo mouse-face face)
+  "Helper to create buffer header.
+Creates header with string NAME, mouse map to select buffer
+identified with MODE and ID (see `dape--info-buffer-identifier')
+with HELP-ECHO string, MOUSE-FACE and FACE."
+  (propertize name 'help-echo help-echo 'mouse-face mouse-face 'face face
+              'keymap
+              (gdb-make-header-line-mouse-map
+	       'mouse-1
+	       (lambda (event) (interactive "e")
+		 (save-selected-window
+		   (select-window (posn-window (event-start event)))
+                   (gdb-set-window-buffer
+                    (dape--info-buffer mode id) t))))))
+
+(defun dape--info-set-header-line-format ()
+  "Helper for dape info buffers to set header line.
+Header line is custructed from buffer local
+`dape--info-buffer-related'."
+  (setq header-line-format
+        (mapcan
+         (pcase-lambda (`(,mode ,id ,name))
+           (list
+            (if (dape--info-buffer-p mode id)
+                (dape--info-header name mode id nil nil 'mode-line)
+              (dape--info-header name mode id "mouse-1: select"
+                                 'mode-line-highlight
+                                 'mode-line-inactive))
+              " "))
+         dape--info-buffer-related)))
+
+(defun dape--info-call-update-with (mode id fn)
+  (if dape--info-buffer-in-redraw
+      (run-with-timer 0.01 nil
+                      'dape--info-call-update-with mode id fn)
+    (when-let ((buffer (dape--info-get-live-buffer mode id)))
+      (let ((dape--info-buffer-in-redraw t))
+        (with-current-buffer buffer
+          (unless (derived-mode-p 'dape-info-parent-mode)
+            (error "Trying to update non info buffer"))
+          ;; Would be nice with replace-buffer-contents
+          ;; But it seams to messes up string properties
+          (let ((line (line-number-at-pos (point) t))
+                (old-window (selected-window)))
+            ;; Still don't know any better way of keeping window scroll?
+            (when-let ((window (get-buffer-window buffer)))
+              (select-window window))
+            (save-window-excursion
+              (let ((inhibit-read-only t))
+                (erase-buffer)
+                (funcall fn))
+              (ignore-errors
+                (goto-char (point-min))
+                (forward-line (1- line)))
+              (dape--info-set-header-line-format))
+            (when old-window
+              (select-window old-window))))))))
+
+(defmacro dape--info-update-with (mode id &rest body)
+  (declare (indent 2))
+  `(dape--info-call-update-with ,mode ,id (lambda () ,@body)))
+
+(defun dape--info-update (conn buffer)
+  "Update dape info BUFFER for adapter CONN."
+  (apply 'dape--info-buffer-update
+         conn (with-current-buffer buffer
+                (list major-mode dape--info-buffer-identifier))))
+
+(defun dape--info-get-live-buffer (mode &optional identifier)
+  "Get live dape info buffer with MODE and IDENTIFIER."
+  (seq-find (lambda (buffer)
+              (with-current-buffer buffer
+                (dape--info-buffer-p mode identifier)))
+            (dape--info-buffer-list)))
+
+(defun dape--info-buffer-name (mode &optional identifier)
+  "Create buffer name from MODE and IDENTIFIER."
+  (format "*dape-info %s*"
+          (pcase mode
+            ('dape-info-breakpoints-mode "Breakpoints")
+            ('dape-info-threads-mode "Threads")
+            ('dape-info-stack-mode "Stack")
+            ('dape-info-modules-mode "Modules")
+            ('dape-info-sources-mode "Sources")
+            ('dape-info-watch-mode "Watch")
+            ;; FIXME If scope is named Scope <%s> there is trouble
+            ('dape-info-scope-mode (format "Scope <%s>" identifier))
+            (_ (error "Unable to create mode from %s with %s" mode identifier)))))
+
+(defun dape--info-buffer (mode &optional identifier skip-update)
+  "Get or create info buffer with MODE and IDENTIFIER.
+If SKIP-UPDATE is non nil skip updating buffer contents."
+  (let ((buffer
+         (or (dape--info-get-live-buffer mode identifier)
+             (get-buffer-create (dape--info-buffer-name mode identifier)))))
+    (with-current-buffer buffer
+      (unless (eq major-mode mode)
+        (funcall mode)
+        (setq dape--info-buffer-identifier identifier)
+        (push buffer dape--info-buffers)))
+    (unless skip-update
+      (dape--info-update (dape--live-connection 'newest t) buffer))
+    buffer))
+
+(defun dape-info-update (&optional conn)
+  "Update and display `dape-info-*' buffers for adapter CONN."
+  (dolist (buffer (dape--info-buffer-list))
+    (dape--info-update (or conn
+                           (dape--live-connection 'stopped t)
+                           (dape--live-connection 'newest t))
+                       buffer)))
+
+(defun dape-info (&optional maybe-kill kill)
+  "Update and display *dape-info* buffers.
+When called interactively MAYBE-KILL is non nil.
+When optional MAYBE-KILL is non nil kill buffers if all *dape-info*
+buffers are already displayed.
+When optional kill is non nil kill buffers *dape-info* buffers."
+  (interactive (list t))
+  (cl-labels ((kill-dape-info ()
+                (dolist (buffer (buffer-list))
+                  (when (with-current-buffer buffer
+                          (derived-mode-p 'dape-info-parent-mode))
+                    (kill-buffer buffer)))))
+    (if kill
+        (kill-dape-info)
+      (let (buffer-displayed-p)
+        ;; Open breakpoints if not group-1 buffer displayed
+        (unless (seq-find (lambda (buffer)
+                            (and (get-buffer-window buffer)
+                                 (with-current-buffer buffer
+                                   (or (dape--info-buffer-p 'dape-info-breakpoints-mode)
+                                       (dape--info-buffer-p 'dape-info-threads-mode)))))
+                          (dape--info-buffer-list))
+          (setq buffer-displayed-p t)
+          (dape--display-buffer
+           (dape--info-buffer 'dape-info-breakpoints-mode 'skip-update)))
+        ;; Open and update stack buffer
+        (unless (seq-find (lambda (buffer)
+                            (and (get-buffer-window buffer)
+                                 (with-current-buffer buffer
+                                   (or (dape--info-buffer-p 'dape-info-stack-mode)
+                                       (dape--info-buffer-p 'dape-info-modules-mode)
+                                       (dape--info-buffer-p 'dape-info-sources-mode)))))
+                          (dape--info-buffer-list))
+          (setq buffer-displayed-p t)
+          (dape--display-buffer
+           (dape--info-buffer 'dape-info-stack-mode 'skip-update)))
+        ;; Open stack 0 if not group-2 buffer displayed
+        (unless (seq-find (lambda (buffer)
+                            (and (get-buffer-window buffer)
+                                 (with-current-buffer buffer
+                                   (or (dape--info-buffer-p 'dape-info-scope-mode)
+                                       (dape--info-buffer-p 'dape-info-watch-mode)))))
+                          (dape--info-buffer-list))
+          (setq buffer-displayed-p t)
+          (dape--display-buffer
+           (dape--info-buffer 'dape-info-scope-mode 0 'skip-update)))
+        (dape-info-update)
+        (when (and maybe-kill (not buffer-displayed-p))
+          (kill-dape-info))))))
+
+
+;;; Info breakpoints buffer
+
+(defconst dape--info-group-1-related
+  '((dape-info-breakpoints-mode nil "Breakpoints")
+    (dape-info-threads-mode nil "Threads"))
+  "Realated buffers in group 1.")
+
+(dape--command-at-line dape-info-breakpoint-goto (dape--info-breakpoint)
+  "Goto breakpoint at line in dape info buffer."
+  (when-let* ((buffer (overlay-buffer dape--info-breakpoint)))
+    (with-selected-window (display-buffer buffer dape-display-source-buffer-action)
+      (goto-char (overlay-start dape--info-breakpoint)))))
+
+(dape--command-at-line dape-info-breakpoint-delete (dape--info-breakpoint)
+  "Delete breakpoint at line in dape info buffer."
+  (dape--breakpoint-remove dape--info-breakpoint)
+  (dape--display-buffer (dape--info-buffer 'dape-info-breakpoints-mode)))
+
+(dape--command-at-line dape-info-breakpoint-log-edit (dape--info-breakpoint)
+  "Edit breakpoint at line in dape info buffer."
+  (let ((edit-fn
+         (cond
+          ((overlay-get dape--info-breakpoint 'dape-log-message)
+           'dape-breakpoint-log)
+          ((overlay-get dape--info-breakpoint 'dape-expr-message)
+           'dape-breakpoint-expression)
+          ((user-error "Unable to edit breakpoint on line without log or expression breakpoint")))))
+    (when-let* ((buffer (overlay-buffer dape--info-breakpoint)))
+      (with-selected-window (display-buffer buffer dape-display-source-buffer-action)
+        (goto-char (overlay-start dape--info-breakpoint))
+        (call-interactively edit-fn)))))
+
+(dape--buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
+  (define-key map "D" 'dape-info-breakpoint-delete)
+  (define-key map "d" 'dape-info-breakpoint-delete)
+  (define-key map "e" 'dape-info-breakpoint-log-edit))
+
+(dape--command-at-line dape-info-exceptions-toggle (dape--info-exception)
+  "Toggle exception at line in dape info buffer."
+  (plist-put dape--info-exception :enabled
+             (not (plist-get dape--info-exception :enabled)))
+  (dape-info-update)
+  (dolist (conn (dape--live-connections))
+    (dape--with dape--set-exception-breakpoints (conn))))
+
+(dape--buffer-map dape-info-exceptions-line-map dape-info-exceptions-toggle)
+
+(define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode
+  "Breakpoints"
+  :interactive nil
+  "Major mode for Dape info breakpoints."
+  (setq dape--info-buffer-related dape--info-group-1-related))
+
+(cl-defmethod dape--info-buffer-update (_conn (mode (eql dape-info-breakpoints-mode)) id)
+  "Update buffer specified by MODE and ID."
+  (dape--info-update-with mode id
+    (let ((table (make-gdb-table)))
+      (gdb-table-add-row table '("Type" "On" "Where" "What"))
+      (dolist (breakpoint (reverse dape--breakpoints))
+        (when-let* ((buffer (overlay-buffer breakpoint))
+                    (line (with-current-buffer buffer
+                            (line-number-at-pos (overlay-start breakpoint)))))
+          (gdb-table-add-row
+           table
+           (list
+            (cond
+             ((overlay-get breakpoint 'dape-log-message)
+              "log")
+             ((overlay-get breakpoint 'dape-expr-message)
+              "condition")
+             ("breakpoint"))
+            (if (overlay-get breakpoint 'dape-verified)
+                (propertize "y" 'font-lock-face
+                            font-lock-warning-face)
+              (propertize "" 'font-lock-face
+                          font-lock-comment-face))
+            (if-let (file (buffer-file-name buffer))
+                (dape--format-file-line file line)
+              (buffer-name buffer))
+            (cond
+             ((overlay-get breakpoint 'dape-log-message)
+              (propertize (overlay-get breakpoint 'dape-log-message)
+                          'face 'dape-log))
+             ((overlay-get breakpoint 'dape-expr-message)
+              (propertize (overlay-get breakpoint 'dape-expr-message)
+                          'face 'dape-expression))
+             ("")))
+           (list
+            'dape--info-breakpoint breakpoint
+            'keymap dape-info-breakpoints-line-map
+            'mouse-face 'highlight
+            'help-echo "mouse-2, RET: visit breakpoint"))))
+      (dolist (exception dape--exceptions)
+        (gdb-table-add-row table
+                           (list
+                            "exception"
+                            (if (plist-get exception :enabled)
+                                (propertize "y" 'font-lock-face
+                                            font-lock-warning-face)
+                              (propertize "n" 'font-lock-face
+                                          font-lock-comment-face))
+                            (plist-get exception :label)
+                            " ")
+                           (list
+                            'dape--info-exception exception
+                            'mouse-face 'highlight
+                            'keymap dape-info-exceptions-line-map
+                            'help-echo "mouse-2, RET: toggle exception")))
+      (insert (gdb-table-string table " ")))))
+
+
+;;; Info threads buffer
+
+(defvar dape--info-thread-position nil
+  "`dape-info-thread-mode' marker for `overlay-arrow-variable-list'.")
+
+(dape--command-at-line dape-info-select-thread (dape--info-thread)
+  "Select thread at line in dape info buffer."
+  (dape-select-thread (dape--live-connection 'stopped)
+                      (plist-get dape--info-thread :id)))
+
+(defvar dape--info-threads-font-lock-keywords
+  (append gdb-threads-font-lock-keywords
+          '((" \\(unknown\\)"  (1 font-lock-warning-face))
+            (" \\(exited\\)"  (1 font-lock-warning-face))
+            (" \\(started\\)"  (1 font-lock-string-face))))
+  "Keywords for `dape-info-threads-mode'.")
+
+(dape--buffer-map dape-info-threads-line-map dape-info-select-thread
+  ;; TODO Add bindings for individual threads.
+  )
+
+(define-derived-mode dape-info-threads-mode dape-info-parent-mode "Threads"
+  "Major mode for Dape info threads."
+  :interactive nil
+  (setq font-lock-defaults '(dape--info-threads-font-lock-keywords)
+        dape--info-thread-position (make-marker)
+        dape--info-buffer-related dape--info-group-1-related)
+  (add-to-list 'overlay-arrow-variable-list 'dape--info-thread-position))
+
+(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-threads-mode)) id)
+  "Fetches data for `dape-info-threads-mode' and updates buffer.
+Buffer is specified by MODE and ID."
+  (if-let ((conn (or conn (dape--live-connection 'newest t)))
+           ((dape--stopped-threads conn))
+           (threads (dape--threads conn)))
+      (dape--with dape--inactive-threads-stack-trace (conn)
+        (dape--info-update-with mode id
+          (let ((table (make-gdb-table))
+                (current-thread (dape--current-thread conn)))
+            (set-marker dape--info-thread-position nil)
+            (dolist (thread threads)
+              (gdb-table-add-row
+               table
+               (list
+                (format "%s" (plist-get thread :id))
+                (concat
+                 (when dape-info-thread-buffer-verbose-names
+                   (concat (plist-get thread :name) " "))
+                 (or (plist-get thread :status)
+                     "unknown")
+                 ;; Include frame information for stopped threads
+                 (if-let* (((equal (plist-get thread :status) "stopped"))
+                           (top-stack (thread-first thread
+                                                    (plist-get :stackFrames)
+                                                    (car))))
+                     (concat
+                      " in " (plist-get top-stack :name)
+                      (when-let* ((dape-info-thread-buffer-locations)
+                                  (path (thread-first top-stack
+                                                      (plist-get :source)
+                                                      (plist-get :path)))
+                                  (path (dape--path path 'local))
+                                  (line (plist-get top-stack :line)))
+                        (concat " of " (dape--format-file-line path line)))
+                      (when-let ((dape-info-thread-buffer-addresses)
+                                 (addr
+                                  (plist-get top-stack :instructionPointerReference)))
+                        (concat " at " addr))
+                      " "))))
+               (list
+                'dape--info-thread thread
+                'mouse-face 'highlight
+                'keymap dape-info-threads-line-map
+                'help-echo "mouse-2, RET: select thread")))
+            (insert (gdb-table-string table " "))
+            (when current-thread
+              (cl-loop for thread in threads
+                       for line from 1
+                       until (eq current-thread thread)
+                       finally (gdb-mark-line line dape--info-thread-position))))))
+    (dape--info-update-with mode id
+      (set-marker dape--info-thread-position nil)
+      (insert "No thread information available."))))
+
+
+;;; Info stack buffer
+
+(defvar dape--info-stack-position nil
+  "`dape-info-stack-mode' marker for `overlay-arrow-variable-list'.")
+
+(defvar dape--info-stack-font-lock-keywords
+  '(("in \\([^ ]+\\)"  (1 font-lock-function-name-face)))
+  "Font lock keywords used in `gdb-frames-mode'.")
+
+(dape--command-at-line dape-info-stack-select (dape--info-frame)
+  "Select stack at line in dape info buffer."
+  (dape-select-stack (dape--live-connection 'stopped)
+                     (plist-get dape--info-frame :id)))
+
+(dape--buffer-map dape-info-stack-line-map dape-info-stack-select)
+
+(define-derived-mode dape-info-stack-mode dape-info-parent-mode "Stack"
+  "Major mode for Dape info stack."
+  :interactive nil
+  (setq font-lock-defaults '(dape--info-stack-font-lock-keywords)
+        dape--info-stack-position (make-marker)
+        dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
+                                    (dape-info-modules-mode nil "Modules")
+                                    (dape-info-sources-mode nil "Sources")))
+  (add-to-list 'overlay-arrow-variable-list 'dape--info-stack-position))
+
+(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-stack-mode)) id)
+  "Fetches data for `dape-info-stack-mode' and updates buffer.
+Buffer is specified by MODE and ID."
+  (let ((stack-frames (plist-get (dape--current-thread conn) :stackFrames))
+        (current-stack-frame (dape--current-stack-frame conn)))
+    (dape--info-update-with mode id
+      (cond
+       ((or (not current-stack-frame)
+            (not (dape--stopped-threads conn)))
+        (set-marker dape--info-stack-position nil)
+        (insert "No stopped threads."))
+       (t
+        (cl-loop with table = (make-gdb-table)
+                 for frame in stack-frames
+                 do
+                 (gdb-table-add-row
+                  table
+                  (list
+                   "in"
+                   (concat
+                    (plist-get frame :name)
+                    (when-let* ((dape-info-stack-buffer-locations)
+                                (path (thread-first frame
+                                                    (plist-get :source)
+                                                    (plist-get :path)))
+                                (path (dape--path path 'local)))
+                      (concat " of "
+                              (dape--format-file-line path
+                                                      (plist-get frame :line))))
+                    (when-let ((dape-info-stack-buffer-addresses)
+                               (ref
+                                (plist-get frame :instructionPointerReference)))
+                      (concat " at " ref))
+                    " "))
+                  (list
+                   'dape--info-frame frame
+                   'mouse-face 'highlight
+                   'keymap dape-info-stack-line-map
+                   'help-echo "mouse-2, RET: Select frame"))
+                 finally (insert (gdb-table-string table " ")))
+        (cl-loop for stack-frame in stack-frames
+                 for line from 1
+                 until (eq current-stack-frame stack-frame)
+                 finally (gdb-mark-line line dape--info-stack-position)))))))
+
+
+;;; Info modules buffer
+
+(defvar dape--info-modules-font-lock-keywords
+  '(("^\\([^ ]+\\) "  (1 font-lock-function-name-face)))
+  "Font lock keywords used in `gdb-frames-mode'.")
+
+(dape--command-at-line dape-info-modules-goto (dape--info-module)
+  "Goto source."
+  (if-let ((path (plist-get dape--info-module :path)))
+      (pop-to-buffer (find-file-noselect path))
+    (user-error "No path associated with module")))
+
+(dape--buffer-map dape-info-module-line-map dape-info-modules-goto)
+
+(define-derived-mode dape-info-modules-mode dape-info-parent-mode "Modules"
+  "Major mode for Dape info modules."
+  :interactive nil
+  (setq font-lock-defaults '(dape--info-modules-font-lock-keywords)
+        dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
+                                    (dape-info-modules-mode nil "Modules")
+                                    (dape-info-sources-mode nil "Sources"))))
+
+(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-modules-mode)) id)
+  (dape--info-update-with mode id
+    ;; Use last connection if current is dead
+    (when-let ((conn (or conn dape--connection)))
+      (cl-loop with modules = (dape--modules conn)
+               with table = (make-gdb-table)
+               for module in (reverse modules)
+               do
+               (gdb-table-add-row
+                table
+                (list
+                 (concat
+                  (plist-get module :name)
+                  (when-let ((path (plist-get module :path)))
+                    (concat " of " (dape--format-file-line path nil)))
+                  (when-let ((address-range (plist-get module :addressRange)))
+                    (concat " at "
+                            address-range nil))
+                  " "))
+                (list
+                 'dape--info-module module
+                 'mouse-face 'highlight
+                 'help-echo (format "mouse-2: goto module")
+                 'keymap dape-info-module-line-map))
+               finally (insert (gdb-table-string table " "))))))
+
+
+;;; Info sources buffer
+
+(dape--command-at-line dape-info-sources-goto (dape--info-source)
+  "Goto source."
+  ;; TODO Should be storing connection in `dape--info-source' instead of
+  ;;      guessing
+  (dape--with dape--source-ensure ((dape--live-connection 'newest t)
+                                   (list :source dape--info-source))
+    (if-let ((marker
+              (dape--object-to-marker (list :source dape--info-source))))
+        (pop-to-buffer (marker-buffer marker))
+      (user-error "Unable to get source"))))
+
+(dape--buffer-map dape-info-sources-line-map dape-info-sources-goto)
+
+(define-derived-mode dape-info-sources-mode dape-info-parent-mode "Sources"
+  "Major mode for Dape info sources."
+  :interactive nil
+  (setq dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
+                                    (dape-info-modules-mode nil "Modules")
+                                    (dape-info-sources-mode nil "Sources"))))
+
+(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-sources-mode)) id)
+  (dape--info-update-with mode id
+    ;; Use last connection if current is dead
+    (when-let ((conn (or conn dape--connection)))
+      (cl-loop with sources = (dape--sources conn)
+               with table = (make-gdb-table)
+               for source in (reverse sources)
+               do
+               (gdb-table-add-row
+                table
+                (list
+                 (concat
+                  (plist-get source :name)
+                  " "))
+                (list
+                 'dape--info-source source
+                 'mouse-face 'highlight
+                 'keymap dape-info-sources-line-map
+                 'help-echo "mouse-2, RET: goto source"))
+               finally (insert (gdb-table-string table " "))))))
+
+
+;;; Info scope buffer
+
+(defvar dape--info-expanded-p (make-hash-table :test 'equal)
+  "Hash table to keep track of expanded info variables.")
+
+(dape--command-at-line dape-info-scope-toggle (dape--info-path)
+  "Expand or contract variable at line in dape info buffer."
+  (unless (dape--live-connection 'stopped)
+    (user-error "No stopped threads"))
+  (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
+           dape--info-expanded-p)
+  (dape--info-buffer major-mode dape--info-buffer-identifier))
+
+(dape--buffer-map dape-info-variable-prefix-map dape-info-scope-toggle)
+
+(dape--command-at-line dape-info-scope-watch-dwim (dape--info-variable)
+  "Watch variable or remove from watch at line in dape info buffer."
+  (dape-watch-dwim (or (plist-get dape--info-variable :evaluateName)
+                       (plist-get dape--info-variable :name))
+                   (eq major-mode 'dape-info-watch-mode)
+                   (eq major-mode 'dape-info-scope-mode))
+  (when (derived-mode-p 'dape-info-parent-mode)
+    (gdb-set-window-buffer (dape--info-buffer 'dape-info-watch-mode) t)))
+
+(dape--buffer-map dape-info-variable-name-map dape-info-scope-watch-dwim)
+
+(dape--command-at-line dape-info-variable-edit
+  (dape--info-ref dape--info-variable)
+  "Edit variable value at line in dape info buffer."
+  (dape--set-variable (dape--live-connection 'stopped)
+                       dape--info-ref
+                       dape--info-variable
+                       (read-string
+                        (format "Set value of %s `%s' = "
+                                (plist-get dape--info-variable :type)
+                                (plist-get dape--info-variable :name))
+                        (or (plist-get dape--info-variable :value)
+                            (plist-get dape--info-variable :result)))))
+
+(dape--buffer-map dape-info-variable-value-map dape-info-variable-edit)
+
+(defvar dape-info-scope-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "e" 'dape-info-scope-toggle)
+    (define-key map "W" 'dape-info-scope-watch-dwim)
+    (define-key map "=" 'dape-info-variable-edit)
+    map)
+  "Local keymap for dape scope buffers.")
+
+;; TODO Add bindings for adding data breakpoint
+
+(defun dape--info-group-2-related-buffers (scopes)
+  (append
+   (cl-loop for scope in scopes
+            for i from 0
+            collect
+            (list 'dape-info-scope-mode i
+                  (string-truncate-left (plist-get scope :name)
+                                        dape-info-header-scope-max-name)))
+   '((dape-info-watch-mode nil "Watch"))))
+
+(defun dape--info-locals-table-columns-list (alist)
+  "Format and arrange the columns in locals display based on ALIST."
+  ;; Stolen from gdb-mi but reimpleted due to usage of dape customs
+  ;; org function `gdb-locals-table-columns-list'.
+  (let (columns)
+    (dolist (config dape-info-variable-table-row-config columns)
+      (let* ((key  (car config))
+             (max  (cdr config))
+             (prop-org (alist-get key alist))
+             (prop prop-org))
+        (when prop-org
+          (when (eq dape-info-buffer-variable-format 'line)
+            (setq prop
+                  (substring prop
+                             0 (string-match-p "\n" prop))))
+          (if (and (> max 0) (length> prop max))
+              (push (propertize (string-truncate-left prop max) 'help-echo prop-org)
+                    columns)
+            (push prop columns)))))
+    (nreverse columns)))
+
+(defun dape--info-scope-add-variable (table object ref path maps)
+  "Add variable OBJECT with REF and PATH to TABLE.
+MAPS is an plist with keys; name, value and prefix.  The values of the
+plist are used as keymap for each sections defined by the key."
+  (let* ((name (or (plist-get object :name) " "))
+         (type (or (plist-get object :type) " "))
+         (value (or (plist-get object :value)
+                    (plist-get object :result)
+                    " "))
+         (prefix (make-string (* (1- (length path)) 2) ? ))
+         (path (cons (plist-get object :name) path))
+         (expanded (gethash path dape--info-expanded-p))
+         row)
+    (setq name
+          (propertize name
+                      'mouse-face 'highlight
+                      'help-echo "mouse-2: create or remove watch expression"
+                      'keymap (plist-get maps 'name)
+                      'font-lock-face font-lock-variable-name-face)
+          type
+          (propertize type
+                      'font-lock-face font-lock-type-face)
+          value
+          (propertize value
+                      'mouse-face 'highlight
+                      'help-echo "mouse-2: edit value"
+                      'keymap (plist-get maps 'value))
+          prefix
+          (concat
+           (cond
+            ((zerop (or (plist-get object :variablesReference) 0))
+             (concat prefix " "))
+            ((and expanded (plist-get object :variables))
+             (propertize (concat prefix "-")
+                         'mouse-face 'highlight
+                         'help-echo "mouse-2: contract"
+                         'keymap (plist-get maps 'prefix)))
+            (t
+             (propertize (concat prefix "+")
+                         'mouse-face 'highlight
+                         'help-echo "mouse-2: expand"
+                         'keymap (plist-get maps 'prefix))))
+           " "))
+    (setq row (dape--info-locals-table-columns-list
+               `((name  . ,name)
+                 (type  . ,type)
+                 (value . ,value))))
+    (setcar row (concat prefix (car row)))
+    (gdb-table-add-row table
+                       (if dape-info-variable-table-aligned
+                           row
+                         (list (mapconcat 'identity row " ")))
+                       (list 'dape--info-variable object
+                             'dape--info-path path
+                             'dape--info-ref ref))
+    (when expanded
+      ;; TODO Should be paged
+      (dolist (variable (plist-get object :variables))
+        (dape--info-scope-add-variable table
+                                       variable
+                                       (plist-get object :variablesReference)
+                                       path
+                                       maps)))))
+
+;; FIXME Empty header line when adapter is killed
+(define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
+  "Major mode for Dape info scope."
+  :interactive nil
+  (setq dape--info-buffer-related '((dape-info-watch-mode nil "Watch")))
+  (dape--info-set-header-line-format))
+
+(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-scope-mode)) id)
+  "Fetches data for `dape-info-scope-mode' and updates buffer.
+Buffer is specified by MODE and ID."
+  (when-let* ((conn (or conn (dape--live-connection 'stopped t)))
+              (frame (dape--current-stack-frame conn))
+              (scopes (plist-get frame :scopes))
+              ;; FIXME if scope is out of range here scope list could
+              ;;       have shrunk since last update and current
+              ;;       scope buffer should be killed and replaced if
+              ;;       if visible
+              (scope (nth id scopes))
+              ;; Check for stopped threads to reduce flickering
+              ((dape--stopped-threads conn)))
+    (dape--with dape--variables (conn scope)
+      (dape--with dape--variables-recursive
+          (conn
+           scope
+           (list (plist-get scope :name))
+           (lambda (path object)
+             (and (not (eq (plist-get object :expensive) t))
+                  (gethash (cons (plist-get object :name) path)
+                           dape--info-expanded-p))))
+        (when (and scope scopes (dape--stopped-threads conn))
+          (dape--info-update-with mode id
+            (rename-buffer (format "*dape-info %s*" (plist-get scope :name)) t)
+            (setq dape--info-buffer-related
+                  (dape--info-group-2-related-buffers scopes))
+            (cl-loop with table = (make-gdb-table)
+                     for object in (plist-get scope :variables)
+                     initially (setf (gdb-table-right-align table)
+                                     dape-info-variable-table-aligned)
+                     do
+                     (dape--info-scope-add-variable table
+                                                    object
+                                                    (plist-get scope :variablesReference)
+                                                    (list (plist-get scope :name))
+                                                    (list 'name dape-info-variable-name-map
+                                                          'value dape-info-variable-value-map
+                                                          'prefix dape-info-variable-prefix-map))
+                     finally (insert (gdb-table-string table " ")))))))))
+
+
+;;; Info watch buffer
+
+(defvar dape-info-watch-mode-map (copy-keymap dape-info-scope-mode-map)
+  "Local keymap for dape watch buffer.")
+
+(define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"
+  "Major mode for Dape info watch."
+  :interactive nil
+  (setq dape--info-buffer-related '((dape-info-watch-mode nil "Watch"))))
+
+(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-watch-mode)) id)
+  "Fetches data for `dape-info-watch-mode' and updates buffer.
+Buffer is specified by MODE and ID."
+  (let* ((frame (dape--current-stack-frame conn))
+         (scopes (plist-get frame :scopes))
+         (responses 0))
+    (cond
+     ((not dape--watched)
+      (dape--info-update-with mode id
+        (setq dape--info-buffer-related
+              (dape--info-group-2-related-buffers scopes))
+        (insert "No watched variable.")))
+     ((not (and conn (jsonrpc-running-p conn)))
+      (dape--info-update-with mode id
+        (cl-loop with table = (make-gdb-table)
+                 for watch in dape--watched
+                 initially (setf (gdb-table-right-align table)
+                                 dape-info-variable-table-aligned)
+                 do
+                 (dape--info-scope-add-variable table watch 'watch (list "Watch")
+                                                (list 'name dape-info-variable-name-map
+                                                      'value dape-info-variable-value-map
+                                                      'prefix dape-info-variable-prefix-map))
+                 finally (insert (gdb-table-string table " ")))))
+     (t
+      (dolist (plist dape--watched)
+        (plist-put plist :variablesReference nil)
+        (plist-put plist :variables nil)
+        (dape--with dape--evaluate-expression
+            (conn
+             (plist-get frame :id)
+             (plist-get plist :name)
+             "watch")
+          (unless error-message
+            (cl-loop for (key value) on body by 'cddr
+                     do (plist-put plist key value)))
+          (setq responses (1+ responses))
+          (when (length= dape--watched responses)
+            (dape--with dape--variables-recursive
+                (conn
+                 (list :variables dape--watched)
+                 (list "Watch")
+                 (lambda (path object)
+                   (and (not (eq (plist-get object :expensive) t))
+                        (gethash (cons (plist-get object :name) path)
+                                 dape--info-expanded-p))))
+              (dape--info-update-with mode id
+                (setq dape--info-buffer-related
+                      (dape--info-group-2-related-buffers scopes))
+                (cl-loop with table = (make-gdb-table)
+                         for watch in dape--watched
+                         initially (setf (gdb-table-right-align table)
+                                         dape-info-variable-table-aligned)
+                         do
+                         (dape--info-scope-add-variable table watch 'watch (list "Watch")
+                                                        (list 'name dape-info-variable-name-map
+                                                              'value dape-info-variable-value-map
+                                                              'prefix dape-info-variable-prefix-map))
+                         finally (insert (gdb-table-string table " "))))))))))))
 
 
 ;;; REPL buffer
@@ -2612,7 +3505,8 @@ Handles newline."
                   (goto-char (point-max)))
                 (setq start (point-marker))
                 (let ((inhibit-read-only t))
-                  (insert (propertize msg 'font-lock-face face)))
+                  (insert (apply 'propertize msg
+                                 (when face (list 'font-lock-face face)))))
                 (goto-char (point-max))
                 ;; HACK Run hooks as if comint-output-filter was executed
                 ;;      Could not get comint-output-filter to work by moving
@@ -2634,6 +3528,74 @@ Handles newline."
       (when-let* ((buffer (get-buffer "*dape-repl*"))
                   (dummy-process (get-buffer-process buffer)))
         (comint-output-filter dummy-process dape--repl-prompt))))))
+
+(defun dape--repl-update-variable (point variable)
+  "Insert VARIABLE at POINT in *dape-repl* buffer.
+VARIABLE is expected to be the string representation of a varable."
+  (cond
+   (dape--repl-insert-text-guard
+    (run-with-timer 0.01 nil 'dape--repl-update-variable
+                    point variable))
+   (t
+    (let ((dape--repl-insert-text-guard t))
+      (when-let ((buffer (get-buffer "*dape-repl*")))
+        (with-current-buffer buffer
+          (when-let ((start
+                      (save-excursion
+                        (previous-single-property-change point
+                                                         'dape--repl-variable)))
+                     (end
+                      (save-excursion
+                        (next-single-property-change point
+                                                     'dape--repl-variable))))
+            (save-window-excursion
+              (let ((inhibit-read-only t)
+                    (line (line-number-at-pos (point) t)))
+                (delete-region start end)
+                (goto-char start)
+                (insert variable)
+                (ignore-errors
+                  (goto-char (point-min))
+                  (forward-line (1- line))))))))))))
+
+(dape--command-at-line dape-repl-scope-toggle (dape--info-path
+                                               dape--repl-variable)
+  "Expand or contract variable at line in dape repl buffer."
+  (unless (dape--live-connection 'stopped)
+    (user-error "No stopped threads"))
+  (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
+           dape--info-expanded-p)
+  (dape--repl-create-variable-table (or (dape--live-connection 'stopped t)
+                                        (dape--live-connection 'newest))
+                                    dape--repl-variable
+                                    (apply-partially #'dape--repl-update-variable
+                                                     (1+ (point)))))
+
+(dape--buffer-map dape-repl-variable-prefix-map dape-repl-scope-toggle)
+
+(defun dape--repl-create-variable-table (conn variable cb)
+  (dape--with dape--variables
+      (conn variable)
+    (dape--with dape--variables-recursive
+        (conn
+         variable
+         (list (plist-get variable :name) "Watch")
+         (lambda (path object)
+           (and (not (eq (plist-get object :expensive) t))
+                (gethash (cons (plist-get object :name) path)
+                         dape--info-expanded-p))))
+      (let ((table (make-gdb-table)))
+        (setf (gdb-table-right-align table)
+              dape-info-variable-table-aligned)
+        (dape--info-scope-add-variable table variable
+                                       'watch
+                                       (list "Watch")
+                                       (list 'name dape-info-variable-name-map
+                                             'value dape-info-variable-value-map
+                                             'prefix dape-repl-variable-prefix-map))
+        (funcall cb
+                 (propertize (gdb-table-string table " ")
+                             'dape--repl-variable variable))))))
 
 (defun dape--repl-input-sender (dummy-process input)
   "Dape repl `comint-input-sender'.
@@ -2659,18 +3621,25 @@ Send INPUT to DUMMY-PROCESS."
      (t
       (dape--repl-insert-prompt)
       (let ((conn (or (dape--live-connection 'stopped t)
-                      (dape--live-connection 'newest))))
+                      (dape--live-connection 'newest)))
+            (input (string-trim (substring-no-properties input))))
         (dape--with dape--evaluate-expression
             (conn
              (plist-get (dape--current-stack-frame conn) :id)
-             (substring-no-properties input)
+             input
              "repl")
-          (unless error-message
-            (dape--update conn nil t))
-          (dape--repl-message (concat
-                               (if error-message
-                                   error-message
-                                   (plist-get body :result))))))))))
+          (cond
+           (error-message
+            (dape--repl-message error-message 'dape-repl-error))
+           ((and-let* ((ref (plist-get body :variablesReference))
+                       ((numberp ref))
+                       ((not (zerop ref)))))
+            (dape--repl-create-variable-table conn
+                                              (plist-put body :name input)
+                                              #'dape--repl-message))
+           (t
+            (dape--update conn nil t)
+            (dape--repl-message (plist-get body :result))))))))))
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
@@ -2833,915 +3802,6 @@ Empty input will rerun last command.\n"
       (when (called-interactively-p 'interactive)
         (select-window window)))))
 
-
-;;; Info Buffers
-;; TODO Because buttons where removed from info buffer
-;;      there should be a way to controll execution by mouse
-
-(defvar-local dape--info-buffer-related nil
-  "List of related buffers.")
-(defvar-local dape--info-buffer-identifier nil
-  "Identifying var for buffers, used only in scope buffer.
-Used there as scope index.")
-(defvar-local dape--info-buffer-in-redraw nil
-  "Guard for buffer `dape-info-update' fn.")
-
-(defvar dape--info-buffers nil
-  "List containing `dape-info' buffers, might be un-live.")
-
-(defun dape--info-buffer-list ()
-  "Return all live `dape-info-parent-mode'."
-  (setq dape--info-buffers
-        (seq-filter 'buffer-live-p dape--info-buffers)))
-
-(defun dape--info-buffer-p (mode &optional identifier)
-  "Is buffer of MODE with IDENTIFIER.
-Uses `dape--info-buffer-identifier' as IDENTIFIER."
-  (and (eq major-mode mode)
-       (or (not identifier)
-           (equal dape--info-buffer-identifier identifier))))
-
-(defun dape--info-buffer-tab (&optional reversed)
-  "Select next related buffer in `dape-info' buffers.
-REVERSED selects previous."
-  (interactive)
-  (unless dape--info-buffer-related
-    (user-error "No related buffers for current buffer"))
-  (pcase-let* ((order-fn (if reversed 'reverse 'identity))
-               (`(,mode ,id)
-                (or
-                 (thread-last (append dape--info-buffer-related
-                                      dape--info-buffer-related)
-                              (funcall order-fn)
-                              (seq-drop-while (pcase-lambda (`(,mode ,id))
-                                                (not (dape--info-buffer-p mode id))))
-                              (cadr))
-                 (car dape--info-buffer-related))))
-    (gdb-set-window-buffer
-     (dape--info-buffer mode id) t)))
-
-(defvar dape-info-parent-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "<backtab>")
-                (lambda () (interactive) (dape--info-buffer-tab t)))
-    (define-key map "\t" 'dape--info-buffer-tab)
-    map)
-  "Keymap for `dape-info-parent-mode'.")
-
-(defun dape--info-buffer-change-fn (&rest _rest)
-  "Hook fn for `window-buffer-change-functions' to ensure update."
-  (dape--info-update (dape--live-connection 'newest t) (current-buffer)))
-
-(define-derived-mode dape-info-parent-mode special-mode ""
-  "Generic mode to derive all other Dape gud buffer modes from."
-  :interactive nil
-  (setq-local buffer-read-only t
-              truncate-lines t
-              cursor-in-non-selected-windows nil)
-  (add-hook 'window-buffer-change-functions 'dape--info-buffer-change-fn
-            nil 'local)
-  (when dape-info-hide-mode-line
-    (setq-local mode-line-format nil))
-  (buffer-disable-undo))
-
-(defun dape--info-header (name mode id help-echo mouse-face face)
-  "Helper to create buffer header.
-Creates header with string NAME, mouse map to select buffer
-identified with MODE and ID (see `dape--info-buffer-identifier')
-with HELP-ECHO string, MOUSE-FACE and FACE."
-  (propertize name 'help-echo help-echo 'mouse-face mouse-face 'face face
-              'keymap
-              (gdb-make-header-line-mouse-map
-	       'mouse-1
-	       (lambda (event) (interactive "e")
-		 (save-selected-window
-		   (select-window (posn-window (event-start event)))
-                   (gdb-set-window-buffer
-                    (dape--info-buffer mode id) t))))))
-
-(defun dape--info-set-header-line-format ()
-  "Helper for dape info buffers to set header line.
-Header line is custructed from buffer local
-`dape--info-buffer-related'."
-  (setq header-line-format
-        (mapcan
-         (pcase-lambda (`(,mode ,id ,name))
-           (list
-            (if (dape--info-buffer-p mode id)
-                (dape--info-header name mode id nil nil 'mode-line)
-              (dape--info-header name mode id "mouse-1: select"
-                                 'mode-line-highlight
-                                 'mode-line-inactive))
-              " "))
-         dape--info-buffer-related)))
-
-(defun dape--info-buffer-update-1 (mode id &rest args)
-  "Helper for `dape--info-buffer-update'.
-Updates buffer identified with MODE and ID contents with by calling
-`dape--info-buffer-update-contents' with ARGS."
-  (if dape--info-buffer-in-redraw
-      (run-with-timer 0.01 nil
-                      (lambda (mode id args)
-                        (apply 'dape--info-buffer-update-1 mode id args)))
-    (when-let ((buffer (dape--info-get-live-buffer mode id)))
-      (let ((dape--info-buffer-in-redraw t))
-        (with-current-buffer buffer
-          (unless (derived-mode-p 'dape-info-parent-mode)
-            (error "Trying to update non info buffer"))
-          ;; Would be nice with replace-buffer-contents
-          ;; But it seams to messes up string properties
-          (let ((line (line-number-at-pos (point) t))
-                (old-window (selected-window)))
-            ;; Still don't know any better way of keeping window scroll?
-            (when-let ((window (get-buffer-window buffer)))
-              (select-window window))
-            (save-window-excursion
-              (let ((inhibit-read-only t))
-                (erase-buffer)
-                (apply 'dape--info-buffer-update-contents args))
-              (ignore-errors
-                (goto-char (point-min))
-                (forward-line (1- line)))
-              (dape--info-set-header-line-format))
-            (when old-window
-              (select-window old-window))))))))
-
-(cl-defgeneric dape--info-buffer-update (_conn mode &optional id)
-  "Update buffer specified by MODE and ID."
-  (dape--info-buffer-update-1 mode id))
-
-(defun dape--info-update (conn buffer)
-  "Update dape info BUFFER for adapter CONN."
-  (apply 'dape--info-buffer-update
-         conn (with-current-buffer buffer
-                (list major-mode dape--info-buffer-identifier))))
-
-(defun dape--info-get-live-buffer (mode &optional identifier)
-  "Get live dape info buffer with MODE and IDENTIFIER."
-  (seq-find (lambda (buffer)
-              (with-current-buffer buffer
-                (dape--info-buffer-p mode identifier)))
-            (dape--info-buffer-list)))
-
-(defun dape--info-buffer-name (mode &optional identifier)
-  "Create buffer name from MODE and IDENTIFIER."
-  (format "*dape-info %s*"
-          (pcase mode
-            ('dape-info-breakpoints-mode "Breakpoints")
-            ('dape-info-threads-mode "Threads")
-            ('dape-info-stack-mode "Stack")
-            ('dape-info-modules-mode "Modules")
-            ('dape-info-sources-mode "Sources")
-            ('dape-info-watch-mode "Watch")
-            ;; FIXME If scope is named Scope <%s> there is trouble
-            ('dape-info-scope-mode (format "Scope <%s>" identifier))
-            (_ (error "Unable to create mode from %s with %s" mode identifier)))))
-
-(defun dape--info-buffer (mode &optional identifier skip-update)
-  "Get or create info buffer with MODE and IDENTIFIER.
-If SKIP-UPDATE is non nil skip updating buffer contents."
-  (let ((buffer
-         (or (dape--info-get-live-buffer mode identifier)
-             (get-buffer-create (dape--info-buffer-name mode identifier)))))
-    (with-current-buffer buffer
-      (unless (eq major-mode mode)
-        (funcall mode)
-        (setq dape--info-buffer-identifier identifier)
-        (push buffer dape--info-buffers)))
-    (unless skip-update
-      (dape--info-update (dape--live-connection 'newest t) buffer))
-    buffer))
-
-(defmacro dape--info-buffer-command (name properties doc &rest body)
-  "Helper macro to create info command with NAME and DOC.
-Gets PROPERTIES from string properties from current line and binds
-them then executes BODY."
-  (declare (indent defun))
-  `(defun ,name (&optional event)
-     ,doc
-     (interactive (list last-input-event))
-     (if event (posn-set-point (event-end event)))
-     (let (,@properties)
-       (save-excursion
-         (beginning-of-line)
-         ,@(mapcar (lambda (property)
-                     `(setq ,property (get-text-property (point) ',property)))
-                   properties))
-       (if (and ,@properties)
-           (progn
-             ,@body)
-         (error "Not recognized as %s line" 'name)))))
-
-(defmacro dape--info-buffer-map (name fn &rest body)
-  "Helper macro to create info buffer map with NAME.
-FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
-  (declare (indent defun))
-  `(defvar ,name
-     (let ((map (make-sparse-keymap)))
-       (suppress-keymap map)
-       (define-key map "\r" ',fn)
-       (define-key map [mouse-2] ',fn)
-       (define-key map [follow-link] 'mouse-face)
-       ,@body
-       map)))
-
-(defun dape-info-update (&optional conn)
-  "Update and display `dape-info-*' buffers for adapter CONN."
-  (dolist (buffer (dape--info-buffer-list))
-    (dape--info-update (or conn
-                           (dape--live-connection 'stopped t)
-                           (dape--live-connection 'newest t))
-                       buffer)))
-
-(defun dape-info (&optional maybe-kill kill)
-  "Update and display *dape-info* buffers.
-When called interactively MAYBE-KILL is non nil.
-When optional MAYBE-KILL is non nil kill buffers if all *dape-info*
-buffers are already displayed.
-When optional kill is non nil kill buffers *dape-info* buffers."
-  (interactive (list t))
-  (cl-labels ((kill-dape-info ()
-                (dolist (buffer (buffer-list))
-                  (when (with-current-buffer buffer
-                          (derived-mode-p 'dape-info-parent-mode))
-                    (kill-buffer buffer)))))
-    (if kill
-        (kill-dape-info)
-      (let (buffer-displayed-p)
-        ;; Open breakpoints if not group-1 buffer displayed
-        (unless (seq-find (lambda (buffer)
-                            (and (get-buffer-window buffer)
-                                 (with-current-buffer buffer
-                                   (or (dape--info-buffer-p 'dape-info-breakpoints-mode)
-                                       (dape--info-buffer-p 'dape-info-threads-mode)))))
-                          (dape--info-buffer-list))
-          (setq buffer-displayed-p t)
-          (dape--display-buffer
-           (dape--info-buffer 'dape-info-breakpoints-mode 'skip-update)))
-        ;; Open and update stack buffer
-        (unless (seq-find (lambda (buffer)
-                            (and (get-buffer-window buffer)
-                                 (with-current-buffer buffer
-                                   (or (dape--info-buffer-p 'dape-info-stack-mode)
-                                       (dape--info-buffer-p 'dape-info-modules-mode)
-                                       (dape--info-buffer-p 'dape-info-sources-mode)))))
-                          (dape--info-buffer-list))
-          (setq buffer-displayed-p t)
-          (dape--display-buffer
-           (dape--info-buffer 'dape-info-stack-mode 'skip-update)))
-        ;; Open stack 0 if not group-2 buffer displayed
-        (unless (seq-find (lambda (buffer)
-                            (and (get-buffer-window buffer)
-                                 (with-current-buffer buffer
-                                   (or (dape--info-buffer-p 'dape-info-scope-mode)
-                                       (dape--info-buffer-p 'dape-info-watch-mode)))))
-                          (dape--info-buffer-list))
-          (setq buffer-displayed-p t)
-          (dape--display-buffer
-           (dape--info-buffer 'dape-info-scope-mode 0 'skip-update)))
-        (dape-info-update)
-        (when (and maybe-kill (not buffer-displayed-p))
-          (kill-dape-info))))))
-
-
-;;; Info breakpoints buffer
-
-(defconst dape--info-group-1-related
-  '((dape-info-breakpoints-mode nil "Breakpoints")
-    (dape-info-threads-mode nil "Threads"))
-  "Realated buffers in group 1.")
-
-(dape--info-buffer-command dape-info-breakpoint-goto (dape--info-breakpoint)
-  "Goto breakpoint at line in dape info buffer."
-  (when-let* ((buffer (overlay-buffer dape--info-breakpoint)))
-    (with-selected-window (display-buffer buffer dape-display-source-buffer-action)
-      (goto-char (overlay-start dape--info-breakpoint)))))
-
-(dape--info-buffer-command dape-info-breakpoint-delete (dape--info-breakpoint)
-  "Delete breakpoint at line in dape info buffer."
-  (dape--breakpoint-remove dape--info-breakpoint)
-  (dape--display-buffer (dape--info-buffer 'dape-info-breakpoints-mode)))
-
-(dape--info-buffer-command dape-info-breakpoint-log-edit (dape--info-breakpoint)
-  "Edit breakpoint at line in dape info buffer."
-  (let ((edit-fn
-         (cond
-          ((overlay-get dape--info-breakpoint 'dape-log-message)
-           'dape-breakpoint-log)
-          ((overlay-get dape--info-breakpoint 'dape-expr-message)
-           'dape-breakpoint-expression)
-          ((user-error "Unable to edit breakpoint on line without log or expression breakpoint")))))
-    (when-let* ((buffer (overlay-buffer dape--info-breakpoint)))
-      (with-selected-window (display-buffer buffer dape-display-source-buffer-action)
-        (goto-char (overlay-start dape--info-breakpoint))
-        (call-interactively edit-fn)))))
-
-(dape--info-buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
-  (define-key map "D" 'dape-info-breakpoint-delete)
-  (define-key map "d" 'dape-info-breakpoint-delete)
-  (define-key map "e" 'dape-info-breakpoint-log-edit))
-
-(dape--info-buffer-command dape-info-exceptions-toggle (dape--info-exception)
-  "Toggle exception at line in dape info buffer."
-  (plist-put dape--info-exception :enabled
-             (not (plist-get dape--info-exception :enabled)))
-  (dape-info-update)
-  (dolist (conn (dape--live-connections))
-    (dape--with dape--set-exception-breakpoints (conn))))
-
-(dape--info-buffer-map dape-info-exceptions-line-map dape-info-exceptions-toggle)
-
-(define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode
-  "Breakpoints"
-  :interactive nil
-  "Major mode for Dape info breakpoints."
-  (setq dape--info-buffer-related dape--info-group-1-related))
-
-(cl-defmethod dape--info-buffer-update-contents
-  (&context (major-mode dape-info-breakpoints-mode))
-  (let ((table (make-gdb-table)))
-    (gdb-table-add-row table '("Type" "On" "Where" "What"))
-    (dolist (breakpoint (reverse dape--breakpoints))
-      (when-let* ((buffer (overlay-buffer breakpoint))
-                  (line (with-current-buffer buffer
-                          (line-number-at-pos (overlay-start breakpoint)))))
-        (gdb-table-add-row
-         table
-         (list
-          (cond
-           ((overlay-get breakpoint 'dape-log-message)
-            "log")
-           ((overlay-get breakpoint 'dape-expr-message)
-            "condition")
-           ("breakpoint"))
-          (if (overlay-get breakpoint 'dape-verified)
-              (propertize "y" 'font-lock-face
-                          font-lock-warning-face)
-            (propertize "" 'font-lock-face
-                        font-lock-comment-face))
-          (if-let (file (buffer-file-name buffer))
-              (dape--format-file-line file line)
-            (buffer-name buffer))
-          (cond
-           ((overlay-get breakpoint 'dape-log-message)
-            (propertize (overlay-get breakpoint 'dape-log-message)
-                        'face 'dape-log))
-           ((overlay-get breakpoint 'dape-expr-message)
-            (propertize (overlay-get breakpoint 'dape-expr-message)
-                        'face 'dape-expression))
-           ("")))
-         (list
-          'dape--info-breakpoint breakpoint
-          'keymap dape-info-breakpoints-line-map
-          'mouse-face 'highlight
-          'help-echo "mouse-2, RET: visit breakpoint"))))
-    (dolist (exception dape--exceptions)
-      (gdb-table-add-row table
-                         (list
-                          "exception"
-                          (if (plist-get exception :enabled)
-                              (propertize "y" 'font-lock-face
-                                          font-lock-warning-face)
-                            (propertize "n" 'font-lock-face
-                                        font-lock-comment-face))
-                          (plist-get exception :label)
-                          " ")
-                         (list
-                          'dape--info-exception exception
-                          'mouse-face 'highlight
-                          'keymap dape-info-exceptions-line-map
-                          'help-echo "mouse-2, RET: toggle exception")))
-    (insert (gdb-table-string table " "))))
-
-
-;;; Info threads buffer
-
-(defvar dape--info-thread-position nil
-  "`dape-info-thread-mode' marker for `overlay-arrow-variable-list'.")
-
-(dape--info-buffer-command dape-info-select-thread (dape--info-thread)
-  "Select thread at line in dape info buffer."
-  (dape-select-thread (dape--live-connection 'stopped)
-                      (plist-get dape--info-thread :id)))
-
-(defvar dape--info-threads-font-lock-keywords
-  (append gdb-threads-font-lock-keywords
-          '((" \\(unknown\\)"  (1 font-lock-warning-face))
-            (" \\(exited\\)"  (1 font-lock-warning-face))
-            (" \\(started\\)"  (1 font-lock-string-face))))
-  "Keywords for `dape-info-threads-mode'.")
-
-(dape--info-buffer-map dape-info-threads-line-map dape-info-select-thread
-  ;; TODO Add bindings for individual threads.
-  )
-
-(define-derived-mode dape-info-threads-mode dape-info-parent-mode "Threads"
-  "Major mode for Dape info threads."
-  :interactive nil
-  (setq font-lock-defaults '(dape--info-threads-font-lock-keywords)
-        dape--info-thread-position (make-marker)
-        dape--info-buffer-related dape--info-group-1-related)
-  (add-to-list 'overlay-arrow-variable-list 'dape--info-thread-position))
-
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-threads-mode)) id)
-  "Fetches data for `dape-info-threads-mode' and updates buffer.
-Buffer is specified by MODE and ID."
-  (if-let ((conn (or conn (dape--live-connection 'newest t)))
-           ((dape--stopped-threads conn)))
-      (dape--with dape--inactive-threads-stack-trace (conn)
-        (dape--info-buffer-update-1 mode id
-                                    :current-thread (dape--current-thread conn)
-                                    :threads (dape--threads conn)))
-    (dape--info-buffer-update-1 mode id
-                                :current-thread nil
-                                :threads (and conn (dape--threads conn)))))
-
-(cl-defmethod dape--info-buffer-update-contents
-  (&context (major-mode dape-info-threads-mode) &key current-thread threads)
-  "Updates `dape-info-threads-mode' buffer from CURRENT-THREAD."
-  (set-marker dape--info-thread-position nil)
-  (if (not threads)
-      (insert "No thread information available.")
-    (let ((table (make-gdb-table)))
-      (dolist (thread threads)
-        (gdb-table-add-row
-         table
-         (list
-          (format "%s" (plist-get thread :id))
-          (concat
-           (when dape-info-thread-buffer-verbose-names
-             (concat (plist-get thread :name) " "))
-           (or (plist-get thread :status)
-               "unknown")
-           ;; Include frame information for stopped threads
-           (if-let* (((equal (plist-get thread :status) "stopped"))
-                     (top-stack (thread-first thread
-                                              (plist-get :stackFrames)
-                                              (car))))
-               (concat
-                " in " (plist-get top-stack :name)
-                (when-let* ((dape-info-thread-buffer-locations)
-                            (path (thread-first top-stack
-                                                (plist-get :source)
-                                                (plist-get :path)))
-                            (path (dape--path path 'local))
-                            (line (plist-get top-stack :line)))
-                  (concat " of " (dape--format-file-line path line)))
-                (when-let ((dape-info-thread-buffer-addresses)
-                           (addr
-                            (plist-get top-stack :instructionPointerReference)))
-                  (concat " at " addr))
-                " "))))
-         (list
-          'dape--info-thread thread
-          'mouse-face 'highlight
-          'keymap dape-info-threads-line-map
-          'help-echo "mouse-2, RET: select thread")))
-      (insert (gdb-table-string table " "))
-      (when current-thread
-        (cl-loop for thread in threads
-                 for line from 1
-                 until (eq current-thread thread)
-                 finally (gdb-mark-line line dape--info-thread-position))))))
-
-
-;;; Info stack buffer
-
-(defvar dape--info-stack-position nil
-  "`dape-info-stack-mode' marker for `overlay-arrow-variable-list'.")
-
-(defvar dape--info-stack-font-lock-keywords
-  '(("in \\([^ ]+\\)"  (1 font-lock-function-name-face)))
-  "Font lock keywords used in `gdb-frames-mode'.")
-
-(dape--info-buffer-command dape-info-stack-select (dape--info-frame)
-  "Select stack at line in dape info buffer."
-  (dape-select-stack (dape--live-connection 'stopped)
-                     (plist-get dape--info-frame :id)))
-
-(dape--info-buffer-map dape-info-stack-line-map dape-info-stack-select)
-
-(define-derived-mode dape-info-stack-mode dape-info-parent-mode "Stack"
-  "Major mode for Dape info stack."
-  :interactive nil
-  (setq font-lock-defaults '(dape--info-stack-font-lock-keywords)
-        dape--info-stack-position (make-marker)
-        dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
-                                    (dape-info-modules-mode nil "Modules")
-                                    (dape-info-sources-mode nil "Sources")))
-  (add-to-list 'overlay-arrow-variable-list 'dape--info-stack-position))
-
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-stack-mode)) id)
-  "Fetches data for `dape-info-stack-mode' and updates buffer.
-Buffer is specified by MODE and ID."
-  (if (dape--stopped-threads conn)
-      (let ((stack-frames (plist-get (dape--current-thread conn) :stackFrames))
-            (current-stack-frame (dape--current-stack-frame conn)))
-        (dape--info-buffer-update-1 mode id
-                                    :current-stack-frame current-stack-frame
-                                    :stack-frames stack-frames))
-    (dape--info-buffer-update-1 mode id)))
-
-(cl-defmethod dape--info-buffer-update-contents
-  (&context (major-mode dape-info-stack-mode) &key current-stack-frame stack-frames)
-  "Updates `dape-info-stack-mode' buffer.
-Updates from CURRENT-STACK-FRAME STACK-FRAMES."
-  (set-marker dape--info-stack-position nil)
-  (cond
-   ((or (not current-stack-frame)
-        (not stack-frames))
-    (insert "No stopped threads."))
-   (t
-    (cl-loop with table = (make-gdb-table)
-             for frame in stack-frames
-             do
-             (gdb-table-add-row
-              table
-              (list
-               "in"
-               (concat
-                (plist-get frame :name)
-                (when-let* ((dape-info-stack-buffer-locations)
-                            (path (thread-first frame
-                                                (plist-get :source)
-                                                (plist-get :path)))
-                            (path (dape--path path 'local)))
-                  (concat " of "
-                          (dape--format-file-line path
-                                                  (plist-get frame :line))))
-                (when-let ((dape-info-stack-buffer-addresses)
-                           (ref
-                            (plist-get frame :instructionPointerReference)))
-                  (concat " at " ref))
-                " "))
-              (list
-               'dape--info-frame frame
-               'mouse-face 'highlight
-               'keymap dape-info-stack-line-map
-               'help-echo "mouse-2, RET: Select frame"))
-             finally (insert (gdb-table-string table " ")))
-    (cl-loop for stack-frame in stack-frames
-             for line from 1
-             until (eq current-stack-frame stack-frame)
-             finally (gdb-mark-line line dape--info-stack-position)))))
-
-
-;;; Info modules buffer
-
-(defvar dape--info-modules-font-lock-keywords
-  '(("^\\([^ ]+\\) "  (1 font-lock-function-name-face)))
-  "Font lock keywords used in `gdb-frames-mode'.")
-
-(dape--info-buffer-command dape-info-modules-goto (dape--info-module)
-  "Goto source."
-  (if-let ((path (plist-get dape--info-module :path)))
-      (pop-to-buffer (find-file-noselect path))
-    (user-error "No path associated with module")))
-
-(dape--info-buffer-map dape-info-module-line-map dape-info-modules-goto)
-
-(define-derived-mode dape-info-modules-mode dape-info-parent-mode "Modules"
-  "Major mode for Dape info modules."
-  :interactive nil
-  (setq font-lock-defaults '(dape--info-modules-font-lock-keywords)
-        dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
-                                    (dape-info-modules-mode nil "Modules")
-                                    (dape-info-sources-mode nil "Sources"))))
-
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-modules-mode)) id)
-  (dape--info-buffer-update-1 mode id
-                              :modules
-                              ;; Use last connection if current is dead
-                              (when-let ((conn (or conn dape--connection)))
-                                (dape--modules conn))))
-
-(cl-defmethod dape--info-buffer-update-contents
-  (&context (major-mode dape-info-modules-mode) &key modules)
-  "Updates `dape-info-modules-mode' buffer."
-  (cl-loop with table = (make-gdb-table)
-           for module in (reverse modules)
-           do
-           (gdb-table-add-row
-            table
-            (list
-             (concat
-              (plist-get module :name)
-              (when-let ((path (plist-get module :path)))
-
-                (concat " of " (dape--format-file-line path nil)))
-              (when-let ((address-range (plist-get module :addressRange)))
-                (concat " at "
-                        address-range nil))
-              " "))
-             (list
-              'dape--info-module module
-              'mouse-face 'highlight
-              'help-echo (format "mouse-2: goto module")
-              'keymap dape-info-module-line-map))
-           finally (insert (gdb-table-string table " "))))
-
-
-;;; Info sources buffer
-
-(dape--info-buffer-command dape-info-sources-goto (dape--info-source)
-  "Goto source."
-  ;; TODO Should be storing connection in `dape--info-source' instead of
-  ;;      guessing
-  (dape--with dape--source-ensure ((dape--live-connection 'newest t)
-                                   (list :source dape--info-source))
-    (if-let ((marker
-              (dape--object-to-marker (list :source dape--info-source))))
-        (pop-to-buffer (marker-buffer marker))
-      (user-error "Unable to get source"))))
-
-(dape--info-buffer-map dape-info-sources-line-map dape-info-sources-goto)
-
-(define-derived-mode dape-info-sources-mode dape-info-parent-mode "Sources"
-  "Major mode for Dape info sources."
-  :interactive nil
-  (setq dape--info-buffer-related '((dape-info-stack-mode nil "Stack")
-                                    (dape-info-modules-mode nil "Modules")
-                                    (dape-info-sources-mode nil "Sources"))))
-
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-sources-mode)) id)
-  (dape--info-buffer-update-1 mode id
-                              :sources
-                              ;; Use last connection if current is dead
-                              (when-let ((conn (or conn dape--connection)))
-                                (dape--sources conn))))
-
-(cl-defmethod dape--info-buffer-update-contents
-  (&context (major-mode dape-info-sources-mode) &key sources)
-  "Updates `dape-info-modules-mode' buffer."
-  (cl-loop with table = (make-gdb-table)
-           for source in (reverse sources)
-           do
-           (gdb-table-add-row
-            table
-            (list
-             (concat
-              (plist-get source :name)
-              " "))
-            (list
-             'dape--info-source source
-             'mouse-face 'highlight
-             'keymap dape-info-sources-line-map
-             'help-echo "mouse-2, RET: goto source"))
-           finally (insert (gdb-table-string table " "))))
-
-
-;;; Info scope buffer
-
-(defvar dape--info-expanded-p (make-hash-table :test 'equal)
-  "Hash table to keep track of expanded info variables.")
-
-(dape--info-buffer-command dape-info-scope-toggle (dape--info-path)
-  "Expand or contract variable at line in dape info buffer."
-  (unless (dape--live-connection 'stopped)
-    (user-error "No stopped threads"))
-  (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
-           dape--info-expanded-p)
-  (dape--info-buffer major-mode dape--info-buffer-identifier))
-
-(dape--info-buffer-map dape-info-variable-prefix-map dape-info-scope-toggle)
-
-(dape--info-buffer-command dape-info-scope-watch-dwim (dape--info-variable)
-  "Watch variable or remove from watch at line in dape info buffer."
-  (dape-watch-dwim (or (plist-get dape--info-variable :evaluateName)
-                       (plist-get dape--info-variable :name))
-                   (eq major-mode 'dape-info-watch-mode)
-                   (eq major-mode 'dape-info-scope-mode))
-  (gdb-set-window-buffer (dape--info-buffer 'dape-info-watch-mode) t))
-
-(dape--info-buffer-map dape-info-variable-name-map dape-info-scope-watch-dwim)
-
-(dape--info-buffer-command dape-info-variable-edit
-  (dape--info-ref dape--info-variable)
-  "Edit variable value at line in dape info buffer."
-  (dape--set-variable (dape--live-connection 'stopped)
-                       dape--info-ref
-                       dape--info-variable
-                       (read-string
-                        (format "Set value of %s `%s' = "
-                                (plist-get dape--info-variable :type)
-                                (plist-get dape--info-variable :name))
-                        (or (plist-get dape--info-variable :value)
-                            (plist-get dape--info-variable :result)))))
-
-(dape--info-buffer-map dape-info-variable-value-map dape-info-variable-edit)
-
-(defvar dape-info-scope-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map "e" 'dape-info-scope-toggle)
-    (define-key map "W" 'dape-info-scope-watch-dwim)
-    (define-key map "=" 'dape-info-variable-edit)
-    map)
-  "Local keymap for dape scope buffers.")
-
-;; TODO Add bindings for adding data breakpoint
-;; FIXME Empty header line when adapter is killed
-
-(define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
-  "Major mode for Dape info scope."
-  :interactive nil
-  (setq dape--info-buffer-related '((dape-info-watch-mode nil "Watch")))
-  (dape--info-set-header-line-format))
-
-(defun dape--info-group-2-related-buffers (scopes)
-  (append
-   (cl-loop for scope in scopes
-            for i from 0
-            collect
-            (list 'dape-info-scope-mode i
-                  (string-truncate-left (plist-get scope :name)
-                                        dape-info-header-scope-max-name)))
-   '((dape-info-watch-mode nil "Watch"))))
-
-(defun dape--info-locals-table-columns-list (alist)
-  "Format and arrange the columns in locals display based on ALIST."
-  ;; Stolen from gdb-mi but reimpleted due to usage of dape customs
-  ;; org function `gdb-locals-table-columns-list'.
-  (let (columns)
-    (dolist (config dape-info-variable-table-row-config columns)
-      (let* ((key  (car config))
-             (max  (cdr config))
-             (prop-org (alist-get key alist))
-             (prop prop-org))
-        (when prop-org
-          (when (eq dape-info-buffer-variable-format 'line)
-            (setq prop
-                  (substring prop
-                             0 (string-match-p "\n" prop))))
-          (if (and (> max 0) (length> prop max))
-              (push (propertize (string-truncate-left prop max) 'help-echo prop-org)
-                    columns)
-            (push prop columns)))))
-    (nreverse columns)))
-
-(defun dape--info-scope-add-variable (table object ref path)
-  "Add variable OBJECT with REF and PATH to TABLE."
-  (let* ((name (or (plist-get object :name) " "))
-         (type (or (plist-get object :type) " "))
-         (value (or (plist-get object :value)
-                    (plist-get object :result)
-                    " "))
-         (prefix (make-string (* (1- (length path)) 2) ? ))
-         (path (cons (plist-get object :name) path))
-         (expanded (gethash path dape--info-expanded-p))
-         row)
-    (setq name
-          (propertize name
-                      'mouse-face 'highlight
-                      'help-echo "mouse-2: create or remove watch expression"
-                      'keymap dape-info-variable-name-map
-                      'font-lock-face font-lock-variable-name-face)
-          type
-          (propertize type
-                      'font-lock-face font-lock-type-face)
-          value
-          (propertize value
-                      'mouse-face 'highlight
-                      'help-echo "mouse-2: edit value"
-                      'keymap dape-info-variable-value-map)
-          prefix
-          (concat
-           (cond
-            ((zerop (or (plist-get object :variablesReference) 0))
-             (concat prefix " "))
-            ((and expanded (plist-get object :variables))
-             (propertize (concat prefix "-")
-                         'mouse-face 'highlight
-                         'help-echo "mouse-2: contract"
-                         'keymap dape-info-variable-prefix-map))
-            (t
-             (propertize (concat prefix "+")
-                         'mouse-face 'highlight
-                         'help-echo "mouse-2: expand"
-                         'keymap dape-info-variable-prefix-map)))
-           " "))
-    (setq row (dape--info-locals-table-columns-list
-               `((name  . ,name)
-                 (type  . ,type)
-                 (value . ,value))))
-    (setcar row (concat prefix (car row)))
-    (gdb-table-add-row table
-                       (if dape-info-variable-table-aligned
-                           row
-                         (list (mapconcat 'identity row " ")))
-                       (list 'dape--info-variable object
-                             'dape--info-path path
-                             'dape--info-ref ref))
-    (when expanded
-      ;; TODO Should be paged
-      (dolist (variable (plist-get object :variables))
-        (dape--info-scope-add-variable table
-                                       variable
-                                       (plist-get object :variablesReference)
-                                       path)))))
-
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-scope-mode)) id)
-  "Fetches data for `dape-info-scope-mode' and updates buffer.
-Buffer is specified by MODE and ID."
-  (when-let* ((conn (or conn (dape--live-connection 'stopped t)))
-              (frame (dape--current-stack-frame conn))
-              (scopes (plist-get frame :scopes))
-              ;; FIXME if scope is out of range here scope list could
-              ;;       have shrunk since last update and current
-              ;;       scope buffer should be killed and replaced if
-              ;;       if visible
-              (scope (nth id scopes))
-              ;; Check for stopped threads to reduce flickering
-              ((dape--stopped-threads conn)))
-    (dape--with dape--variables (conn scope)
-      (dape--with dape--variables-recursive
-          (conn
-           scope
-           (list (plist-get scope :name))
-           (lambda (path object)
-             (and (not (eq (plist-get object :expensive) t))
-                  (gethash (cons (plist-get object :name) path)
-                           dape--info-expanded-p))))
-        (when (and scope scopes (dape--stopped-threads conn))
-          (dape--info-buffer-update-1 mode id :scope scope :scopes scopes))))))
-
-(cl-defmethod dape--info-buffer-update-contents
-  (&context (major-mode dape-info-scope-mode) &key scope scopes)
-  "Updates `dape-info-scope-mode' buffer for SCOPE, SCOPES."
-  (rename-buffer (format "*dape-info %s*" (plist-get scope :name)) t)
-  (setq dape--info-buffer-related
-        (dape--info-group-2-related-buffers scopes))
-  (cl-loop with table = (make-gdb-table)
-           for object in (plist-get scope :variables)
-           initially (setf (gdb-table-right-align table)
-                           dape-info-variable-table-aligned)
-           do
-           (dape--info-scope-add-variable table
-                                          object
-                                          (plist-get scope :variablesReference)
-                                          (list (plist-get scope :name)))
-           finally (insert (gdb-table-string table " "))))
-
-
-;;; Info watch buffer
-
-(defvar dape-info-watch-mode-map (copy-keymap dape-info-scope-mode-map)
-  "Local keymap for dape watch buffer.")
-
-(define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"
-  "Major mode for Dape info watch."
-  :interactive nil
-  (setq dape--info-buffer-related '((dape-info-watch-mode nil "Watch"))))
-
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-watch-mode)) id)
-  "Fetches data for `dape-info-watch-mode' and updates buffer.
-Buffer is specified by MODE and ID."
-  (if (not (and conn (jsonrpc-running-p conn)))
-      (dape--info-buffer-update-1 mode id :scopes nil)
-    (when-let* ((frame (dape--current-stack-frame conn))
-                (scopes (plist-get frame :scopes))
-                (responses 0))
-      (if (not dape--watched)
-          (dape--info-buffer-update-1 mode id :scopes scopes)
-        (dolist (plist dape--watched)
-          (plist-put plist :variablesReference nil)
-          (plist-put plist :variables nil)
-          (dape--with dape--evaluate-expression
-              (conn
-               (plist-get frame :id)
-               (plist-get plist :name)
-               "watch")
-            (unless error-message
-              (cl-loop for (key value) on body by 'cddr
-                       do (plist-put plist key value)))
-            (setq responses (1+ responses))
-            (when (length= dape--watched responses)
-              (dape--with dape--variables-recursive
-                  (conn
-                   (list :variables dape--watched)
-                   (list "Watch")
-                   (lambda (path object)
-                     (and (not (eq (plist-get object :expensive) t))
-                          (gethash (cons (plist-get object :name) path)
-                                   dape--info-expanded-p))))
-                (dape--info-buffer-update-1 mode id :scopes scopes)))))))))
-
-(cl-defmethod dape--info-buffer-update-contents
-  (&context (major-mode dape-info-watch-mode) &key scopes)
-  "Updates `dape-info-watch-mode' buffer for SCOPES."
-  (when scopes
-    (setq dape--info-buffer-related
-          (dape--info-group-2-related-buffers scopes)))
-  (if (not dape--watched)
-      (insert "No watched variable.")
-    (cl-loop with table = (make-gdb-table)
-             for watch in dape--watched
-             initially (setf (gdb-table-right-align table)
-                             dape-info-variable-table-aligned)
-             do
-             (dape--info-scope-add-variable table watch
-                                            'watch
-                                            (list "Watch"))
-             finally (insert (gdb-table-string table " ")))))
 
 
 ;;; Minibuffer config hints
