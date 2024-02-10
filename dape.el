@@ -98,13 +98,14 @@
                fn dape-config-autoport
                :type "lldb"
                :request "launch"
-               :cwd "."
-               :args [])))
+               :cwd "."))
+            (common `(:args [] :stopOnEntry nil)))
         `((codelldb-cc
            modes (c-mode c-ts-mode c++-mode c++-ts-mode)
            command-args ("--port" :autoport)
            ,@codelldb
-           :program "a.out")
+           :program "a.out"
+           ,@common)
           (codelldb-rust
            modes (rust-mode rust-ts-mode)
            command-args ("--port" :autoport
@@ -116,7 +117,8 @@
                                                        (directory-file-name)
                                                        (file-name-split)
                                                        (last)
-                                                       (car)))))))
+                                                       (car))))
+           ,@common)))
     (cpptools
      modes (c-mode c-ts-mode c++-mode c++-ts-mode)
      ensure dape-ensure-command
@@ -150,6 +152,7 @@
      :type "executable"
      :cwd dape-cwd
      :program dape-buffer-default
+     :args []
      :justMyCode nil
      :console "integratedTerminal"
      :showReturnValue t
@@ -215,7 +218,6 @@
           (js-debug-chrome
            ,@js-debug
            :type "pwa-chrome"
-           :trace t
            :url "http://localhost:3000"
            :webRoot dape-cwd
            :outputCapture "console")))
