@@ -2674,7 +2674,9 @@ REVERSED selects previous."
 
 (defun dape--info-buffer-change-fn (&rest _rest)
   "Hook fn for `window-buffer-change-functions' to ensure update."
-  (dape--info-update (dape--live-connection 'newest t) (current-buffer)))
+  (dape--info-update (or (dape--live-connection 'stopped)
+                         (dape--live-connection 'newest t))
+                     (current-buffer)))
 
 (define-derived-mode dape-info-parent-mode special-mode ""
   "Generic mode to derive all other Dape gud buffer modes from."
