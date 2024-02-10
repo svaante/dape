@@ -1202,20 +1202,26 @@ and success.  See `dape--callback' for signature."
 (defun dape--set-breakpoints-in-buffer (conn buffer &optional cb)
   "Set breakpoints in BUFFER for adapter CONN.
 See `dape--callback' for expected CB signature."
-  (let* ((overlays (and (buffer-live-p buffer)
-                        (alist-get buffer
-                                   (seq-group-by 'overlay-buffer
-                                                 dape--breakpoints))))
-         (lines (mapcar (lambda (overlay)
-                          (with-current-buffer (overlay-buffer overlay)
-                            (line-number-at-pos (overlay-start overlay))))
-                        overlays))
-         (source (with-current-buffer buffer
-                   (or dape--source
-                       (list
-                        :name (file-name-nondirectory
-                               (buffer-file-name buffer))
-                        :path (dape--path (buffer-file-name buffer) 'remote))))))
+  (let* ((overlays
+          (alist-get buffer
+                     (seq-group-by 'overlay-buffer
+                                   dape--breakpoints)))
+         (lines
+          (mapcan (lambda (overlay)
+                    (when-let* ((buffer (overlay-buffer overlay))
+                                ((buffer-live-p buffer)))
+                      (with-current-buffer buffer
+                        (list
+                         (line-number-at-pos (overlay-start overlay))))))
+                  overlays))
+         (source
+          (when (buffer-live-p buffer)
+            (with-current-buffer buffer
+              (or dape--source
+                  (list
+                   :name (file-name-nondirectory
+                          (buffer-file-name buffer))
+                   :path (dape--path (buffer-file-name buffer) 'remote)))))))
     (dape--with dape-request
         (conn
          "setBreakpoints"
