@@ -2,6 +2,17 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.6
+- Harden breakpoints functions against dead breakpoint overlays
+- Small improvements in the batteries included configurations
+- Nicer variable print in repl
+- Improve current connection guesses (improves =debugpy= multi process support)
+- Bump required jsonrpc version to 1.0.24
+- Fix broken external terminal with correct =runInTerminal= response in =js-debug=
+- Normalize naming and usage of dape faces
+- Add typescript as part of js-debug modes
+- Focus emacs on stopped, controllable with =dape-on-stopped-hooks=
+
 * Version 0.5
 - Use setBreakpoints response and event =breakpoint= to validate and move breakpoints
 - Add =dape-debug= custom to disable debug printouts in =*dape-repl*=
