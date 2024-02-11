@@ -555,7 +555,7 @@ The hook is run with one argument, the compilation buffer."
 
 
 ;;; Face
-(defface dape-breakpoint
+(defface dape-breakpoint-face
   '((t :inherit (font-lock-keyword-face)))
   "Face used to display breakpoint overlays.")
 
@@ -565,7 +565,7 @@ The hook is run with one argument, the compilation buffer."
   "Face used to display log breakpoints.")
 
 (defface dape-expression
-  '((t :inherit (dape-breakpoint)
+  '((t :inherit (dape-breakpoint-face)
        :height 0.85 :box (:line-width -1)))
   "Face used to display conditional breakpoints.")
 
@@ -2419,7 +2419,7 @@ that breakpoint as DAP only supports one breakpoint per line."
       (dape--overlay-icon breakpoint
                           dape-breakpoint-margin-string
                           'large-circle
-                          'dape-breakpoint
+                          'dape-breakpoint-face
                           'in-margin)))
     (overlay-put breakpoint 'modification-hooks '(dape--breakpoint-freeze))
     (push breakpoint dape--breakpoints)
@@ -2617,7 +2617,7 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
                                    ((seq-filter (lambda (ov)
                                                   (overlay-get ov 'dape-breakpoint))
                                                 (dape--breakpoints-at-point))
-                                    'dape-breakpoint)
+                                    'dape-breakpoint-face)
                                    (deepest-p
                                     'default)
                                    (t
