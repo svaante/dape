@@ -557,6 +557,10 @@ The hook is run with one argument, the compilation buffer."
   "Print debug info in *dape-repl* and *dape-connection events*."
   :type 'boolean)
 
+(defcustom dape-request-timeout jsonrpc-default-request-timeout
+  "Number of seconds until a request is deemed to be timed out."
+  :type 'natnum)
+
 
 ;;; Face
 (defface dape-breakpoint-face
@@ -1160,8 +1164,14 @@ and success.  See `dape--callback' for signature."
                          (when (functionp cb)
                            (lambda ()
                              (dape--repl-message
-                              (format "* Command %s timeout *" command) 'dape-repl-error-face)
-                             (funcall cb conn nil "timeout")))))
+                              (format
+                               "* Command %s timed out after %d seconds, the \
+timeout period is configurable with `dape-request-timeout' *"
+                               command
+                               dape-request-timeout)
+                              'dape-repl-error-face)
+                             (funcall cb conn nil "timeout")))
+                         :timeout dape-request-timeout))
 
 (defun dape--initialize (conn)
   "Initialize and launch/attach adapter CONN."
