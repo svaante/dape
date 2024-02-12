@@ -427,6 +427,10 @@ Each element should look like (MIME-TYPE . MODE) where
                  (const :tag "Step line" line)
                  (const :tag "Step instruction" instruction)))
 
+(defcustom dape-stack-trace-levels 20
+  "The number of stack frames fetched."
+  :type 'natnum)
+
 (defcustom dape-on-start-hooks '(dape-repl dape-info)
   "Hook to run on session start."
   :type 'hook)
@@ -1334,25 +1338,34 @@ See `dape--callback' for expected CB signature."
            (plist-get body :threads)))
     (funcall cb conn)))
 
-(defun dape--stack-trace (conn thread cb)
-  "Update stack trace in THREAD plist by adapter CONN.
+(defun dape--stack-trace (conn thread nof cb)
+  "Update stack trace in THREAD plist with NOF frames by adapter CONN.
 See `dape--callback' for expected CB signature."
-  (cond
-   ((or (not (equal (plist-get thread :status) "stopped"))
-        (plist-get thread :stackFrames)
-        (not (integerp (plist-get thread :id))))
-    (funcall cb conn))
-   (t
-    (dape-request conn
-                  "stackTrace"
-                  (list :threadId (plist-get thread :id)
-                        :levels 50)
-                  (dape--callback
-                   (plist-put thread :stackFrames
-                              (cl-map 'list
-                                      'identity
-                                      (plist-get body :stackFrames)))
-                   (funcall cb conn))))))
+  (let ((current-nof (length (plist-get thread :stackFrames)))
+        (delayed-stack-trace-p (dape--capable-p conn :supportsDelayedStackTraceLoading)))
+    (cond
+     ((or (not (equal (plist-get thread :status) "stopped"))
+          (not (integerp (plist-get thread :id)))
+          (and delayed-stack-trace-p (<= nof current-nof))
+          (and (not delayed-stack-trace-p) (> current-nof 0)))
+      (funcall cb conn))
+     (t
+      (dape-request
+       conn
+       "stackTrace"
+       `(:threadId
+         ,(plist-get thread :id)
+         ,@(when delayed-stack-trace-p
+             (list
+              :startFrame current-nof
+              :levels (- nof current-nof))))
+       (dape--callback
+        (plist-put thread :stackFrames
+                   (append
+                    (plist-get thread :stackFrames)
+                    (plist-get body :stackFrames)
+                    nil))
+        (funcall cb conn)))))))
 
 (defun dape--variables (conn object cb)
   "Update OBJECTs variables by adapter CONN.
@@ -1471,7 +1484,7 @@ See `dape--callback' for expected CB signature."
       (funcall cb conn)
     (let ((responses 0))
       (dolist (thread (dape--threads conn))
-        (dape--with dape--stack-trace (conn thread)
+        (dape--with dape--stack-trace (conn thread 1)
           (setq responses (1+ responses))
           (when (length= (dape--threads conn) responses)
             (funcall cb conn)))))))
@@ -1486,7 +1499,7 @@ If SKIP-STACK-POINTER-FLASH skip flashing after placing stack pointer."
     (unless skip-clear-stack-frames
       (dolist (thread (dape--threads conn))
         (plist-put thread :stackFrames nil)))
-    (dape--with dape--stack-trace (conn current-thread)
+    (dape--with dape--stack-trace (conn current-thread 1)
       (dape--update-stack-pointers conn skip-stack-pointer-flash)
       (dape--with dape--scopes (conn (dape--current-stack-frame conn))
         (run-hooks 'dape-update-ui-hooks)))))
@@ -3083,50 +3096,72 @@ Buffer is specified by MODE and ID."
                                     (dape-info-sources-mode nil "Sources")))
   (add-to-list 'overlay-arrow-variable-list 'dape--info-stack-position))
 
+(defun dape--info-stack-buffer-insert (current-stack-frame stack-frames)
+  "Helper for inserting stack info into *dape-info Stack* buffer.
+Create table from CURRENT-STACK-FRAME and STACK-FRAMES and insert into
+current buffer."
+  (cl-loop with table = (make-gdb-table)
+           for frame in stack-frames
+           do
+           (gdb-table-add-row
+            table
+            (list
+             "in"
+             (concat
+              (plist-get frame :name)
+              (when-let* ((dape-info-stack-buffer-locations)
+                          (path (thread-first frame
+                                              (plist-get :source)
+                                              (plist-get :path)))
+                          (path (dape--path path 'local)))
+                (concat " of "
+                        (dape--format-file-line path
+                                                (plist-get frame :line))))
+              (when-let ((dape-info-stack-buffer-addresses)
+                         (ref
+                          (plist-get frame :instructionPointerReference)))
+                (concat " at " ref))
+              " "))
+            (list
+             'dape--info-frame frame
+             'mouse-face 'highlight
+             'keymap dape-info-stack-line-map
+             'help-echo "mouse-2, RET: Select frame"))
+           finally (insert (gdb-table-string table " ")))
+  (cl-loop for stack-frame in stack-frames
+           for line from 1
+           until (eq current-stack-frame stack-frame)
+           finally (gdb-mark-line line dape--info-stack-position)))
+
 (cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-stack-mode)) id)
   "Fetches data for `dape-info-stack-mode' and updates buffer.
 Buffer is specified by MODE and ID."
-  (let ((stack-frames (plist-get (dape--current-thread conn) :stackFrames))
-        (current-stack-frame (dape--current-stack-frame conn)))
-    (dape--info-update-with mode id
-      (cond
-       ((or (not current-stack-frame)
-            (not (dape--stopped-threads conn)))
+  (let* ((current-thread (dape--current-thread conn))
+         (stack-frames (plist-get current-thread :stackFrames))
+         (current-stack-frame (dape--current-stack-frame conn)))
+    (cond
+     ((or (not current-stack-frame)
+          (not (dape--stopped-threads conn)))
+      (dape--info-update-with mode id
         (set-marker dape--info-stack-position nil)
-        (insert "No stopped threads."))
-       (t
-        (cl-loop with table = (make-gdb-table)
-                 for frame in stack-frames
-                 do
-                 (gdb-table-add-row
-                  table
-                  (list
-                   "in"
-                   (concat
-                    (plist-get frame :name)
-                    (when-let* ((dape-info-stack-buffer-locations)
-                                (path (thread-first frame
-                                                    (plist-get :source)
-                                                    (plist-get :path)))
-                                (path (dape--path path 'local)))
-                      (concat " of "
-                              (dape--format-file-line path
-                                                      (plist-get frame :line))))
-                    (when-let ((dape-info-stack-buffer-addresses)
-                               (ref
-                                (plist-get frame :instructionPointerReference)))
-                      (concat " at " ref))
-                    " "))
-                  (list
-                   'dape--info-frame frame
-                   'mouse-face 'highlight
-                   'keymap dape-info-stack-line-map
-                   'help-echo "mouse-2, RET: Select frame"))
-                 finally (insert (gdb-table-string table " ")))
-        (cl-loop for stack-frame in stack-frames
-                 for line from 1
-                 until (eq current-stack-frame stack-frame)
-                 finally (gdb-mark-line line dape--info-stack-position)))))))
+        (insert "No stopped threads.")))
+     (t
+      ;; Why are we updating it twice? Calls to `dape--stack-trace'
+      ;; with an large nof can be expensive, therefore 1 nof is fetchd
+      ;; at an 'update event, then we fetch the rest here.
+
+      ;; Start off with shoving available stack info into buffer
+      (dape--info-update-with mode id
+        (dape--info-stack-buffer-insert current-stack-frame stack-frames))
+      (dape--with dape--stack-trace (conn
+                                     current-thread
+                                     dape-stack-trace-levels)
+        ;; If stack trace lookup with `dape-stack-trace-levels' frames changed
+        ;; the stack frame list, we need to update the buffer again
+        (unless (eq stack-frames (plist-get current-thread :stackFrames))
+          (dape--info-update-with mode id
+            (dape--info-stack-buffer-insert current-stack-frame
+                                            (plist-get current-thread :stackFrames)))))))))
 
 
 ;;; Info modules buffer
