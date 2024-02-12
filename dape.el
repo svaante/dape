@@ -1138,6 +1138,8 @@ If NOWARN does not error on no active process."
 
 
 ;;; Outgoing requests
+(defvar dape-jsonrpc-timeout 30
+  "The time (in seconds) to wait for dape requests to complete.")
 
 (defun dape-request (conn command arguments &optional cb)
   "Send request with COMMAND and ARGUMENTS to adapter CONN.
@@ -1152,6 +1154,7 @@ and success.  See `dape--callback' for signature."
                                       (unless (eq (plist-get result :success) t)
                                         (or (plist-get result :message) "")))))
                          :error-fn 'ignore ;; will never be called
+                         :timeout dape-jsonrpc-timeout
                          :timeout-fn
                          (when (functionp cb)
                            (lambda ()
