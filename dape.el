@@ -175,6 +175,18 @@
      :cwd "."
      :program "lib/main.dart"
      :toolArgs ["-d" "all"])
+    ;; gdb is not fully functional with an thread count > 1
+    ;; See: `dape--info-threads-all-stack-trace-disable'
+    (gdb
+     modes (c-mode c-ts-mode c++-mode c++-ts-mode)
+     command-cwd dape-command-cwd
+     command "gdb"
+     command-args ("--interpreter=dap")
+     fn (dape-config-tramp)
+     :request "launch"
+     :program "a.out"
+     :args []
+     :stopAtBeginningOfMainSubprogram nil)
     (godot
      modes (gdscript-mode)
      port 6006
@@ -1489,18 +1501,6 @@ See `dape--callback' for expected CB signature."
                        (plist-put stack-frame :scopes scopes)
                        (funcall cb conn))))
     (funcall cb conn)))
-
-(defun dape--inactive-threads-stack-trace (conn cb)
-  "Populate CONN stack frame data for all threads.
-See `dape--callback' for expected CB signature."
-  (if (not (dape--threads conn))
-      (funcall cb conn)
-    (let ((responses 0))
-      (dolist (thread (dape--threads conn))
-        (dape--with dape--stack-trace (conn thread 1)
-          (setq responses (1+ responses))
-          (when (length= (dape--threads conn) responses)
-            (funcall cb conn)))))))
 
 (defun dape--update (conn
                      &optional skip-clear-stack-frames skip-stack-pointer-flash)
@@ -3020,6 +3020,26 @@ When optional kill is non nil kill buffers *dape-info* buffers."
   ;; TODO Add bindings for individual threads.
   )
 
+;; TODO Report gdb bug
+(defvar dape--info-threads-all-stack-trace-disable nil
+  "Disable stack information for non selected threads.
+GDB fails fetching stack variables if an stack trace for another
+thread is in flight, which happens when *dape-info Threads* and
+*dape-info Scopes* are updated at the same time.")
+
+(defun dape--info-threads-all-stack-trace (conn cb)
+  "Populate CONN stack frame data for non selected threads.
+See `dape--callback' for expected CB signature."
+  (if (or dape--info-threads-all-stack-trace-disable
+          (not (dape--threads conn)))
+      (funcall cb conn)
+    (let ((responses 0))
+      (dolist (thread (dape--threads conn))
+        (dape--with dape--stack-trace (conn thread 1)
+          (setq responses (1+ responses))
+          (when (length= (dape--threads conn) responses)
+            (funcall cb conn)))))))
+
 (define-derived-mode dape-info-threads-mode dape-info-parent-mode "Threads"
   "Major mode for Dape info threads."
   :interactive nil
@@ -3034,7 +3054,7 @@ Buffer is specified by MODE and ID."
   (if-let ((conn (or conn (dape--live-connection 'newest t)))
            ((dape--stopped-threads conn))
            (threads (dape--threads conn)))
-      (dape--with dape--inactive-threads-stack-trace (conn)
+      (dape--with dape--info-threads-all-stack-trace (conn)
         (dape--info-update-with mode id
           (let ((table (make-gdb-table))
                 (current-thread (dape--current-thread conn)))
