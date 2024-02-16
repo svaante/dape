@@ -3515,8 +3515,9 @@ Buffer is specified by MODE and ID."
                         (gethash (cons (plist-get object :name) path)
                                  dape--info-expanded-p))))
               (dape--info-update-with mode id
-                (setq dape--info-buffer-related
-                      (dape--info-group-2-related-buffers scopes))
+                (when scopes
+                  (setq dape--info-buffer-related
+                        (dape--info-group-2-related-buffers scopes)))
                 (cl-loop with table = (make-gdb-table)
                          for watch in dape--watched
                          initially (setf (gdb-table-right-align table)
