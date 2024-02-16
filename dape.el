@@ -1348,7 +1348,8 @@ See `dape--callback' for expected CB signature."
   "Update stack trace in THREAD plist with NOF frames by adapter CONN.
 See `dape--callback' for expected CB signature."
   (let ((current-nof (length (plist-get thread :stackFrames)))
-        (delayed-stack-trace-p (dape--capable-p conn :supportsDelayedStackTraceLoading)))
+         (delayed-stack-trace-p
+          (dape--capable-p conn :supportsDelayedStackTraceLoading)))
     (cond
      ((or (not (equal (plist-get thread :status) "stopped"))
           (not (integerp (plist-get thread :id)))
@@ -1366,11 +1367,17 @@ See `dape--callback' for expected CB signature."
               :startFrame current-nof
               :levels (- nof current-nof))))
        (dape--callback
-        (plist-put thread :stackFrames
-                   (append
-                    (plist-get thread :stackFrames)
-                    (plist-get body :stackFrames)
-                    nil))
+        (cond
+         ((not delayed-stack-trace-p)
+          (plist-put thread :stackFrames
+                     (append (plist-get body :stackFrames) nil)))
+         ;; sanity check delayed stack trace
+         ((length= (plist-get thread :stackFrames) current-nof)
+          (plist-put thread :stackFrames
+                     (append
+                      (plist-get thread :stackFrames)
+                      (plist-get body :stackFrames)
+                      nil))))
         (funcall cb conn)))))))
 
 (defun dape--variables (conn object cb)
