@@ -2831,10 +2831,11 @@ If SKIP-UPDATE is non nil skip updating buffer contents."
 (defun dape-info-update (&optional conn)
   "Update and display `dape-info-*' buffers for adapter CONN."
   (dolist (buffer (dape--info-buffer-list))
-    (dape--info-update (or conn
-                           (dape--live-connection 'stopped t)
-                           (dape--live-connection 'newest t))
-                       buffer)))
+    (when (get-buffer-window buffer)
+      (dape--info-update (or conn
+                             (dape--live-connection 'stopped t)
+                             (dape--live-connection 'newest t))
+                         buffer))))
 
 (defun dape-info (&optional maybe-kill kill)
   "Update and display *dape-info* buffers.
