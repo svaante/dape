@@ -487,6 +487,7 @@ Expects line with string \"breakpoint\" in source."
       (dape-test--apply-to-match "^1 .* stopped in" 'dape-info-select-thread))
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-threads-mode))
+      (display-buffer (current-buffer)) ; trigger window-buffer-change-functions
       ;; thread selected
       (dape-test--should
        (and (dape-test--line-at-regex "^1 .* stopped in")
@@ -569,6 +570,7 @@ Expects line with string \"breakpoint\" in source."
     ;; contents
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-modules-mode))
+      (display-buffer (current-buffer)) ; trigger window-buffer-change-functions
       (dape-test--should ;; Regression .* symlinks are now handled differently
        (dape-test--line-at-regex "^__main__ of .*main.py")))))
 
@@ -593,6 +595,7 @@ Expects line with string \"breakpoint\" in source."
     ;; contents
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-sources-mode))
+      (display-buffer (current-buffer)) ; trigger window-buffer-change-functions
       (dape-test--should
        (and (dape-test--line-at-regex "^os ")
             (dape-test--line-at-regex "index.js"))))
