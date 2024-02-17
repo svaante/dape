@@ -1941,6 +1941,8 @@ CONN is inferred for interactive invocations."
          (dape--capable-p conn :supportsRestartRequest))
     (setf (dape--threads conn) nil)
     (setf (dape--thread-id conn) nil)
+    (setf (dape--modules conn) nil)
+    (setf (dape--sources conn) nil)
     (setf (dape--restart-in-progress-p conn) t)
     (dape-request conn "restart" nil
                   (dape--callback
