@@ -147,6 +147,16 @@ If you find a working configuration for any other debug adapter please submit a 
 
 See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]] for other adapters, your mileage will vary.
 
+* Performance
+If your are having issues with adapter output in =*dape-repl*= and startup time =jsonrpc.el= could be the culprit.
+This has been reported upstream (#69241), but until the issue has been fixed there exists an fork of =jsonrpc.el=.
+
+#+begin_src emacs-lisp
+  (use-package jsonrpc
+    :straight (jsonrpc :type git :host github :repo "svaante/jsonrpc"))
+#+end_src
+
+
 * Bugs and issues
 Before reporting any issues =(setq dape-debug t)= and take a look at =*dape-repl*= buffer. Please share your =*dape-repl*= and =*dape-connection events*= in the buffer contents with the bug report.
 Master is used is for all case and purposes a development branch still and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.
