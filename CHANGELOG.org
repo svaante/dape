@@ -2,6 +2,13 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.7
+- Add GDB as an "supported" adapter (see =dape--info-threads-all-stack-trace-disable=)
+- Change thread up/down bindings to match gud bindings
+- Skip updating non visible info buffers
+- Expose request timeout as =dape-timeout=
+- Improve performance of stack trace calls
+
 * Version 0.6
 - Harden breakpoints functions against dead breakpoint overlays
 - Small improvements in the batteries included configurations
