@@ -37,7 +37,7 @@ Currently =Dape= does not come with any debug adapter configuration.
 
 #+begin_src emacs-lisp
   (use-package dape
-    ;; By default dape uses gdb keybinding prefix
+    ;; By default dape shares the same keybinding prefix as `gud'
     ;; If you do not want to use any prefix, set it to nil.
     ;; :preface
     ;; (setq dape-key-prefix "\C-x\C-a")
