@@ -1159,27 +1159,34 @@ If NOWARN does not error on no active process."
   "Send request with COMMAND and ARGUMENTS to adapter CONN.
 If callback function CB is supplied, it's called on timeout
 and success.  See `dape--callback' for signature."
-  (jsonrpc-async-request conn command arguments
-                         :success-fn
-                         (when (functionp cb)
-                           (lambda (result)
-                             (funcall cb conn
-                                      (plist-get result :body)
-                                      (unless (eq (plist-get result :success) t)
-                                        (or (plist-get result :message) "")))))
-                         :error-fn 'ignore ;; will never be called
-                         :timeout-fn
-                         (when (functionp cb)
-                           (lambda ()
-                             (dape--repl-message
-                              (format
-                               "* Command %s timed out after %d seconds, the \
+  (let ((buffer (current-buffer)))
+    (jsonrpc-async-request conn command arguments
+                           :success-fn
+                           (when (functionp cb)
+                             (lambda (result)
+                               (with-current-buffer
+                                   (if (buffer-live-p buffer) buffer
+                                     (current-buffer))
+                                 (funcall cb conn
+                                          (plist-get result :body)
+                                          (unless (eq (plist-get result :success) t)
+                                            (or (plist-get result :message) ""))))))
+                           :error-fn 'ignore ;; will never be called
+                           :timeout-fn
+                           (when (functionp cb)
+                             (lambda ()
+                               (dape--repl-message
+                                (format
+                                 "* Command %s timed out after %d seconds, the \
 timeout period is configurable with `dape-request-timeout' *"
-                               command
-                               dape-request-timeout)
-                              'dape-repl-error-face)
-                             (funcall cb conn nil "timeout")))
-                         :timeout dape-request-timeout))
+                                 command
+                                 dape-request-timeout)
+                                'dape-repl-error-face)
+                               (with-current-buffer
+                                   (if (buffer-live-p buffer) buffer
+                                     (current-buffer))
+                                 (funcall cb conn nil "timeout"))))
+                           :timeout dape-request-timeout)))
 
 (defun dape--initialize (conn)
   "Initialize and launch/attach adapter CONN."
@@ -2167,7 +2174,7 @@ Optional argument SKIP-REMOVE limits usage to only adding watched vars."
       (push (list :name expression)
             dape--watched)
       ;; FIXME don't want to have a depency on info ui in core commands
-      (dape--display-buffer (dape--info-buffer 'dape-info-watch-mode))))
+      (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode))))
   (run-hooks 'dape-update-ui-hooks))
 
 (defun dape-evaluate-expression (conn expression)
@@ -2662,8 +2669,6 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
 (defvar-local dape--info-buffer-identifier nil
   "Identifying var for buffers, used only in scope buffer.
 Used there as scope index.")
-(defvar-local dape--info-buffer-in-redraw nil
-  "Guard for buffer `dape-info-update' fn.")
 
 (defvar dape--info-buffers nil
   "List containing `dape-info' buffers, might be un-live.")
@@ -2697,7 +2702,7 @@ REVERSED selects previous."
                               (cadr))
                  (car dape--info-buffer-related))))
     (gdb-set-window-buffer
-     (dape--info-buffer mode id) t)))
+     (dape--info-get-buffer-create mode id) t)))
 
 (defvar dape-info-parent-mode-map
   (let ((map (make-sparse-keymap)))
@@ -2709,17 +2714,16 @@ REVERSED selects previous."
 
 (defun dape--info-buffer-change-fn (&rest _rest)
   "Hook fn for `window-buffer-change-functions' to ensure update."
-  (ignore-errors
-    (dape--info-update (or (dape--live-connection 'stopped)
-                           (dape--live-connection 'newest t))
-                       (current-buffer))))
+  (when (derived-mode-p 'dape-info-parent-mode)
+    (ignore-errors (revert-buffer))))
 
 (define-derived-mode dape-info-parent-mode special-mode ""
   "Generic mode to derive all other Dape gud buffer modes from."
   :interactive nil
   (setq-local buffer-read-only t
               truncate-lines t
-              cursor-in-non-selected-windows nil)
+              cursor-in-non-selected-windows nil
+              revert-buffer-function #'dape--info-revert)
   (add-hook 'window-buffer-change-functions 'dape--info-buffer-change-fn
             nil 'local)
   (when dape-info-hide-mode-line
@@ -2738,8 +2742,9 @@ with HELP-ECHO string, MOUSE-FACE and FACE."
 	       (lambda (event) (interactive "e")
 		 (save-selected-window
 		   (select-window (posn-window (event-start event)))
-                   (gdb-set-window-buffer
-                    (dape--info-buffer mode id) t))))))
+                   (let ((buffer (dape--info-get-buffer-create mode id)))
+                     (with-current-buffer buffer (revert-buffer))
+                     (gdb-set-window-buffer buffer t)))))))
 
 (defun dape--info-set-header-line-format ()
   "Helper for dape info buffers to set header line.
@@ -2757,42 +2762,38 @@ Header line is custructed from buffer local
               " "))
          dape--info-buffer-related)))
 
-(defun dape--info-call-update-with (mode id fn)
-  (if dape--info-buffer-in-redraw
-      (run-with-timer 0.01 nil
-                      'dape--info-call-update-with mode id fn)
-    (when-let ((buffer (dape--info-get-live-buffer mode id)))
-      (let ((dape--info-buffer-in-redraw t))
-        (with-current-buffer buffer
-          (unless (derived-mode-p 'dape-info-parent-mode)
-            (error "Trying to update non info buffer"))
-          ;; Would be nice with replace-buffer-contents
-          ;; But it seams to messes up string properties
-          (let ((line (line-number-at-pos (point) t))
-                (old-window (selected-window)))
-            ;; Still don't know any better way of keeping window scroll?
-            (when-let ((window (get-buffer-window buffer)))
-              (select-window window))
-            (save-window-excursion
-              (let ((inhibit-read-only t))
-                (erase-buffer)
-                (funcall fn))
-              (ignore-errors
-                (goto-char (point-min))
-                (forward-line (1- line)))
-              (dape--info-set-header-line-format))
-            (when old-window
-              (select-window old-window))))))))
+(defun dape--info-call-update-with (fn &optional buffer)
+  "Helper for `dape--info-revert' functions.
+Erase buffer content and updates `header-line-format'.
+FN is expected to update insert buffer contents and
+update `dape--info-buffer-related'."
+  (setq buffer (or buffer (current-buffer)))
+  (with-current-buffer buffer
+    (unless (derived-mode-p 'dape-info-parent-mode)
+      (error "Trying to update non info buffer"))
+    ;; Would be nice with replace-buffer-contents
+    ;; But it seams to messes up string properties
+    (let ((line (line-number-at-pos (point) t))
+          (old-window (selected-window)))
+      ;; Still don't know any better way of keeping window scroll?
+      (when-let ((window (get-buffer-window buffer)))
+        (select-window window))
+      (save-window-excursion
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (funcall fn))
+        (ignore-errors
+          (goto-char (point-min))
+          (forward-line (1- line)))
+        (dape--info-set-header-line-format))
+      (when old-window
+        (select-window old-window)))))
 
-(defmacro dape--info-update-with (mode id &rest body)
-  (declare (indent 2))
-  `(dape--info-call-update-with ,mode ,id (lambda () ,@body)))
-
-(defun dape--info-update (conn buffer)
-  "Update dape info BUFFER for adapter CONN."
-  (apply 'dape--info-buffer-update
-         conn (with-current-buffer buffer
-                (list major-mode dape--info-buffer-identifier))))
+(defmacro dape--info-update-with (&rest body)
+"Creates update function from BODY.
+See `dape--info-call-update-with'."
+  (declare (indent 0))
+  `(dape--info-call-update-with (lambda () ,@body)))
 
 (defun dape--info-get-live-buffer (mode &optional identifier)
   "Get live dape info buffer with MODE and IDENTIFIER."
@@ -2815,9 +2816,8 @@ Header line is custructed from buffer local
             ('dape-info-scope-mode (format "Scope <%s>" identifier))
             (_ (error "Unable to create mode from %s with %s" mode identifier)))))
 
-(defun dape--info-buffer (mode &optional identifier skip-update)
-  "Get or create info buffer with MODE and IDENTIFIER.
-If SKIP-UPDATE is non nil skip updating buffer contents."
+(defun dape--info-get-buffer-create (mode &optional identifier)
+  "Get or create info buffer with MODE and IDENTIFIER."
   (let ((buffer
          (or (dape--info-get-live-buffer mode identifier)
              (get-buffer-create (dape--info-buffer-name mode identifier)))))
@@ -2826,18 +2826,14 @@ If SKIP-UPDATE is non nil skip updating buffer contents."
         (funcall mode)
         (setq dape--info-buffer-identifier identifier)
         (push buffer dape--info-buffers)))
-    (unless skip-update
-      (dape--info-update (dape--live-connection 'newest t) buffer))
     buffer))
 
-(defun dape-info-update (&optional conn)
+(defun dape-info-update ()
   "Update and display `dape-info-*' buffers for adapter CONN."
   (dolist (buffer (dape--info-buffer-list))
     (when (get-buffer-window buffer)
-      (dape--info-update (or conn
-                             (dape--live-connection 'stopped t)
-                             (dape--live-connection 'newest t))
-                         buffer))))
+      (with-current-buffer buffer
+        (revert-buffer)))))
 
 (defun dape-info (&optional maybe-kill kill)
   "Update and display *dape-info* buffers.
@@ -2863,7 +2859,7 @@ When optional kill is non nil kill buffers *dape-info* buffers."
                           (dape--info-buffer-list))
           (setq buffer-displayed-p t)
           (dape--display-buffer
-           (dape--info-buffer 'dape-info-breakpoints-mode 'skip-update)))
+           (dape--info-get-buffer-create 'dape-info-breakpoints-mode)))
         ;; Open and update stack buffer
         (unless (seq-find (lambda (buffer)
                             (and (get-buffer-window buffer)
@@ -2874,7 +2870,7 @@ When optional kill is non nil kill buffers *dape-info* buffers."
                           (dape--info-buffer-list))
           (setq buffer-displayed-p t)
           (dape--display-buffer
-           (dape--info-buffer 'dape-info-stack-mode 'skip-update)))
+           (dape--info-get-buffer-create 'dape-info-stack-mode)))
         ;; Open stack 0 if not group-2 buffer displayed
         (unless (seq-find (lambda (buffer)
                             (and (get-buffer-window buffer)
@@ -2884,7 +2880,7 @@ When optional kill is non nil kill buffers *dape-info* buffers."
                           (dape--info-buffer-list))
           (setq buffer-displayed-p t)
           (dape--display-buffer
-           (dape--info-buffer 'dape-info-scope-mode 0 'skip-update)))
+           (dape--info-get-buffer-create 'dape-info-scope-mode 0)))
         (dape-info-update)
         (when (and maybe-kill (not buffer-displayed-p))
           (kill-dape-info))))))
@@ -2906,7 +2902,7 @@ When optional kill is non nil kill buffers *dape-info* buffers."
 (dape--command-at-line dape-info-breakpoint-delete (dape--info-breakpoint)
   "Delete breakpoint at line in dape info buffer."
   (dape--breakpoint-remove dape--info-breakpoint)
-  (dape--display-buffer (dape--info-buffer 'dape-info-breakpoints-mode)))
+  (dape--display-buffer (dape--info-get-buffer-create 'dape-info-breakpoints-mode)))
 
 (dape--command-at-line dape-info-breakpoint-log-edit (dape--info-breakpoint)
   "Edit breakpoint at line in dape info buffer."
@@ -2943,9 +2939,10 @@ When optional kill is non nil kill buffers *dape-info* buffers."
   "Major mode for Dape info breakpoints."
   (setq dape--info-buffer-related dape--info-group-1-related))
 
-(cl-defmethod dape--info-buffer-update (_conn (mode (eql dape-info-breakpoints-mode)) id)
-  "Update buffer specified by MODE and ID."
-  (dape--info-update-with mode id
+(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-breakpoints-mode))
+                                          &optional _ignore-auto _noconfirm _preserve-modes)
+  "Revert buffer function for `dape-info-breakpoints-mode'."
+  (dape--info-update-with
     (let ((table (make-gdb-table)))
       (gdb-table-add-row table '("Type" "On" "Where" "What"))
       (dolist (breakpoint (reverse dape--breakpoints))
@@ -3050,14 +3047,16 @@ See `dape--callback' for expected CB signature."
         dape--info-buffer-related dape--info-group-1-related)
   (add-to-list 'overlay-arrow-variable-list 'dape--info-thread-position))
 
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-threads-mode)) id)
-  "Fetches data for `dape-info-threads-mode' and updates buffer.
-Buffer is specified by MODE and ID."
-  (if-let ((conn (or conn (dape--live-connection 'newest t)))
+
+(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-threads-mode))
+                                          &optional _ignore-auto _noconfirm _preserve-modes)
+  "Revert buffer function for `dape-info-threads-mode'."
+  (if-let ((conn (or (dape--live-connection 'stopped t)
+                     (dape--live-connection 'newest t)))
            ((dape--stopped-threads conn))
            (threads (dape--threads conn)))
       (dape--with dape--info-threads-all-stack-trace (conn)
-        (dape--info-update-with mode id
+        (dape--info-update-with
           (let ((table (make-gdb-table))
                 (current-thread (dape--current-thread conn)))
             (set-marker dape--info-thread-position nil)
@@ -3101,7 +3100,7 @@ Buffer is specified by MODE and ID."
                        for line from 1
                        until (eq current-thread thread)
                        finally (gdb-mark-line line dape--info-thread-position))))))
-    (dape--info-update-with mode id
+    (dape--info-update-with
       (set-marker dape--info-thread-position nil)
       (insert "No thread information available."))))
 
@@ -3169,16 +3168,18 @@ current buffer."
            until (eq current-stack-frame stack-frame)
            finally (gdb-mark-line line dape--info-stack-position)))
 
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-stack-mode)) id)
-  "Fetches data for `dape-info-stack-mode' and updates buffer.
-Buffer is specified by MODE and ID."
-  (let* ((current-thread (dape--current-thread conn))
+(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-stack-mode))
+                                          &optional _ignore-auto _noconfirm _preserve-modes)
+  "Revert buffer function for `dape-info-stack-mode'."
+  (let* ((conn (or (dape--live-connection 'stopped t)
+                   (dape--live-connection 'newest t)))
+         (current-thread (dape--current-thread conn))
          (stack-frames (plist-get current-thread :stackFrames))
          (current-stack-frame (dape--current-stack-frame conn)))
     (cond
      ((or (not current-stack-frame)
           (not (dape--stopped-threads conn)))
-      (dape--info-update-with mode id
+      (dape--info-update-with
         (set-marker dape--info-stack-position nil)
         (insert "No stopped threads.")))
      (t
@@ -3187,7 +3188,7 @@ Buffer is specified by MODE and ID."
       ;; at an 'update event, then we fetch the rest here.
 
       ;; Start off with shoving available stack info into buffer
-      (dape--info-update-with mode id
+      (dape--info-update-with
         (dape--info-stack-buffer-insert current-stack-frame stack-frames))
       (dape--with dape--stack-trace (conn
                                      current-thread
@@ -3195,7 +3196,7 @@ Buffer is specified by MODE and ID."
         ;; If stack trace lookup with `dape-stack-trace-levels' frames changed
         ;; the stack frame list, we need to update the buffer again
         (unless (eq stack-frames (plist-get current-thread :stackFrames))
-          (dape--info-update-with mode id
+          (dape--info-update-with
             (dape--info-stack-buffer-insert current-stack-frame
                                             (plist-get current-thread :stackFrames)))))))))
 
@@ -3222,10 +3223,14 @@ Buffer is specified by MODE and ID."
                                     (dape-info-modules-mode nil "Modules")
                                     (dape-info-sources-mode nil "Sources"))))
 
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-modules-mode)) id)
-  (dape--info-update-with mode id
-    ;; Use last connection if current is dead
-    (when-let ((conn (or conn dape--connection)))
+(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-modules-mode))
+                                          &optional _ignore-auto _noconfirm _preserve-modes)
+  "Revert buffer function for `dape-info-modules-mode'."
+  (dape--info-update-with
+      ;; Use last connection if current is dead
+      (when-let ((conn (or (dape--live-connection 'stopped t)
+                           (dape--live-connection 'newest t)
+                           dape--connection)))
       (cl-loop with modules = (dape--modules conn)
                with table = (make-gdb-table)
                for module in (reverse modules)
@@ -3271,26 +3276,25 @@ Buffer is specified by MODE and ID."
                                     (dape-info-modules-mode nil "Modules")
                                     (dape-info-sources-mode nil "Sources"))))
 
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-sources-mode)) id)
-  (dape--info-update-with mode id
+(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-sources-mode))
+                                          &optional _ignore-auto _noconfirm _preserve-modes)
+  "Revert buffer function for `dape-info-sources-mode'."
+  (dape--info-update-with
     ;; Use last connection if current is dead
-    (when-let ((conn (or conn dape--connection)))
-      (cl-loop with sources = (dape--sources conn)
-               with table = (make-gdb-table)
-               for source in (reverse sources)
-               do
-               (gdb-table-add-row
-                table
-                (list
-                 (concat
-                  (plist-get source :name)
-                  " "))
-                (list
-                 'dape--info-source source
-                 'mouse-face 'highlight
-                 'keymap dape-info-sources-line-map
-                 'help-echo "mouse-2, RET: goto source"))
-               finally (insert (gdb-table-string table " "))))))
+      (when-let ((conn (or (dape--live-connection 'stopped t)
+                           (dape--live-connection 'newest t)
+                           dape--connection)))
+        (cl-loop with sources = (dape--sources conn)
+                 with table = (make-gdb-table)
+                 for source in (reverse sources)
+                 do (gdb-table-add-row table
+                                       (list (concat (plist-get source :name) " "))
+                                       (list
+                                        'dape--info-source source
+                                        'mouse-face 'highlight
+                                        'keymap dape-info-sources-line-map
+                                        'help-echo "mouse-2, RET: goto source"))
+                 finally (insert (gdb-table-string table " "))))))
 
 
 ;;; Info scope buffer
@@ -3304,7 +3308,7 @@ Buffer is specified by MODE and ID."
     (user-error "No stopped threads"))
   (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
            dape--info-expanded-p)
-  (dape--info-buffer major-mode dape--info-buffer-identifier))
+  (revert-buffer))
 
 (dape--buffer-map dape-info-variable-prefix-map dape-info-scope-toggle)
 
@@ -3315,7 +3319,8 @@ Buffer is specified by MODE and ID."
                    (eq major-mode 'dape-info-watch-mode)
                    (eq major-mode 'dape-info-scope-mode))
   (when (derived-mode-p 'dape-info-parent-mode)
-    (gdb-set-window-buffer (dape--info-buffer 'dape-info-watch-mode) t)))
+    (gdb-set-window-buffer
+     (dape--info-get-buffer-create 'dape-info-watch-mode) t)))
 
 (dape--buffer-map dape-info-variable-name-map dape-info-scope-watch-dwim)
 
@@ -3446,17 +3451,19 @@ plist are used as keymap for each sections defined by the key."
   (setq dape--info-buffer-related '((dape-info-watch-mode nil "Watch")))
   (dape--info-set-header-line-format))
 
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-scope-mode)) id)
-  "Fetches data for `dape-info-scope-mode' and updates buffer.
-Buffer is specified by MODE and ID."
-  (when-let* ((conn (or conn (dape--live-connection 'stopped t)))
+(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-scope-mode))
+                                          &optional _ignore-auto _noconfirm _preserve-modes)
+  "Revert buffer function for `dape-info-scope-mode'."
+  (when-let* ((conn (or (dape--live-connection 'stopped t)
+                        (dape--live-connection 'newest t)
+                        dape--connection))
               (frame (dape--current-stack-frame conn))
               (scopes (plist-get frame :scopes))
               ;; FIXME if scope is out of range here scope list could
               ;;       have shrunk since last update and current
               ;;       scope buffer should be killed and replaced if
               ;;       if visible
-              (scope (nth id scopes))
+              (scope (nth dape--info-buffer-identifier scopes))
               ;; Check for stopped threads to reduce flickering
               ((dape--stopped-threads conn)))
     (dape--with dape--variables (conn scope)
@@ -3469,7 +3476,7 @@ Buffer is specified by MODE and ID."
                   (gethash (cons (plist-get object :name) path)
                            dape--info-expanded-p))))
         (when (and scope scopes (dape--stopped-threads conn))
-          (dape--info-update-with mode id
+          (dape--info-update-with
             (rename-buffer (format "*dape-info %s*" (plist-get scope :name)) t)
             (setq dape--info-buffer-related
                   (dape--info-group-2-related-buffers scopes))
@@ -3498,20 +3505,23 @@ Buffer is specified by MODE and ID."
   :interactive nil
   (setq dape--info-buffer-related '((dape-info-watch-mode nil "Watch"))))
 
-(cl-defmethod dape--info-buffer-update (conn (mode (eql dape-info-watch-mode)) id)
-  "Fetches data for `dape-info-watch-mode' and updates buffer.
-Buffer is specified by MODE and ID."
-  (let* ((frame (dape--current-stack-frame conn))
+(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-mode))
+                                          &optional _ignore-auto _noconfirm _preserve-modes)
+  "Revert buffer function for `dape-info-watch-mode'."
+  (let* ((conn (or (dape--live-connection 'stopped t)
+                   (dape--live-connection 'newest t)
+                   dape--connection))
+         (frame (dape--current-stack-frame conn))
          (scopes (plist-get frame :scopes))
          (responses 0))
     (cond
      ((not dape--watched)
-      (dape--info-update-with mode id
+      (dape--info-update-with
         (setq dape--info-buffer-related
               (dape--info-group-2-related-buffers scopes))
         (insert "No watched variable.")))
      ((not (and conn (jsonrpc-running-p conn)))
-      (dape--info-update-with mode id
+      (dape--info-update-with
         (cl-loop with table = (make-gdb-table)
                  for watch in dape--watched
                  initially (setf (gdb-table-right-align table)
@@ -3544,7 +3554,7 @@ Buffer is specified by MODE and ID."
                    (and (not (eq (plist-get object :expensive) t))
                         (gethash (cons (plist-get object :name) path)
                                  dape--info-expanded-p))))
-              (dape--info-update-with mode id
+              (dape--info-update-with
                 (when scopes
                   (setq dape--info-buffer-related
                         (dape--info-group-2-related-buffers scopes)))
