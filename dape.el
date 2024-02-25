@@ -1027,7 +1027,8 @@ them then executes BODY."
 TYPE is expected to be one of the following symbols:
 
 parent   parent connection.
-newset   last created child connection or parent.
+last     last created child connection or parent which has an active
+         thread.
 running  last created child connection or parent which has an active
          thread but no stopped threads.
 stopped  last created child connection or parent which has stopped
@@ -1044,7 +1045,7 @@ If NOWARN does not error on no active process."
               ('parent
                (when (jsonrpc-running-p dape--connection)
                  dape--connection))
-              ('newest
+              ('last
                (seq-find (lambda (conn)
                            (and (jsonrpc-running-p conn)
                                 (dape--thread-id conn)))
@@ -1963,7 +1964,7 @@ CONN is inferred for interactive invocations."
 (defun dape-restart (&optional conn)
   "Restart debugging session.
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection 'newest t)))
+  (interactive (list (dape--live-connection 'last t)))
   (dape--remove-stack-pointers)
   (cond
    ((and conn
@@ -2199,7 +2200,7 @@ repl context.  CONN is inferred for interactive invocations."
   (interactive
    (list
     (or (dape--live-connection 'stopped t)
-        (dape--live-connection 'newest))
+        (dape--live-connection 'last))
     (if (region-active-p)
         (buffer-substring (region-beginning)
                           (region-end))
@@ -3066,7 +3067,7 @@ See `dape-request' for expected CB signature."
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-info-threads-mode'."
   (if-let ((conn (or (dape--live-connection 'stopped t)
-                     (dape--live-connection 'newest t)))
+                     (dape--live-connection 'last t)))
            ((dape--stopped-threads conn))
            (threads (dape--threads conn)))
       (dape--with-request (dape--info-threads-all-stack-trace conn)
@@ -3186,7 +3187,7 @@ current buffer."
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-info-stack-mode'."
   (let* ((conn (or (dape--live-connection 'stopped t)
-                   (dape--live-connection 'newest t)))
+                   (dape--live-connection 'last t)))
          (current-thread (dape--current-thread conn))
          (stack-frames (plist-get current-thread :stackFrames))
          (current-stack-frame (dape--current-stack-frame conn)))
@@ -3243,7 +3244,7 @@ current buffer."
   (dape--info-update-with
       ;; Use last connection if current is dead
       (when-let ((conn (or (dape--live-connection 'stopped t)
-                           (dape--live-connection 'newest t)
+                           (dape--live-connection 'last t)
                            dape--connection)))
       (cl-loop with modules = (dape--modules conn)
                with table = (make-gdb-table)
@@ -3274,7 +3275,7 @@ current buffer."
   "Goto source."
   ;; TODO Should be storing connection in `dape--info-source' instead of
   ;;      guessing
-  (dape--with-request (dape--source-ensure (dape--live-connection 'newest t)
+  (dape--with-request (dape--source-ensure (dape--live-connection 'last t)
                                            (list :source dape--info-source))
     (if-let ((marker
               (dape--object-to-marker (list :source dape--info-source))))
@@ -3296,7 +3297,7 @@ current buffer."
   (dape--info-update-with
     ;; Use last connection if current is dead
     (when-let ((conn (or (dape--live-connection 'stopped t)
-                         (dape--live-connection 'newest t)
+                         (dape--live-connection 'last t)
                          dape--connection)))
       (cl-loop with sources = (dape--sources conn)
                with table = (make-gdb-table)
@@ -3469,7 +3470,7 @@ plist are used as keymap for each sections defined by the key."
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-info-scope-mode'."
   (when-let* ((conn (or (dape--live-connection 'stopped t)
-                        (dape--live-connection 'newest t)
+                        (dape--live-connection 'last t)
                         dape--connection))
               (frame (dape--current-stack-frame conn))
               (scopes (plist-get frame :scopes))
@@ -3523,7 +3524,7 @@ plist are used as keymap for each sections defined by the key."
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-info-watch-mode'."
   (let* ((conn (or (dape--live-connection 'stopped t)
-                   (dape--live-connection 'newest t)
+                   (dape--live-connection 'last t)
                    dape--connection))
          (frame (dape--current-stack-frame conn))
          (scopes (plist-get frame :scopes))
@@ -3675,7 +3676,7 @@ VARIABLE is expected to be the string representation of a varable."
   (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
            dape--info-expanded-p)
   (dape--repl-create-variable-table (or (dape--live-connection 'stopped t)
-                                        (dape--live-connection 'newest))
+                                        (dape--live-connection 'last))
                                     dape--repl-variable
                                     (apply-partially #'dape--repl-update-variable
                                                      (1+ (point)))))
@@ -3727,7 +3728,7 @@ Send INPUT to DUMMY-PROCESS."
      (t
       (dape--repl-insert-prompt)
       (let ((conn (or (dape--live-connection 'stopped t)
-                      (dape--live-connection 'newest)))
+                      (dape--live-connection 'last)))
             (input (string-trim (substring-no-properties input))))
         (dape--with-request-bind
             ((&whole body &key variablesReference result &allow-other-keys) error)
@@ -3753,7 +3754,7 @@ Send INPUT to DUMMY-PROCESS."
   ;;       - compleation is done on whole line for `debugpy'
   (when (or (symbol-at-point)
             (member (buffer-substring-no-properties (1- (point)) (point))
-                    (or (thread-first (dape--live-connection 'newest t)
+                    (or (thread-first (dape--live-connection 'last t)
                                       (dape--capabilities)
                                       (plist-get :completionTriggerCharacters)
                                       (append nil))
@@ -3781,7 +3782,7 @@ Send INPUT to DUMMY-PROCESS."
        (completion-table-dynamic
         (lambda (_str)
           (when-let ((conn (or (dape--live-connection 'stopped t)
-                               (dape--live-connection 'newest t))))
+                               (dape--live-connection 'last t))))
             (dape--with-request-bind
                 ((&key targets &allow-other-keys) _error)
                 (dape-request conn
@@ -4292,7 +4293,7 @@ See `dape--config-mode-p' how \"valid\" is defined."
   "Hook function to produce doc strings for `eldoc'.
 On success calls CB with the doc string.
 See `eldoc-documentation-functions', for more infomation."
-  (and-let* ((conn (dape--live-connection 'newest t))
+  (and-let* ((conn (dape--live-connection 'last t))
              ((dape--capable-p conn :supportsEvaluateForHovers))
              (symbol (thing-at-point 'symbol)))
     (dape--with-request-bind
@@ -4324,7 +4325,7 @@ See `eldoc-documentation-functions', for more infomation."
 
 (defun dape--mode-line-format ()
   "Format Dape mode line."
-  (let ((conn (or (dape--live-connection 'newest t)
+  (let ((conn (or (dape--live-connection 'last t)
                   dape--connection)))
     (concat (propertize "Dape" 'face 'font-lock-constant-face)
             ":"
