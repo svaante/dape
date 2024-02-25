@@ -1427,7 +1427,8 @@ See `dape-request' for expected CB signature."
   (let ((variables-reference (plist-get object :variablesReference)))
     (if (or (not (numberp variables-reference))
             (zerop variables-reference)
-            (plist-get object :variables))
+            (plist-get object :variables)
+            (not (jsonrpc-running-p conn)))
         (dape--request-return cb)
       (dape--with-request-bind
           ((&key variables &allow-other-keys) _error)
