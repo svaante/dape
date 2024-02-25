@@ -1174,6 +1174,10 @@ If NOWARN does not error on no active process."
 
 ;;; Outgoing requests
 
+(defconst dape--timeout-error "Request timeout"
+  "Error string for request timeout.
+Useful for `eq' comparison to derive request timeout error.")
+
 (defun dape-request (conn command arguments &optional cb)
   "Send request with COMMAND and ARGUMENTS to adapter CONN.
 If callback function CB is supplied, it's called on timeout
@@ -1197,10 +1201,10 @@ On failure, ERROR will be an string."
                               (format
                                "* Command %s timed out after %d seconds, the \
 timeout period is configurable with `dape-request-timeout' *"
-                                 (funcall cb conn nil "timeout"))))
                                command
                                dape-request-timeout)
                               'dape-repl-error-face)
+                             (funcall cb nil dape--timeout-error)))
                          :timeout dape-request-timeout))
 
 (defun dape--initialize (conn)
@@ -1984,9 +1988,12 @@ terminate.  CONN is inferred for interactive invocations."
    ((and conn (jsonrpc-running-p conn)
          (not with-disconnect)
          (dape--capable-p conn :supportsTerminateRequest))
-                   (if error-message
     (dape--with-request-bind (_body error)
         (dape-request conn "terminate" nil)
+      ;; We have to give up trying to kill the debuggee in an correct
+      ;; way if the request timeout, otherwise we might force the
+      ;; user to kill the process in some other way.
+      (if (and error (not (eq error dape--timeout-error)))
           (dape-kill cb 'with-disconnect)
         (jsonrpc-shutdown conn)
         (dape--request-return cb))))
