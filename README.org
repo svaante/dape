@@ -37,6 +37,14 @@ Currently =Dape= does not come with any debug adapter configuration.
 
 #+begin_src emacs-lisp
   (use-package dape
+    ;; By default dape shares the same keybinding prefix as `gud'
+    ;; If you do not want to use any prefix, set it to nil.
+    ;; :preface
+    ;; (setq dape-key-prefix "\C-x\C-a")
+    ;;
+    ;; May also need to set/change gud (gdb-mi) key prefix
+    ;; (setq gud-key-prefix "\C-x\C-a")
+
     ;; To use window configuration like gud (gdb-mi)
     ;; :init
     ;; (setq dape-buffer-window-arrangement 'gud)
@@ -52,10 +60,6 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; To display info and/or repl buffers on stopped
     ;; (add-hook 'dape-on-stopped-hooks 'dape-info)
     ;; (add-hook 'dape-on-stopped-hooks 'dape-repl)
-
-    ;; By default dape uses gdb keybinding prefix
-    ;; If you do not want to use any prefix, set it to nil.
-    ;; (setq dape-key-prefix "\C-x\C-a")
 
     ;; Kill compile buffer on build success
     ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
