@@ -3090,7 +3090,6 @@ See `dape-request' for expected CB signature."
   "Revert buffer function for `dape-info-threads-mode'."
   (if-let ((conn (or (dape--live-connection 'stopped t)
                      (dape--live-connection 'last t)))
-           ((dape--stopped-threads conn))
            (threads (dape--threads conn)))
       (dape--with-request (dape--info-threads-all-stack-trace conn)
         (dape--info-update-with
