@@ -4030,7 +4030,7 @@ displayed as hints display."
        ((and (symbolp value) (get value 'dape--minibuffer-hint))
         (funcall value))
        ((eq (car-safe value) 'lambda)
-        '*read-value*)
+        value)
        (t value)))
      (t (funcall-interactively value))))
    ((dape--plistp value)
