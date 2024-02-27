@@ -548,6 +548,11 @@ left-to-right display order of the properties."
   "Function to run compile with."
   :type 'function)
 
+(defcustom dape-use-savehist nil
+  "Use `savehist-mode' to store breakpoints exceptions.
+Make sure to set `dape-use-savehist' before loading `dape'."
+  :type 'boolean)
+
 (defcustom dape-cwd-fn #'dape--default-cwd
   "Function to get current working directory.
 The function should take one optional argument and return a string
@@ -1278,8 +1283,7 @@ See `dape-request' for expected CB signature."
             (with-current-buffer buffer
               (or dape--source
                   (list
-                   :name (file-name-nondirectory
-                          (buffer-file-name buffer))
+                   :name (file-name-nondirectory (buffer-file-name buffer))
                    :path (dape--path (buffer-file-name buffer) 'remote)))))))
     (dape--with-request-bind
         ((&key breakpoints &allow-other-keys) error)
@@ -4327,6 +4331,41 @@ See `eldoc-documentation-functions', for more infomation."
 (add-to-list 'mode-line-misc-info
              `(dape-active-mode
                (" [" (:eval (dape--mode-line-format)) "] ")))
+
+
+;;; Savehist mode
+
+(defvar dape--breakpoints-savehist nil
+  "Used to save and load `dape--breakpoints' in an printable format.")
+
+(defun dape-savehist-load ()
+  "Load breakpoints and exceptions saved by `savehist-mode'."
+  (when dape-use-savehist
+    (add-to-list 'savehist-additional-variables #'dape--breakpoints-savehist)
+    (add-to-list 'savehist-additional-variables #'dape--exceptions)
+    (cl-loop for (file point . args) in dape--breakpoints-savehist
+             do (ignore-errors
+                  (with-current-buffer (find-file-noselect file)
+                    (save-excursion
+                      (goto-char point)
+                      (apply #'dape--breakpoint-place args)))))
+    (add-hook 'savehist-save-hook #'dape--breakpoints-savehist-save))
+  (remove-hook 'savehist-mode-hook #'dape-savehist-load))
+
+(defun dape--breakpoints-savehist-save ()
+  "Store breakpoints in an printable format for `savehist-mode'."
+  (setq dape--breakpoints-savehist
+        (cl-loop with arg-symbols = '(dape-log-message dape-expr-message)
+                 for ov in dape--breakpoints
+                 for file = (buffer-file-name (overlay-buffer ov))
+                 for point = (overlay-start ov)
+                 for args = (mapcar (apply-partially 'overlay-get ov) arg-symbols)
+                 when (and file point)
+                 collect (append (list file point) args))))
+
+(if (bound-and-true-p savehist-loaded)
+    (dape-savehist-load)
+  (add-hook 'savehist-mode-hook #'dape-savehist-load))
 
 
 ;;; Keymaps

@@ -45,9 +45,12 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; May also need to set/change gud (gdb-mi) key prefix
     ;; (setq gud-key-prefix "\C-x\C-a")
 
+    :init
     ;; To use window configuration like gud (gdb-mi)
-    ;; :init
     ;; (setq dape-buffer-window-arrangement 'gud)
+
+    ;; To save breakpoints and exceptions with `savehist-mode'
+    ;; (setq dape-use-savehist t)
 
     :config
     ;; Info buffers to the right
