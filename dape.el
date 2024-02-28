@@ -4340,7 +4340,7 @@ See `eldoc-documentation-functions', for more infomation."
 
 (defun dape-savehist-load ()
   "Load breakpoints and exceptions saved by `savehist-mode'."
-  (when dape-use-savehist
+  (when (and dape-use-savehist (not dape--breakpoints))
     (add-to-list 'savehist-additional-variables #'dape--breakpoints-savehist)
     (add-to-list 'savehist-additional-variables #'dape--exceptions)
     (cl-loop for (file point . args) in dape--breakpoints-savehist
