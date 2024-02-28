@@ -501,11 +501,15 @@ left-to-right display order of the properties."
   :type 'boolean)
 
 (defcustom dape-info-stack-buffer-locations t
-  "Show file information or library names in stack buffers."
+  "Show file information or library names in stack buffer."
+  :type 'boolean)
+
+(defcustom dape-info-stack-buffer-modules t
+  "Show module information in stack buffer if adapter supports it."
   :type 'boolean)
 
 (defcustom dape-info-stack-buffer-addresses t
-  "Show frame addresses in stack buffers."
+  "Show frame addresses in stack buffer."
   :type 'boolean)
 
 (defcustom dape-info-buffer-variable-format 'line
@@ -1420,7 +1424,10 @@ See `dape-request' for expected CB signature."
                           ,@(when delayed-stack-trace-p
                               (list
                                :startFrame current-nof
-                               :levels (- nof current-nof)))))
+                               :levels (- nof current-nof)))
+                          ,@(when (and dape-info-stack-buffer-modules
+                                       (dape--capable-p conn :supportsValueFormattingOptions))
+                              `(:format (:module t)))))
         (cond
          ((not delayed-stack-trace-p)
           (plist-put thread :stackFrames
