@@ -4464,7 +4464,7 @@ See `eldoc-documentation-functions', for more infomation."
   "Format Dape mode line."
   (let ((conn (or (dape--live-connection 'last t)
                   dape--connection)))
-    (concat (propertize "Dape" 'face 'font-lock-constant-face)
+    (concat (propertize "dape" 'face 'font-lock-constant-face)
             ":"
             (propertize
              (format "%s" (or (and conn (dape--state conn))
