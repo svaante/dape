@@ -1730,7 +1730,6 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
       (dape--update-threads conn
                             (plist-get body :threadId)
                             (plist-get body :allThreadsStopped))
-    (run-hooks 'dape-on-stopped-hooks)
     (dape--update conn))
   (if-let (((equal "exception" (plist-get body :reason)))
            (texts
@@ -1740,7 +1739,8 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
       (let ((str (mapconcat 'identity texts ":\n\t")))
         (setf (dape--exception-description conn) str)
         (dape--repl-message str 'dape-repl-error-face))
-    (setf (dape--exception-description conn) nil)))
+    (setf (dape--exception-description conn) nil))
+  (run-hooks 'dape-on-stopped-hooks))
 
 (cl-defmethod dape-handle-event (conn (_event (eql continued)) body)
   "Handle adapter CONN continued events.
@@ -2319,7 +2319,7 @@ Using BUFFER and STR."
 
 (defun dape--memory-revert (&optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-memory-mode'."
-  (let* ((conn (dape--live-connection 'stopped))
+  (let* ((conn (dape--live-connection 'last))
          (write-capable-p (dape--capable-p conn :supportsWriteMemoryRequest)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
       (user-error "Adapter not capable of reading memory."))
@@ -2379,7 +2379,7 @@ Using BUFFER and STR."
 
 (defun dape--memory-write ()
   "Write buffer contents to stopped connection."
-  (let ((conn (dape--live-connection 'stopped))
+  (let ((conn (dape--live-connection 'last))
         (buffer (current-buffer))
         (start (point-min))
         (end (point-max))
