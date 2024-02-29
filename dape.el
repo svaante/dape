@@ -504,7 +504,7 @@ left-to-right display order of the properties."
   "Show file information or library names in stack buffer."
   :type 'boolean)
 
-(defcustom dape-info-stack-buffer-modules t
+(defcustom dape-info-stack-buffer-modules nil
   "Show module information in stack buffer if adapter supports it."
   :type 'boolean)
 
