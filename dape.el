@@ -2350,7 +2350,7 @@ Using BUFFER and STR."
                       (list :memoryReference dape--memory-offset
                             :count dape-read-memory-bytes))
       (if error
-          (message "Failed to write memory: %s" error)
+          (message "Failed to read memory %s" error)
         (let ((inhibit-read-only t))
           (setq dape--memory-offset address
                 buffer-undo-list nil)
