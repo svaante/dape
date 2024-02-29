@@ -2349,8 +2349,10 @@ Using BUFFER and STR."
         (dape-request conn "readMemory"
                       (list :memoryReference dape--memory-offset
                             :count dape-read-memory-bytes))
-      (if error
-          (message "Failed to read memory %s" error)
+      (cond
+       (error (message "Failed to read memory: %s" error))
+       ((not data) (message "No bytes returned from adapter"))
+       (t
         (let ((inhibit-read-only t))
           (setq dape--memory-offset address
                 buffer-undo-list nil)
@@ -2391,7 +2393,7 @@ Using BUFFER and STR."
                         (list :memoryReference offset
                               :data (base64-encode-string (buffer-string) t)))
         (if error
-            (message "Failed to write memory %s" error)
+            (message "Failed to write memory: %s" error)
           (with-current-buffer buffer
             (set-buffer-modified-p nil))
           (message "Memory written successfully at %s" offset)
