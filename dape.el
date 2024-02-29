@@ -4472,6 +4472,7 @@ See `eldoc-documentation-functions', for more infomation."
 
 
 ;;; Savehist mode
+
 (defvar savehist-additional-variables) ;; skip savehist require
 
 (defvar dape--breakpoints-savehist nil
