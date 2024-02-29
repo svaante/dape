@@ -2891,6 +2891,9 @@ REVERSED selects previous."
   (setq-local buffer-read-only t
               truncate-lines t
               cursor-in-non-selected-windows nil
+              ;; FIXME Is `revert-buffer-in-progress-p' is not
+              ;;       respected as most of the work is done in an
+              ;;       callback.
               revert-buffer-function #'dape--info-revert)
   (add-hook 'window-buffer-change-functions 'dape--info-buffer-change-fn
             nil 'local)
