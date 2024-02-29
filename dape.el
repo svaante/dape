@@ -4341,6 +4341,7 @@ See `eldoc-documentation-functions', for more infomation."
 
 
 ;;; Savehist mode
+(defvar savehist-additional-variables) ;; skip savehist require
 
 (defvar dape--breakpoints-savehist nil
   "Used to save and load `dape--breakpoints' in an printable format.")
@@ -4348,8 +4349,8 @@ See `eldoc-documentation-functions', for more infomation."
 (defun dape-savehist-load ()
   "Load breakpoints and exceptions saved by `savehist-mode'."
   (when (and dape-use-savehist (not dape--breakpoints))
-    (add-to-list 'savehist-additional-variables #'dape--breakpoints-savehist)
-    (add-to-list 'savehist-additional-variables #'dape--exceptions)
+    (add-to-list 'savehist-additional-variables 'dape--breakpoints-savehist)
+    (add-to-list 'savehist-additional-variables 'dape--exceptions)
     (cl-loop for (file point . args) in dape--breakpoints-savehist
              do (ignore-errors
                   (with-current-buffer (find-file-noselect file)
