@@ -2375,7 +2375,7 @@ Using BUFFER and STR."
         (set-buffer-modified-p nil)
         (when write-capable-p
 	  (add-hook 'write-contents-functions #'dape--memory-write))
-        (rename-buffer (format "*dape-memory @ %s*" address) t)))))
+        (rename-buffer (format "*dape-memory @ %s*" address) t))))))
 
 (defun dape--memory-write ()
   "Write buffer contents to stopped connection."
