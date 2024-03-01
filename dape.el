@@ -1598,6 +1598,9 @@ Starts a new adapter CONNs from ARGUMENTS."
                           " ")
                          buffer
                          buffer)
+    ;; FIXME `display-buffer-alist' should not be set here as it does
+    ;;       not allow for user to change display behaviour for
+    ;;       *dape-shell*
     (dape--display-buffer buffer)
     (list :processId (process-id (get-buffer-process buffer)))))
 
