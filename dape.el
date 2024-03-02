@@ -338,14 +338,15 @@ In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
 
-Symbol Keys (Used by Dape):
+Symbol Keys (Used by dape):
 - fn: Function or list of functions, takes config and returns config.
   If list functions are applied in order.  Used for hiding unnecessary
   configuration details from config history.
 - ensure: Function to ensure that adapter is available.
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
-- command-cwd: Working directory for the command.
+- command-cwd: Working directory for the command, if not supplied
+  `default-directory' will be used.
 - prefix-local: Path prefix for Emacs file access.
 - prefix-remote: Path prefix for debugger file access.
 - host: Host of the debug adapter.
