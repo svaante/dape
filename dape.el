@@ -821,18 +821,11 @@ Note requires `dape--source-ensure' if source is by reference."
    (file-relative-name (buffer-file-name) (dape-command-cwd))))
 
 (defun dape--guess-root (config)
-  "Guess adapter path root from CONFIG."
-  ;; FIXME We need some property on the adapter telling us how it
-  ;;       decided on root
-  ;; FIXME Is this function meant to return root emacs world (with tramp)
-  ;;       or adapter world w/o tramp?
-  (let ((cwd (plist-get config :cwd))
-        (command-cwd (plist-get config 'command-cwd)))
-    (cond
-     ((and cwd (stringp cwd) (file-name-absolute-p cwd))
-      cwd)
-     ((stringp command-cwd) command-cwd)
-     (t default-directory))))
+  "Return best guess root path from CONFIG."
+  (if-let* ((command-cwd (plist-get config 'command-cwd))
+            ((stringp command-cwd)))
+      command-cwd
+    (dape-command-cwd)))
 
 (defun dape-config-autoport (config)
   "Replace :autoport in CONFIG keys `command-args' and `port'.
