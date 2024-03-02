@@ -2307,6 +2307,8 @@ Using BUFFER and STR."
   (let ((default-directory (dape--guess-root config))
         (command (plist-get config 'compile)))
     (setq dape--compile-config config)
+    ;; FIXME: Kill current compilation before adding hook otherwise we
+    ;;        we might call `dape' on old compilation.
     (add-hook 'compilation-finish-functions
               #'dape--compile-compilation-finish)
     (funcall dape-compile-fn command)))
