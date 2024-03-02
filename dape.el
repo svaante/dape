@@ -726,14 +726,11 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
                    (eq (plist-get thread :id) (dape--thread-id conn)))
                  (dape--threads conn))))
 
-(defun dape--path (path format)
-  "Translate PATH to FORMAT from config.
-Accepted FORMAT values is `local' and `remote'.
-See `dape-configs' keywords `prefix-local' `prefix-remote'."
-  (if-let* (;; Not optimal but will work unless dape tries to support
-            ;; multiple debugging sessions.
-            dape--connection
-            (config (dape--config dape--connection))
+(defun dape--path (conn path format)
+  "Return translate absolute PATH in FORMAT from CONN config.
+Accepted FORMAT values are local and remote.
+See `dape-configs' symbols prefix-local prefix-remote."
+  (if-let* ((config (dape--config conn))
             (path (expand-file-name
                    path
                    (let ((command-cwd (plist-get config 'command-cwd)))
@@ -777,8 +774,9 @@ See `dape-configs' keywords `prefix-local' `prefix-remote'."
         (car stack-frames-with-source)
         (car stack-frames))))
 
-(defun dape--object-to-marker (plist)
-  "Create marker from dap PLIST containing source information.
+(defun dape--object-to-marker (conn plist)
+  "Return marker created from PLIST and CONN config.
+Marker is created from PLIST keys :source and :line.
 Note requires `dape--source-ensure' if source is by reference."
   (when-let ((source (plist-get plist :source))
              (line (or (plist-get plist :line) 1))
@@ -790,7 +788,7 @@ Note requires `dape--source-ensure' if source is by reference."
                               ((buffer-live-p buffer)))
                     buffer)
                   (when-let* ((path (plist-get source :path))
-                              (path (dape--path path 'local))
+                              (path (dape--path conn path 'local))
                               ((file-exists-p path))
                               (buffer (find-file-noselect path t)))
                     buffer))))
@@ -1298,7 +1296,7 @@ See `dape-request' for expected CB signature."
               (or dape--source
                   (list
                    :name (file-name-nondirectory (buffer-file-name buffer))
-                   :path (dape--path (buffer-file-name buffer) 'remote)))))))
+                   :path (dape--path conn (buffer-file-name buffer) 'remote)))))))
     (dape--with-request-bind
         ((&key breakpoints &allow-other-keys) error)
         (dape-request conn
@@ -1586,7 +1584,7 @@ If SKIP-DISPLAY is non nil refrain from displaying selected stack."
 Starts a new adapter CONNs from ARGUMENTS."
   (let ((default-directory
          (or (when-let ((cwd (plist-get arguments :cwd)))
-               (dape--path cwd 'local))
+               (dape--path conn cwd 'local))
              default-directory))
         (process-environment
          (or (cl-loop for (key value) on (plist-get arguments :env) by 'cddr
@@ -2679,11 +2677,11 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                        ;; Default to current overlay as `:source'
                        `(:source
                          ,(or (when-let ((path (buffer-file-name old-buffer)))
-                                `(:path ,(dape--path path 'remote)))
+                                `(:path ,(dape--path conn path 'remote)))
                               (with-current-buffer old-buffer
                                 dape--source))))))
     (dape--with-request (dape--source-ensure conn breakpoint)
-      (when-let* ((marker (dape--object-to-marker breakpoint))
+      (when-let* ((marker (dape--object-to-marker conn breakpoint))
                   (new-buffer (marker-buffer marker))
                   (new-line (plist-get breakpoint :line)))
         (unless (and (= old-line new-line)
@@ -2718,7 +2716,7 @@ See `dape-request' for expected CB signature."
          (buffer (plist-get dape--source-buffers source-reference)))
     (cond
      ((or (not conn)
-          (and path (file-exists-p (dape--path path 'local)))
+          (and path (file-exists-p (dape--path conn path 'local)))
           (and buffer (buffer-live-p buffer)))
       (dape--request-return cb))
      ((and (numberp source-reference) (> source-reference 0))
@@ -2780,7 +2778,7 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
     (let ((deepest-p (eq frame (car (plist-get (dape--current-thread conn)
                                                :stackFrames)))))
       (dape--with-request (dape--source-ensure conn frame)
-        (when-let ((marker (dape--object-to-marker frame)))
+        (when-let ((marker (dape--object-to-marker conn frame)))
           (unless skip-display
             (when-let ((window
                         (display-buffer (marker-buffer marker)
@@ -3274,7 +3272,7 @@ See `dape-request' for expected CB signature."
                                   (path (thread-first top-stack
                                                       (plist-get :source)
                                                       (plist-get :path)))
-                                  (path (dape--path path 'local))
+                                  (path (dape--path conn path 'local))
                                   (line (plist-get top-stack :line)))
                         (concat " of " (dape--format-file-line path line)))
                       (when-let ((dape-info-thread-buffer-addresses)
@@ -3321,10 +3319,10 @@ See `dape-request' for expected CB signature."
         dape--info-stack-position (make-marker))
   (add-to-list 'overlay-arrow-variable-list 'dape--info-stack-position))
 
-(defun dape--info-stack-buffer-insert (current-stack-frame stack-frames)
+(defun dape--info-stack-buffer-insert (conn current-stack-frame stack-frames)
   "Helper for inserting stack info into *dape-info Stack* buffer.
 Create table from CURRENT-STACK-FRAME and STACK-FRAMES and insert into
-current buffer."
+current buffer with CONN config."
   (cl-loop with table = (make-gdb-table)
            for frame in stack-frames
            do
@@ -3338,7 +3336,7 @@ current buffer."
                           (path (thread-first frame
                                               (plist-get :source)
                                               (plist-get :path)))
-                          (path (dape--path path 'local)))
+                          (path (dape--path conn path 'local)))
                 (concat " of "
                         (dape--format-file-line path
                                                 (plist-get frame :line))))
@@ -3379,7 +3377,7 @@ current buffer."
 
       ;; Start off with shoving available stack info into buffer
       (dape--info-update-with
-        (dape--info-stack-buffer-insert current-stack-frame stack-frames))
+        (dape--info-stack-buffer-insert conn current-stack-frame stack-frames))
       (dape--with-request (dape--stack-trace conn
                                              current-thread
                                              dape-stack-trace-levels)
@@ -3387,7 +3385,7 @@ current buffer."
         ;; the stack frame list, we need to update the buffer again
         (unless (eq stack-frames (plist-get current-thread :stackFrames))
           (dape--info-update-with
-            (dape--info-stack-buffer-insert current-stack-frame
+            (dape--info-stack-buffer-insert conn current-stack-frame
                                             (plist-get current-thread :stackFrames)))))))))
 
 
@@ -3447,12 +3445,13 @@ current buffer."
   "Goto source."
   ;; TODO Should be storing connection in `dape--info-source' instead of
   ;;      guessing
-  (dape--with-request (dape--source-ensure (dape--live-connection 'last t)
-                                           (list :source dape--info-source))
-    (if-let ((marker
-              (dape--object-to-marker (list :source dape--info-source))))
-        (pop-to-buffer (marker-buffer marker))
-      (user-error "Unable to get source"))))
+  (let ((conn (dape--live-connection 'last t))
+        (source (list :source dape--info-source)))
+    (dape--with-request (dape--source-ensure conn source)
+      (if-let ((marker
+                (dape--object-to-marker conn source)))
+          (pop-to-buffer (marker-buffer marker))
+        (user-error "Unable to get source")))))
 
 (dape--buffer-map dape-info-sources-line-map dape-info-sources-goto)
 
