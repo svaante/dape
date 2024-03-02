@@ -3381,9 +3381,13 @@ current buffer with CONN config."
 
 (dape--command-at-line dape-info-modules-goto (dape--info-module)
   "Goto source."
-  (if-let ((path (plist-get dape--info-module :path)))
-      (pop-to-buffer (find-file-noselect path))
-    (user-error "No path associated with module")))
+  (let ((conn (dape--live-connection 'last t))
+        (source (list :source dape--info-module)))
+    (dape--with-request (dape--source-ensure conn source)
+      (if-let ((marker
+                (dape--object-to-marker conn source)))
+          (pop-to-buffer (marker-buffer marker))
+        (user-error "Unable to open module")))))
 
 (dape--buffer-map dape-info-module-line-map dape-info-modules-goto)
 
