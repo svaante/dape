@@ -5,8 +5,8 @@
 
 #+html: <a href="https://elpa.gnu.org/packages/dape.html"><img alt="GNU ELPA" src="https://elpa.gnu.org/packages/dape.svg"/></a>
 
-Use ~dape-configs~ to set up your debug adapter configurations.
-To initiate debugging sessions, use the command ~dape~.
+See the variable ~dape-configs~ to browse pre-defined debug adapter configurations for different languages, or to add your own.
+To initiate debugging sessions, use the command ~dape~. In the minibuffer that appears, type in a debug adapter configuration name from ~dape-configs~.
 
 For complete functionality, activate ~eldoc-mode~ in your source buffers and enable ~repeat-mode~ for ergonomics.
 
@@ -33,7 +33,7 @@ And with minibuffer config hints:
 Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-operandi-tinted]].
 
 * Configuration
-Currently =Dape= does not come with any debug adapter configuration.
+=Dape= comes with pre-defined debug adapter configurations for different languages. See ~dape-configs~ for more information. 
 
 #+begin_src emacs-lisp
   (use-package dape
