@@ -176,8 +176,6 @@
      :cwd "."
      :program "lib/main.dart"
      :toolArgs ["-d" "all"])
-    ;; gdb is not fully functional with an thread count > 1
-    ;; See: `dape--info-threads-all-stack-trace-disable'
     (gdb
      modes (c-mode c-ts-mode c++-mode c++-ts-mode)
      command-cwd dape-command-cwd
@@ -3206,18 +3204,10 @@ displayed."
   ;; TODO Add bindings for individual threads.
   )
 
-;; TODO Report gdb bug
-(defvar dape--info-threads-all-stack-trace-disable nil
-  "Disable stack information for non selected threads.
-GDB fails fetching stack variables if an stack trace for another
-thread is in flight, which happens when *dape-info Threads* and
-*dape-info Scopes* are updated at the same time.")
-
 (defun dape--info-threads-all-stack-trace (conn cb)
   "Populate CONN stack frame data for non selected threads.
 See `dape-request' for expected CB signature."
-  (if (or dape--info-threads-all-stack-trace-disable
-          (not (dape--threads conn)))
+  (if (not (dape--threads conn))
       (dape--request-return cb)
     (let ((responses 0))
       (dolist (thread (dape--threads conn))
