@@ -856,6 +856,8 @@ Replaces symbol and string occurences of \"autoport\"."
 
 (defun dape-config-tramp (config)
   "Infer `prefix-local' and `host' on CONFIG if in tramp context."
+  ;; TODO maybe this should be moved out of configs and into
+  ;;      `dape--config-eval'
   (when-let* ((default-directory
                (or (plist-get config 'command-cwd)
                    default-directory))
