@@ -730,15 +730,21 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
 (defun dape--path (path format)
   "Translate PATH to FORMAT from config.
 Accepted FORMAT values is `local' and `remote'.
-See `dape-config' keywords `prefix-local' `prefix-remote'."
-  (if-let* (dape--connection
+See `dape-configs' keywords `prefix-local' `prefix-remote'."
+  (if-let* (;; Not optimal but will work unless dape tries to support
+            ;; multiple debugging sessions.
+            dape--connection
             (config (dape--config dape--connection))
+            (path (expand-file-name
+                   path
+                   (let ((command-cwd (plist-get config 'command-cwd)))
+                     (pcase format
+                       ('local (tramp-file-local-name command-cwd))
+                       ('remote command-cwd)))))
             ((or (plist-member config 'prefix-local)
                  (plist-member config 'prefix-remote)))
-            (prefix-local (or (plist-get config 'prefix-local)
-                              ""))
-            (prefix-remote (or (plist-get config 'prefix-remote)
-                               ""))
+            (prefix-local (or (plist-get config 'prefix-local) ""))
+            (prefix-remote (or (plist-get config 'prefix-remote) ""))
             (mapping (pcase format
                        ('local (cons prefix-remote prefix-local))
                        ('remote (cons prefix-local prefix-remote))
@@ -1576,11 +1582,13 @@ If SKIP-DISPLAY is non nil refrain from displaying selected stack."
 (cl-defgeneric dape-handle-request (_conn _command _arguments)
   "Sink for all unsupported requests." nil)
 
-(cl-defmethod dape-handle-request (_conn (_command (eql runInTerminal)) arguments)
+(cl-defmethod dape-handle-request (conn (_command (eql runInTerminal)) arguments)
   "Handle runInTerminal requests.
 Starts a new adapter CONNs from ARGUMENTS."
-  (let ((default-directory (or (plist-get arguments :cwd)
-                               default-directory))
+  (let ((default-directory
+         (or (when-let ((cwd (plist-get arguments :cwd)))
+               (dape--path cwd 'local))
+             default-directory))
         (process-environment
          (or (cl-loop for (key value) on (plist-get arguments :env) by 'cddr
                       collect
@@ -1588,21 +1596,19 @@ Starts a new adapter CONNs from ARGUMENTS."
                               (substring (format "%s" key) 1)
                               value))
              process-environment))
-        (buffer (get-buffer-create "*dape-shell*"))
-        (display-buffer-alist
-         '(((major-mode . shell-mode) . (display-buffer-no-window)))))
-    (async-shell-command (string-join
-                          (cl-map 'list
-                                  'identity
-                                  (plist-get arguments :args))
-                          " ")
-                         buffer
-                         buffer)
-    ;; FIXME `display-buffer-alist' should not be set here as it does
-    ;;       not allow for user to change display behaviour for
-    ;;       *dape-shell*
-    (dape--display-buffer buffer)
-    (list :processId (process-id (get-buffer-process buffer)))))
+        (buffer (get-buffer-create "*dape-shell*")))
+    (with-current-buffer buffer
+      (shell-mode)
+      (shell-command-save-pos-or-erase))
+    (let ((process
+           (make-process :name "dape shell"
+                         :buffer buffer
+                         :command (append (plist-get arguments :args) nil)
+                         :filter 'comint-output-filter
+                         :sentinel 'shell-command-sentinel
+                         :file-handler t)))
+      (dape--display-buffer buffer)
+      (list :processId (process-id process)))))
 
 (cl-defmethod dape-handle-request (conn (_command (eql startDebugging)) arguments)
   "Handle adapter CONNs startDebugging requests with ARGUMENTS.
