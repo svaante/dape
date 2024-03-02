@@ -200,7 +200,6 @@
                          (dape-ensure-command config)
                          (let ((js-debug-file
                                 (file-name-concat
-                                 (dape--config-eval-value (plist-get config 'command-cwd))
                                  (dape--config-eval-value (car (plist-get config 'command-args))))))
                            (unless (file-exists-p js-debug-file)
                              (user-error "File %S does not exist" js-debug-file))))
