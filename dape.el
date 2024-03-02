@@ -3380,7 +3380,7 @@ current buffer with CONN config."
   "Font lock keywords used in `gdb-frames-mode'.")
 
 (dape--command-at-line dape-info-modules-goto (dape--info-module)
-  "Goto source."
+  "Goto module."
   (let ((conn (dape--live-connection 'last t))
         (source (list :source dape--info-module)))
     (dape--with-request (dape--source-ensure conn source)
