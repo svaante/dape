@@ -2709,6 +2709,7 @@ See `dape-request' for expected CB signature."
          (buffer (plist-get dape--source-buffers source-reference)))
     (cond
      ((or (not conn)
+          (not (jsonrpc-running-p conn))
           (and path (file-exists-p (dape--path conn path 'local)))
           (and buffer (buffer-live-p buffer)))
       (dape--request-return cb))
