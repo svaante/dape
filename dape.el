@@ -333,7 +333,7 @@
      :vmArgs " -XX:+ShowCodeDetailsInExceptionMessages"
      :console "integratedConsole"
      :internalConsoleOptions "neverOpen"))
-   "This variable holds the Dape configurations as an alist.
+   "This variable holds the dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
@@ -346,8 +346,8 @@ Symbol Keys (Used by Dape):
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
 - command-cwd: Working directory for the command.
-- prefix-local: Defines the source path prefix, accessible from Emacs.
-- prefix-remote: Defines the source path prefix, accessible by the adapter.
+- prefix-local: Path prefix for Emacs file access.
+- prefix-remote: Path prefix for debugger file access.
 - host: Host of the debug adapter.
 - port: Port of the debug adapter.
 - modes: List of modes where the configuration is active in `dape'
@@ -381,8 +381,8 @@ Functions and symbols in configuration:
                          ((const :tag "Shell command to initiate the debug adapter" command) (choice string symbol))
                          ((const :tag "List of string arguments for command" command-args) (repeat string))
                          ((const :tag "Working directory for command" command-cwd) (choice string symbol))
-                         ((const :tag "Path prefix for local src paths" prefix-local) string)
-                         ((const :tag "Path prefix for remote src paths" prefix-remote) string)
+                         ((const :tag "Path prefix for Emacs file access" prefix-local) string)
+                         ((const :tag "Path prefix for debugger file access" prefix-remote) string)
                          ((const :tag "Host of debug adapter" host) string)
                          ((const :tag "Port of debug adapter" port) natnum)
                          ((const :tag "Compile cmd" compile) string)
