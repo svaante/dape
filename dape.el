@@ -844,7 +844,7 @@ with value of `port' instead.
 Replaces symbol and string occurences of \"autoport\"."
   ;; Stolen from `Eglot'
   (let ((port (plist-get config 'port)))
-    (when (eq (plist-get config 'port) :autoport)
+    (when (eq port :autoport)
       (let ((port-probe (make-network-process :name "dape-port-probe-dummy"
                                               :server t
                                               :host "localhost"
