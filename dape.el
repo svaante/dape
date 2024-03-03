@@ -92,7 +92,6 @@
                                           "adapter"
                                           "codelldb")
                port :autoport
-               fn dape-config-autoport
                :type "lldb"
                :request "launch"
                :cwd "."))
@@ -141,7 +140,6 @@
                          (call-process-shell-command
                           (format "%s -c \"import debugpy.adapter\"" python)))
                   (user-error "%s module debugpy is not installed" python))))
-     fn (dape-config-autoport dape-config-tramp)
      command "python"
      command-args ("-m" "debugpy.adapter" "--host" "0.0.0.0" "--port" :autoport)
      port :autoport
@@ -157,7 +155,6 @@
     (dlv
      modes (go-mode go-ts-mode)
      ensure dape-ensure-command
-     fn (dape-config-autoport dape-config-tramp)
      command "dlv"
      command-args ("dap" "--listen" "127.0.0.1::autoport")
      command-cwd dape-command-cwd
@@ -181,7 +178,6 @@
      command-cwd dape-command-cwd
      command "gdb"
      command-args ("--interpreter=dap")
-     fn (dape-config-tramp)
      :request "launch"
      :program "a.out"
      :args []
@@ -208,8 +204,7 @@
                                                  "src"
                                                  "dapDebugServer.js"))
                              :autoport)
-               port :autoport
-               fn dape-config-autoport)))
+               port :autoport)))
         `((js-debug-node
            ,@js-debug
            :type "pwa-node"
@@ -257,15 +252,13 @@
      ensure dape-ensure-command
      command "rdbg"
      command-args ("-O" "--host" "0.0.0.0" "--port" :autoport "-c" "--" :-c)
-     fn ((lambda (config)
-           (plist-put config 'command-args
-                      (mapcar (lambda (arg)
-                                (if (eq arg :-c)
-                                    (plist-get config '-c)
-                                  arg))
-                              (plist-get config 'command-args))))
-         dape-config-autoport
-         dape-config-tramp)
+     fn (lambda (config)
+          (plist-put config 'command-args
+                     (mapcar (lambda (arg)
+                               (if (eq arg :-c)
+                                   (plist-get config '-c)
+                                 arg))
+                             (plist-get config 'command-args))))
      port :autoport
      command-cwd dape-command-cwd
      :type "Ruby"
@@ -356,7 +349,7 @@ Symbol Keys (Used by dape):
 - compile: Executes a shell command with `dape-compile-fn'.
 
 Debug adapter conn in configuration:
-- If only command is specified (without host and port), Dape
+- If only command is specified (without host and port), dape
   will communicate with the debug adapter through stdin/stdout.
 - If both host and port are specified, Dape will connect to the
   debug adapter.  If `command is specified, Dape will wait until the
@@ -390,6 +383,13 @@ Functions and symbols in configuration:
                          ((const :tag "Adapter type" :type) string)
                          ((const :tag "Request type launch/attach" :request) string)))))
 
+(defcustom dape-default-config-functions
+  '(dape-config-autoport dape-config-tramp)
+  "Functions applied on config before starting debugging session.
+Functions are evaluated after functions defined in fn symbol in `dape-configs'.
+See `fn' in `dape-configs' function signature."
+  :type '(repeat function))
+
 (defcustom dape-command nil
   "Initial contents for `dape' completion.
 Sometimes it is useful for files or directories to supply local values
@@ -399,8 +399,6 @@ Example value:
 \(codelldb-cc :program \"/home/user/project/a.out\")"
   :type 'sexp)
 
-;; TODO Add more defaults, don't know which adapters support
-;;      sourceReference
 (defcustom dape-mime-mode-alist '(("text/x-lldb.disassembly" . asm-mode)
                                   ("text/javascript" . js-mode))
   "Alist of MIME types vs corresponding major mode functions.
@@ -730,12 +728,13 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
 Accepted FORMAT values are local and remote.
 See `dape-configs' symbols prefix-local prefix-remote."
   (if-let* ((config (dape--config conn))
-            (path (expand-file-name
-                   path
-                   (let ((command-cwd (plist-get config 'command-cwd)))
-                     (pcase format
-                       ('local (tramp-file-local-name command-cwd))
-                       ('remote command-cwd)))))
+            (path
+             (expand-file-name
+              path
+              (let ((command-cwd (plist-get config 'command-cwd)))
+                (pcase format
+                  ('local (tramp-file-local-name command-cwd))
+                  ('remote command-cwd)))))
             ((or (plist-member config 'prefix-local)
                  (plist-member config 'prefix-remote)))
             (prefix-local (or (plist-get config 'prefix-local) ""))
@@ -828,37 +827,38 @@ Note requires `dape--source-ensure' if source is by reference."
 
 (defun dape-config-autoport (config)
   "Replace :autoport in CONFIG keys `command-args' and `port'.
-If `port' is `:autoport' replaces with open port, if not replaces
-with value of `port' instead.
-Replaces symbol and string occurences of \"autoport\"."
-  ;; Stolen from `Eglot'
-  (let ((port (plist-get config 'port)))
-    (when (eq port :autoport)
-      (let ((port-probe (make-network-process :name "dape-port-probe-dummy"
-                                              :server t
-                                              :host "localhost"
-                                              :service 0)))
-        (setq port
-              (unwind-protect
-                  (process-contact port-probe :service)
-                (delete-process port-probe)))))
-    (let ((command-args (seq-map (lambda (item)
-                                   (cond
-                                    ((eq item :autoport)
-                                     (number-to-string port))
-                                    ((stringp item)
-                                     (string-replace ":autoport"
-                                                     (number-to-string port)
-                                                     item))))
-                                 (plist-get config 'command-args))))
-      (thread-first config
-                    (plist-put 'port port)
-                    (plist-put 'command-args command-args)))))
+If `port' is not `:autoport' return config as is."
+  (when (eq (plist-get config 'port) :autoport)
+    ;; Stolen from `Eglot'
+    (let ((port-probe
+           (make-network-process :name "dape-port-probe-dummy"
+                                 :server t
+                                 :host "localhost"
+                                 :service 0)))
+      (plist-put config
+                 'port
+                 (unwind-protect
+                     (process-contact port-probe :service)
+                   (delete-process port-probe)))))
+  (when-let* ((command-args (plist-get config 'command-args))
+              (port (plist-get config 'port))
+              (port-string (number-to-string port)))
+    (plist-put
+     config
+     'command-args
+     (seq-map (lambda (arg)
+                (cond
+                 ((eq arg :autoport) port-string)
+                 ((stringp arg) (string-replace ":autoport" port-string arg))
+                 (t item)))
+              command-args)))
+  config)
 
 (defun dape-config-tramp (config)
-  "Infer `prefix-local' and `host' on CONFIG if in tramp context."
-  ;; TODO maybe this should be moved out of configs and into
-  ;;      `dape--config-eval'
+  "Infer `prefix-local' and `host' on CONFIG if in tramp context.
+If `tramp-tramp-file-p' is nil for command-cwd or command-cwd is nil
+and `tramp-tramp-file-p' is nil for `defualt-directory' return config
+as is."
   (when-let* ((default-directory
                (or (plist-get config 'command-cwd)
                    default-directory))
@@ -867,6 +867,8 @@ Replaces symbol and string occurences of \"autoport\"."
     (when (and (not (plist-get config 'prefix-local))
                (not (plist-get config 'prefix-remote))
                (plist-get config 'command))
+      ;; TODO Should probably log to repl here that prefix-local has
+      ;;      been modified.
       (plist-put config 'prefix-local
                  (tramp-completion-make-tramp-file-name
                   (tramp-file-name-method parts)
@@ -877,6 +879,8 @@ Replaces symbol and string occurences of \"autoport\"."
                (plist-get config 'port)
                (not (plist-get config 'host))
                (equal (tramp-file-name-method parts) "ssh"))
+      ;; TODO Should probably log to repl here that host has been
+      ;;      modified.
       (plist-put config 'host (file-remote-p default-directory 'host))))
   config)
 
@@ -2270,12 +2274,13 @@ Use SKIP-COMPILE to skip compilation."
   (interactive (list (dape--read-config)))
   (dape--with-request (dape-kill (dape--live-connection 'parent t))
     (dape--config-ensure config t)
-    (when-let ((fn (plist-get config 'fn))
+    (when-let ((fn (or (plist-get config 'fn) 'identity))
                (fns (or (and (functionp fn) (list fn))
                         (and (listp fn) fn))))
       (setq config
             (seq-reduce (lambda (config fn) (funcall fn config))
-                        fns (copy-tree config))))
+                        (append fns dape-default-config-functions)
+                        (copy-tree config))))
     (if (and (not skip-compile) (plist-get config 'compile))
         (dape--compile config)
       (setq dape--connection
