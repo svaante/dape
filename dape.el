@@ -1794,10 +1794,9 @@ Killing the adapter and it's CONN."
   "Preform some cleanup and start debugging with CONN."
   (unless (dape--parent conn)
     (dape--remove-stack-pointers)
-    ;; FIXME Cleanup source buffers in a nicer way
     (cl-loop for (_ buffer) on dape--source-buffers by 'cddr
-             do (when (buffer-live-p buffer)
-                  (kill-buffer buffer)))
+             when (buffer-live-p buffer)
+             do (kill-buffer buffer))
     (setq dape--source-buffers nil
           dape--repl-insert-text-guard nil)
     (unless dape-active-mode
