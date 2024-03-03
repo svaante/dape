@@ -4092,7 +4092,8 @@ Empty input will rerun last command.\n"
       (ignore-errors
         (pcase-setq `(,hint-key ,hint-config) (dape--config-from-string str t)))
       (setq default-directory
-            (dape--guess-root hint-config)
+            (or (ignore-errors (dape--guess-root hint-config))
+                default-directory)
             use-cache
             (pcase-let ((`(,key ,config)
                          dape--minibuffer-cache))
