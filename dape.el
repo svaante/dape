@@ -2555,7 +2555,6 @@ contents."
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
   "Make sure that Dape OVERLAY region covers line."
-  ;; FIXME Press evil "O" on a break point line this will mess things up
   (apply 'move-overlay overlay
          (dape--overlay-region (eq (overlay-get overlay 'category)
                                    'dape-stack-pointer))))
@@ -2633,12 +2632,12 @@ that breakpoint as DAP only supports one breakpoint per line."
     (push breakpoint dape--breakpoints)
     (dolist (conn (dape--live-connections))
       (unless skip-update
-        (dape--set-breakpoints-in-buffer conn (current-buffer)))
-      ;; FIXME Update stack pointer colors should be it's own function
-      ;;       it's a shame we need conn here as only the color needs to
-      ;;       be updated
-      (when-let ((conn (dape--live-connection 'stopped t)))
-        (dape--update-stack-pointers conn t t)))
+        (dape--set-breakpoints-in-buffer conn (current-buffer))))
+    ;; If we have an stopped connection we also have an stack pointer
+    ;; which should be colored with `dape-breakpoint-face' if we are
+    ;; placing the breakpoint on the line of the stack pointer.
+    (when-let ((conn (dape--live-connection 'stopped t)))
+      (dape--update-stack-pointers conn t t))
     (add-hook 'kill-buffer-hook 'dape--breakpoint-buffer-kill-hook nil t)
     (run-hooks 'dape-update-ui-hooks)
     breakpoint))
@@ -2651,13 +2650,13 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (delete-overlay overlay)
     (unless skip-update
       (dolist (conn (dape--live-connections))
-        (dape--set-breakpoints-in-buffer conn buffer))
-      ;; FIXME Update stack pointer colors should be it's own function
-      ;;       it's a shame we need conn here as only the color needs to
-      ;;       be updated
-      (when-let ((conn (dape--live-connection 'stopped t)))
-        (dape--update-stack-pointers conn t t)))
+        (dape--set-breakpoints-in-buffer conn buffer)))
     (dape--margin-cleanup buffer))
+  ;; If we have an stopped connection we also have an stack pointer
+  ;; which should not have `dape-breakpoint-face' if we are
+  ;; removing the breakpoint on the line of the stack pointer.
+  (when-let ((conn (dape--live-connection 'stopped t)))
+    (dape--update-stack-pointers conn t t))
   (run-hooks 'dape-update-ui-hooks))
 
 (defun dape--breakpoint-update (conn overlay breakpoint)
