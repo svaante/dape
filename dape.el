@@ -2236,17 +2236,19 @@ repl context.  CONN is inferred for interactive invocations."
                    (thing-at-point 'symbol)))))
   (let ((interactive-p (called-interactively-p 'any)))
     (dape--with-request-bind
-        ((&key result &allow-other-keys) _error)
+        ((&key result &allow-other-keys) error)
         (dape--evaluate-expression conn
                                    (plist-get (dape--current-stack-frame conn) :id)
                                    (substring-no-properties expression)
                                    "repl")
       (when interactive-p
         ;; TODO Print error
-        (message "%s" (or (and (stringp result)
-                               (not (string-empty-p result))
-                               result)
-                          "Evaluation done"))))))
+        (message "%s" (if error
+                          (format "Evaluation failed %s" error)
+                        (or (and (stringp result)
+                                 (not (string-empty-p result))
+                                 result)
+                            "Evaluation done")))))))
 
 ;;;###autoload
 (defun dape (config &optional skip-compile)
