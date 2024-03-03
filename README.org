@@ -167,6 +167,11 @@ This has been reported upstream (#69241), but until the issue has been fixed the
     :straight (jsonrpc :type git :host github :repo "svaante/jsonrpc"))
 #+end_src
 
+* Contribute
+~dape~ is subject to the same copyright assignment policy as GNU Emacs.
+
+Any legally [[https://www.gnu.org/prep/maintain/html_node/Legally-Significant.html#Legally-Significant][significant]] contributions can only be merged after the author has completed their paperwork.
+See [[https://www.fsf.org/licensing/contributor-faq][Contributor's Frequently Asked Questions (FAQ)]] for more information.
 
 * Bugs and issues
 Before reporting any issues =(setq dape-debug t)= and take a look at =*dape-repl*= buffer. Please share your =*dape-repl*= and =*dape-connection events*= in the buffer contents with the bug report.
