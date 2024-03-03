@@ -3666,16 +3666,48 @@ plist are used as keymap for each sections defined by the key."
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-info-watch-mode'."
-  (let* ((conn (or (dape--live-connection 'stopped t)
-                   (dape--live-connection 'last t)
-                   dape--connection))
-         (frame (dape--current-stack-frame conn))
-         (responses 0))
+  (let ((conn (dape--live-connection 'stopped t)))
     (cond
      ((not dape--watched)
       (dape--info-update-with
         (insert "No watched variable.")))
-     ((not (and conn (jsonrpc-running-p conn)))
+     (conn
+      (let ((frame (dape--current-stack-frame conn))
+            (responses 0))
+        (dolist (plist dape--watched)
+          (plist-put plist :variablesReference nil)
+          (plist-put plist :variables nil)
+          (dape--with-request-bind
+              (body error)
+              (dape--evaluate-expression conn
+                                         (plist-get frame :id)
+                                         (plist-get plist :name)
+                                         "watch")
+            (unless error
+              (cl-loop for (key value) on body by 'cddr
+                       do (plist-put plist key value)))
+            (setf responses (1+ responses))
+            (when (length= dape--watched responses)
+              (dape--with-request
+                  (dape--variables-recursive conn
+                                             (list :variables dape--watched)
+                                             (list "Watch")
+                                             (lambda (path object)
+                                               (and (not (eq (plist-get object :expensive) t))
+                                                    (gethash (cons (plist-get object :name) path)
+                                                             dape--info-expanded-p))))
+                (dape--info-update-with
+                  (cl-loop with table = (make-gdb-table)
+                           for watch in dape--watched
+                           initially (setf (gdb-table-right-align table)
+                                           dape-info-variable-table-aligned)
+                           do
+                           (dape--info-scope-add-variable table watch 'watch (list "Watch")
+                                                          (list 'name dape-info-variable-name-map
+                                                                'value dape-info-variable-value-map
+                                                                'prefix dape-info-variable-prefix-map))
+                           finally (insert (gdb-table-string table " "))))))))))
+     (t
       (dape--info-update-with
         (cl-loop with table = (make-gdb-table)
                  for watch in dape--watched
@@ -3686,41 +3718,7 @@ plist are used as keymap for each sections defined by the key."
                                                 (list 'name dape-info-variable-name-map
                                                       'value dape-info-variable-value-map
                                                       'prefix dape-info-variable-prefix-map))
-                 finally (insert (gdb-table-string table " ")))))
-     (t
-      (dolist (plist dape--watched)
-        (plist-put plist :variablesReference nil)
-        (plist-put plist :variables nil)
-        (dape--with-request-bind
-            (body error)
-            (dape--evaluate-expression conn
-                                       (plist-get frame :id)
-                                       (plist-get plist :name)
-                                       "watch")
-          (unless error
-            (cl-loop for (key value) on body by 'cddr
-                     do (plist-put plist key value)))
-          (setf responses (1+ responses))
-          (when (length= dape--watched responses)
-            (dape--with-request
-                (dape--variables-recursive conn
-                                           (list :variables dape--watched)
-                                           (list "Watch")
-                                           (lambda (path object)
-                                             (and (not (eq (plist-get object :expensive) t))
-                                                  (gethash (cons (plist-get object :name) path)
-                                                           dape--info-expanded-p))))
-              (dape--info-update-with
-                (cl-loop with table = (make-gdb-table)
-                         for watch in dape--watched
-                         initially (setf (gdb-table-right-align table)
-                                         dape-info-variable-table-aligned)
-                         do
-                         (dape--info-scope-add-variable table watch 'watch (list "Watch")
-                                                        (list 'name dape-info-variable-name-map
-                                                              'value dape-info-variable-value-map
-                                                              'prefix dape-info-variable-prefix-map))
-                         finally (insert (gdb-table-string table " "))))))))))))
+                 finally (insert (gdb-table-string table " "))))))))
 
 
 ;;; REPL buffer
