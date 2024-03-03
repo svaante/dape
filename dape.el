@@ -1499,27 +1499,34 @@ See `dape-request' for expected CB signature."
                               :context context))
                 cb))
 
-(defun dape--set-variable (conn ref variable value)
-  "Set VARIABLE VALUE with REF in adapter CONN.
-REF should refer to VARIABLE container.
-See `dape-request' for expected CB signature."
+(defun dape--set-variable (conn variable-reference variable value)
+  "Set VARIABLE to VALUE with VARIABLE-REFERENCE in for CONN.
+Calls setVariable endpoint if VARIABLE-REFERENCE is an number and
+setExpression if it's not.
+Runs the appropriate hooks on non error response."
   (cond
+   ;; `variable' from an "variable" request
    ((and (dape--capable-p conn :supportsSetVariable)
-         (numberp ref))
+         (numberp variable-reference))
     (dape--with-request-bind
         (body error)
         (dape-request conn
                       "setVariable"
                       (list
-                       :variablesReference ref
+                       :variablesReference variable-reference
                        :name (plist-get variable :name)
                        :value value))
       (if error
           (message "%s" error)
+        ;; Would make more sense to update all variables after
+        ;; setVariable request but certain adapters cache "variable"
+        ;; response so we just update the variable in question in
+        ;; place.
         (plist-put variable :variables nil)
         (cl-loop for (key value) on body by 'cddr
                  do (plist-put variable key value))
         (run-hooks 'dape-update-ui-hooks))))
+   ;; `variable' from an "evaluate" request
    ((and (dape--capable-p conn :supportsSetExpression)
          (or (plist-get variable :evaluateName)
              (plist-get variable :name)))
@@ -1533,10 +1540,8 @@ See `dape-request' for expected CB signature."
                             :value value))
       (if error
           (message "%s" error)
-        ;; FIXME: js-debug caches variables response for each stop
-        ;; therefore it's not to just refresh all variables as it will
-        ;; return the old value
-        (dape--update conn nil t))))
+        ;; Update all variables
+        (dape--update conn nil t t))))
    ((user-error "Unable to set variable"))))
 
 (defun dape--scopes (conn stack-frame cb)
