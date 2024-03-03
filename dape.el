@@ -1983,7 +1983,8 @@ CONN is inferred for interactive invocations."
 (defun dape-pause (conn)
   "Pause execution.
 CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection 'running)))
+  (interactive (list (or (dape--live-connection 'running t)
+                         (dape--live-connection 'parent))))
   (when (dape--stopped-threads conn)
     ;; cpptools crashes on pausing an paused thread
     (user-error "Thread already is stopped"))
