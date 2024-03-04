@@ -2248,10 +2248,9 @@ repl context.  CONN is inferred for interactive invocations."
                                    (substring-no-properties expression)
                                    "repl")
       (when interactive-p
-        ;; TODO Print error
-        (message "%s" (if error
-                          (format "Evaluation failed %s" error)
-                        (or (and (stringp result)
+        (if error
+            (message "Evaluation failed %s" error)
+          (message "%s" (or (and (stringp result)
                                  (not (string-empty-p result))
                                  result)
                             "Evaluation done")))))))
