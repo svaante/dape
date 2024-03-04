@@ -49,12 +49,14 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; To use window configuration like gud (gdb-mi)
     ;; (setq dape-buffer-window-arrangement 'gud)
 
-    ;; To save breakpoints and exceptions with `savehist-mode'
-    ;; (setq dape-use-savehist t)
-
     :config
     ;; Info buffers to the right
     ;; (setq dape-buffer-window-arrangement 'right)
+
+    ;; Save breakpoints on quit
+    ;; (add-hook 'kill-emacs-hook 'dape-breakpoint-save)
+    ;; Load breakpoints on startup
+    ;; (dape-breakpoint-load)
 
     ;; To not display info and/or buffers on startup
     ;; (remove-hook 'dape-on-start-hooks 'dape-info)
