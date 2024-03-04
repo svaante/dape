@@ -3897,6 +3897,17 @@ VARIABLE is expected to be the string representation of a varable."
         (funcall cb (propertize (gdb-table-string table " ")
                                 'dape--repl-variable variable))))))
 
+(defun dape--repl-shorthand-alist ()
+  "Return shorthanded version of `dape-repl-commands'."
+  (cl-loop with shorthand-alist = nil
+           for (str . command) in dape-repl-commands
+           for shorthand = (cl-loop for i from 1 upto (length str)
+                                    for shorthand = (substring str 0 i)
+                                    unless (assoc shorthand shorthand-alist)
+                                    return shorthand)
+           collect (cons shorthand command) into shorthand-alist
+           finally return shorthand-alist))
+
 (defun dape--repl-input-sender (dummy-process input)
   "Dape repl `comint-input-sender'.
 Send INPUT to DUMMY-PROCESS."
@@ -3912,9 +3923,7 @@ Send INPUT to DUMMY-PROCESS."
      ((setq cmd
             (or (alist-get input dape-repl-commands nil nil 'equal)
                 (and dape-repl-use-shorthand
-                     (cl-loop for (key . value) in dape-repl-commands
-                              when (equal (substring key 0 1) input)
-                              return value))))
+                     (cdr (assoc input (dape--repl-shorthand-alist))))))
       (dape--repl-insert-prompt)
       (call-interactively cmd))
      ;; Evaluate expression
@@ -3967,7 +3976,9 @@ Send INPUT to DUMMY-PROCESS."
                             (format " %s"
                                     (propertize (symbol-name (cdr cmd))
                                                 'face 'font-lock-builtin-face))))
-                    dape-repl-commands))
+                    (append dape-repl-commands
+                            (when dape-repl-use-shorthand
+                              (dape--repl-shorthand-alist)))))
            done)
       (list
        (car bounds)
@@ -4073,18 +4084,20 @@ Send INPUT to DUMMY-PROCESS."
              "* Welcome to Dape REPL! *
 Available Dape commands: %s
 Empty input will rerun last command.\n"
-             (mapconcat 'identity
-                        (mapcar (lambda (cmd)
-                                  (let ((str (car cmd)))
-                                    (if dape-repl-use-shorthand
-                                        (concat
-                                         (propertize
-                                          (substring str 0 1)
-                                          'font-lock-face 'help-key-binding)
-                                         (substring str 1))
-                                      str)))
-                                dape-repl-commands)
-                        ", ")))
+             (mapconcat
+              (pcase-lambda (`(,str . ,command))
+                (setq str (concat str))
+                (when dape-repl-use-shorthand
+                  (set-text-properties
+                   0 (thread-last (dape--repl-shorthand-alist)
+                                  (rassoc command)
+                                  (car)
+                                  (length))
+                   '(font-lock-face help-key-binding)
+                   str))
+                str)
+              dape-repl-commands
+              ", ")))
     (set-marker (process-mark (get-buffer-process (current-buffer))) (point))
     (comint-output-filter (get-buffer-process (current-buffer))
                           dape--repl-prompt)))
