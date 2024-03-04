@@ -851,7 +851,7 @@ If `port' is not `:autoport' return config as is."
                 (cond
                  ((eq arg :autoport) port-string)
                  ((stringp arg) (string-replace ":autoport" port-string arg))
-                 (t item)))
+                 (t arg)))
               command-args)))
   config)
 
@@ -3899,8 +3899,7 @@ VARIABLE is expected to be the string representation of a varable."
 
 (defun dape--repl-shorthand-alist ()
   "Return shorthanded version of `dape-repl-commands'."
-  (cl-loop with shorthand-alist = nil
-           for (str . command) in dape-repl-commands
+  (cl-loop for (str . command) in dape-repl-commands
            for shorthand = (cl-loop for i from 1 upto (length str)
                                     for shorthand = (substring str 0 i)
                                     unless (assoc shorthand shorthand-alist)
