@@ -4289,8 +4289,12 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
 (defun dape--config-from-string (str &optional loose-parsing)
   "Parse list of name and config from STR.
 If LOOSE-PARSING is non nil ignore arg parsing failures."
-  (let (name read-config base-config)
+  (let ((buffer (current-buffer))
+        name read-config base-config)
     (with-temp-buffer
+      ;; Keep possible local `dape-configs' value
+      (setq-local dape-configs
+                  (buffer-local-value 'dape-configs buffer))
       (insert str)
       (goto-char (point-min))
       (unless (setq name (ignore-errors (read (current-buffer))))
@@ -4456,7 +4460,10 @@ See `dape--config-mode-p' how \"valid\" is defined."
                       resize-mini-windows t
                       max-mini-window-height 0.5
                       dape--minibuffer-hint-overlay (make-overlay (point) (point))
-                      default-directory (dape-command-cwd))
+                      default-directory (dape-command-cwd)
+                      ;; Store origin buffer `dape-configs' value
+                      dape-configs (buffer-local-value
+                                    'dape-configs dape--minibuffer-last-buffer))
           (set-syntax-table emacs-lisp-mode-syntax-table)
           (add-hook 'completion-at-point-functions
                     'comint-filename-completion nil t)
