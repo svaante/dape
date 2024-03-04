@@ -45,6 +45,12 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; May also need to set/change gud (gdb-mi) key prefix
     ;; (setq gud-key-prefix "\C-x\C-a")
 
+    :hook
+    ;; Save breakpoints on quit
+    ;; (kill-emacs . dape-breakpoint-save)
+    ;; Load breakpoints on startup
+    ;; (after-init . dape-breakpoint-load))
+
     :init
     ;; To use window configuration like gud (gdb-mi)
     ;; (setq dape-buffer-window-arrangement 'gud)
@@ -52,11 +58,6 @@ Currently =Dape= does not come with any debug adapter configuration.
     :config
     ;; Info buffers to the right
     ;; (setq dape-buffer-window-arrangement 'right)
-
-    ;; Save breakpoints on quit
-    ;; (add-hook 'kill-emacs-hook 'dape-breakpoint-save)
-    ;; Load breakpoints on startup
-    ;; (dape-breakpoint-load)
 
     ;; To not display info and/or buffers on startup
     ;; (remove-hook 'dape-on-start-hooks 'dape-info)
