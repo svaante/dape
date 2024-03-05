@@ -130,28 +130,38 @@
      :cwd "."
      :program "a.out"
      :MIMode ,(seq-find 'executable-find '("lldb" "gdb")))
-    (debugpy
-     modes (python-mode python-ts-mode)
-     ensure (lambda (config)
-              (dape-ensure-command config)
-              (let ((python
-                     (dape--config-eval-value (plist-get config 'command))))
-                (unless (zerop
-                         (call-process-shell-command
-                          (format "%s -c \"import debugpy.adapter\"" python)))
-                  (user-error "%s module debugpy is not installed" python))))
-     command "python"
-     command-args ("-m" "debugpy.adapter" "--host" "0.0.0.0" "--port" :autoport)
-     port :autoport
-     :request "launch"
-     :type "executable"
-     :cwd dape-cwd
-     :program dape-buffer-default
-     :args []
-     :justMyCode nil
-     :console "integratedTerminal"
-     :showReturnValue t
-     :stopAtEntry t)
+    ,@(let ((debugpy
+             `(modes (python-mode python-ts-mode)
+               ensure (lambda (config)
+                        (dape-ensure-command config)
+                        (let ((python (dape-config-get config 'command)))
+                          (unless (zerop
+                                   (call-process-shell-command
+                                    (format "%s -c \"import debugpy.adapter\"" python)))
+                            (user-error "%s module debugpy is not installed" python))))
+               command "python"
+               command-args ("-m" "debugpy.adapter" "--host" "0.0.0.0" "--port" :autoport)
+               port :autoport
+               :request "launch"
+               :type "python"
+               :cwd dape-cwd))
+            (common
+             `(:args []
+               :justMyCode nil
+               :console "integratedTerminal"
+               :showReturnValue t
+               :stopAtEntry t)))
+        `((debugpy ,@debugpy
+                   :program dape-buffer-default
+                   ,@common)
+          (debugpy-module ,@debugpy
+                          :module (lambda ()
+                                    (thread-first default-directory
+                                                  (directory-file-name)
+                                                  (file-name-split)
+                                                  (last)
+                                                  (car)))
+                          ,@common)))
     (dlv
      modes (go-mode go-ts-mode)
      ensure dape-ensure-command
