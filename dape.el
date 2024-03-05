@@ -4193,7 +4193,7 @@ Empty input will rerun last command.\n"
                                          'shadow))
                                     (error
                                      (propertize (error-message-string err)
-                                                 'face error)))))))
+                                                 'face 'error)))))))
             dape--minibuffer-cache
             (list hint-key hint-config error-message hint-rows))
       (overlay-put dape--minibuffer-hint-overlay
