@@ -4352,11 +4352,10 @@ If LOOSE-PARSING is non nil ignore arg parsing failures."
   "Create string from KEY and POST-EVAL-CONFIG."
   (let ((config-diff (dape--config-diff key post-eval-config)))
     (concat (when key (format "%s" key))
-            (and-let* ((config-diff) (config-str (prin1-to-string config-diff)))
+            (and-let* ((config-diff)
+                       (config-str (prin1-to-string config-diff)))
               (format " %s"
-                      (substring config-str
-                                 1
-                                 (1- (length config-str))))))))
+                      (substring config-str 1 (1- (length config-str))))))))
 
 (defun dape--config-ensure (config &optional signal)
   "Ensure that CONFIG is executable.
