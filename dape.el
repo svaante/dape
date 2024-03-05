@@ -4183,14 +4183,17 @@ Empty input will rerun last command.\n"
                                 (propertize (format "%s" key)
                                             'face font-lock-keyword-face)
                                 " "
-                                (propertize
-                                 (format "%S"
-                                         (with-current-buffer dape--minibuffer-last-buffer
-                                           (condition-case _
-                                               (dape--config-eval-value value nil nil t)
-                                             (error 'error))))
-                                 'face (when (equal value (plist-get base-config key))
-                                         'shadow)))))
+                                (with-current-buffer dape--minibuffer-last-buffer
+                                  (condition-case err
+                                      (propertize
+                                       (format "%S"
+                                               (dape--config-eval-value value nil nil t))
+                                       'face
+                                       (when (equal value (plist-get base-config key))
+                                         'shadow))
+                                    (error
+                                     (propertize (error-message-string err)
+                                                 'face error)))))))
             dape--minibuffer-cache
             (list hint-key hint-config error-message hint-rows))
       (overlay-put dape--minibuffer-hint-overlay
