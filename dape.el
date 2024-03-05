@@ -4133,17 +4133,6 @@ Empty input will rerun last command.\n"
 (defvar dape--minibuffer-hint-overlay nil
   "Overlay for `dape--minibuffer-hint'.")
 
-(dolist (fn '(dape-cwd
-              dape-command-cwd
-              dape-buffer-default
-              dape--rust-program
-              dape--netcoredbg-program
-              dape--rdbg-c
-              dape--jdtls-file-path
-              dape--jdtls-main-class
-              dape--jdtls-project-name))
-  (put fn 'dape--minibuffer-hint t))
-
 (defun dape--minibuffer-hint (&rest _)
   "Display current configuration in minibuffer in overlay."
   (save-excursion
@@ -4230,54 +4219,64 @@ Empty input will rerun last command.\n"
              (len (length object))
              ((zerop (% len 2))))))
 
-(defun dape--config-eval-value (value &optional skip-function for-adapter for-hints)
-  "Evaluate dape config VALUE.
-If SKIP-FUNCTION and VALUE is an function it is not invoked.
-If FOR-ADAPTER current value is for the debug adapter.  Other rules
-apply.
-If FOR-HINTS handle function symbols as if they are going to be
-displayed as hints display."
-  (cond
-   ((functionp value)
-    (cond
-     (skip-function value)
-     (for-hints
-      (cond
-       ((and (symbolp value) (get value 'dape--minibuffer-hint))
-        (funcall value))
-       ((eq (car-safe value) 'lambda)
-        value)
-       (t value)))
-     (t (funcall-interactively value))))
-   ((dape--plistp value)
-    (dape--config-eval-1 value skip-function for-adapter for-hints))
-   ((vectorp value) (cl-map 'vector
-                            (lambda (value)
-                              (dape--config-eval-value value
-                                                       skip-function
-                                                       for-adapter
-                                                       for-hints))
-                            value))
-   ((and (symbolp value)
-         (not (eq (symbol-value value) value)))
-    (dape--config-eval-value (symbol-value value)
-                             skip-function for-adapter for-hints))
-   (t value)))
+(defun dape--config-eval-value (value &optional skip-functions check
+                                skip-interactive)
+  "Return recursively evaluated VALUE.
+If SKIP-FUNCTIONS is non nil return VALUE as is if `functionp' is non
+nil.
+If CHECK is non nil assert VALUE types, signal `user-error' on
+mismatch.
+If SKIP-INTERACTIVE is non nil return VALUE as is if `functionp' is
+non nil and function uses the minibuffer."
+  (pcase value
+    ;; On function
+    ((pred functionp)
+     (cond
+      (skip-functions value)
+      (skip-interactive
+       (condition-case _
+           (let ((enable-recursive-minibuffers nil))
+             (funcall-interactively value))
+         (error value)))
+      (t
+       (funcall-interactively value))))
+    ;; On plist recursively evaluate
+    ((pred dape--plistp)
+     (dape--config-eval-1 value skip-functions check skip-interactive))
+    ;; On vector evaluate each item
+    ((pred vectorp)
+     (cl-map 'vector
+             (lambda (value)
+               (dape--config-eval-value value
+                                        skip-functions
+                                        check
+                                        skip-interactive))
+             value))
+    ;; On symbol evaluate symbol value
+    ((and (pred symbolp)
+          ;; Guard against infinite recursion
+          (guard (not (eq (symbol-value value) value))))
+     (dape--config-eval-value (symbol-value value)
+                              skip-functions check skip-interactive))
+    ;; Otherwise return value
+    (_ value)))
 
-(defun dape--config-eval-1 (config &optional skip-functions for-adapter for-hints)
+(defun dape--config-eval-1 (config &optional skip-functions check
+                                   skip-interactive)
   "Helper for `dape--config-eval'."
   (cl-loop for (key value) on config by 'cddr
            append (cond
                    ((memql key '(modes fn ensure)) (list key value))
-                   ((and for-adapter (not (keywordp key)))
+                   ((and check (not (keywordp key)))
                     (user-error "Unexpected key %S; lists of things needs be \
 arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
                                 key key key key))
-                   (t (list key (dape--config-eval-value value
-                                                         skip-functions
-                                                         (or for-adapter
-                                                             (keywordp key))
-                                                         for-hints))))))
+                   (t
+                    (list key
+                          (dape--config-eval-value value
+                                                   skip-functions
+                                                   (or check (keywordp key))
+                                                   skip-interactive))))))
 
 (defun dape--config-eval (key options)
   "Evaluate config with KEY and OPTIONS."
