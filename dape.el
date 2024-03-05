@@ -107,13 +107,13 @@
            command-args ("--port" :autoport
                          "--settings" "{\"sourceLanguages\":[\"rust\"]}")
            ,@codelldb
-           :program ,(defun dape--rust-program ()
-                       (file-name-concat "target" "debug"
-                                         (thread-first (dape-cwd)
-                                                       (directory-file-name)
-                                                       (file-name-split)
-                                                       (last)
-                                                       (car))))
+           :program (lambda ()
+                      (file-name-concat "target" "debug"
+                                        (thread-first (dape-cwd)
+                                                      (directory-file-name)
+                                                      (file-name-split)
+                                                      (last)
+                                                      (car))))
            ,@common)))
     (cpptools
      modes (c-mode c-ts-mode c++-mode c++-ts-mode)
@@ -237,15 +237,15 @@
      command-args ["--interpreter=vscode"]
      :request "launch"
      :cwd dape-cwd
-     :program ,(defun dape--netcoredbg-program ()
-                 (let ((dlls
-                        (file-expand-wildcards
-                         (file-name-concat "bin" "Debug" "*" "*.dll"))))
-                   (if dlls
-                       (file-relative-name
-                        (file-relative-name (car dlls)))
-                     ".dll"
-                     (dape-cwd))))
+     :program (lambda ()
+                (let ((dlls
+                       (file-expand-wildcards
+                        (file-name-concat "bin" "Debug" "*" "*.dll"))))
+                  (if dlls
+                      (file-relative-name
+                       (file-relative-name (car dlls)))
+                    ".dll"
+                    (dape-cwd))))
      :stopAtEntry nil)
     (rdbg
      modes (ruby-mode ruby-ts-mode)
@@ -266,9 +266,9 @@
      ;; rails server
      ;; bundle exec ruby foo.rb
      ;; bundle exec rake test
-     -c ,(defun dape--rdbg-c ()
-           (format "ruby %s"
-                   (or (dape-buffer-default) ""))))
+     -c (lambda ()
+          (format "ruby %s"
+                  (or (dape-buffer-default) ""))))
     (jdtls
      modes (java-mode java-ts-mode)
      ensure (lambda (config)
@@ -316,14 +316,14 @@
                                  (aref main-classes 0))))
                        (plist-get main-class key)))))
          `(:filePath
-           ,(defun dape--jdtls-file-path ()
+           ,(lambda ()
               (or (resolve-main-class :filePath)
                   (expand-file-name (dape-buffer-default) (dape-cwd))))
            :mainClass
-           ,(defun dape--jdtls-main-class ()
+           ,(lambda ()
               (or (resolve-main-class :mainClass) ""))
            :projectName
-           ,(defun dape--jdtls-project-name ()
+           ,(lambda ()
               (or (resolve-main-class :projectName) ""))))
      :args ""
      :stopOnEntry nil
