@@ -192,11 +192,10 @@
              `(modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
                ensure ,(lambda (config)
                          (dape-ensure-command config)
-                         (let ((js-debug-file
-                                (file-name-concat
-                                 (dape--config-eval-value (car (plist-get config 'command-args))))))
-                           (unless (file-exists-p js-debug-file)
-                             (user-error "File %S does not exist" js-debug-file))))
+                         (let ((dap-debug-server-path
+                                (car (plist-get config 'command-args))))
+                           (unless (file-exists-p dap-debug-server-path)
+                             (user-error "File %S does not exist" dap-debug-server-path))))
                command "node"
                command-args (,(expand-file-name
                                (file-name-concat dape-adapter-dir
@@ -272,11 +271,8 @@
     (jdtls
      modes (java-mode java-ts-mode)
      ensure (lambda (config)
-              (let ((file (thread-first (plist-get config :filePath)
-                                        (dape--config-eval-value))))
+              (let ((file (dape-config-get config :filePath)))
                 (unless (and (stringp file) (file-exists-p file))
-                  (thread-first (plist-get config :filePath)
-                                (dape--config-eval-value))
                   (user-error "Unable to find locate :filePath `%s'" file))
                 (with-current-buffer (find-file-noselect file)
                   (unless (eglot-current-server)
@@ -285,9 +281,8 @@
         			          "vscode.java.resolveClasspath")
         	    (user-error "jdtls instance does not bundle java-debug-server, please install")))))
      fn (lambda (config)
-          (with-current-buffer (thread-first (plist-get config :filePath)
-                                             (dape--config-eval-value)
-                                             (find-file-noselect))
+          (with-current-buffer
+              (find-file-noselect (dape-config-get config :filePath))
             (if-let ((server (eglot-current-server)))
 	        (pcase-let ((`[,module-paths ,class-paths]
 			     (eglot-execute-command server
@@ -894,7 +889,7 @@ as is."
 (defun dape-ensure-command (config)
   "Ensure that `command' from CONFIG exist system."
   (let ((command
-         (dape--config-eval-value (plist-get config 'command))))
+         (dape-config-get config 'command)))
     (unless (or (file-executable-p command)
                 (executable-find command t))
       (user-error "Unable to locate %S with default-directory %s"
@@ -4215,6 +4210,10 @@ Empty input will rerun last command.\n"
 
 
 ;;; Config
+
+(defun dape-config-get (config prop)
+  "Return PROP value in CONFIG evaluated."
+  (dape--config-eval-value (plist-get config prop)))
 
 (defun dape--plistp (object)
   "Non-nil if and only if OBJECT is a valid plist."
