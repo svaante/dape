@@ -303,11 +303,17 @@
               server)))
      ,@(cl-flet ((resolve-main-class (key)
                    (ignore-errors
-                     (pcase-let ((`[,main-class]
-                                  (eglot-execute-command
-                                   (eglot-current-server)
-				   "vscode.java.resolveMainClass"
-				   (file-name-nondirectory (directory-file-name (dape-cwd))))))
+                     (let* ((main-classes
+                             (eglot-execute-command (eglot-current-server)
+                                                    "vscode.java.resolveMainClass"
+                                                    (file-name-nondirectory
+                                                     (directory-file-name (dape-cwd)))))
+                            (main-class
+                             (or (seq-find (lambda(val)
+                                             (equal (plist-get val :filePath)
+                                                    (buffer-file-name)))
+                                           main-classes)
+                                 (aref main-classes 0))))
                        (plist-get main-class key)))))
          `(:filePath
            ,(defun dape--jdtls-file-path ()
