@@ -4280,10 +4280,11 @@ arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
                                                          for-hints))))))
 
 (defun dape--config-eval (key options)
-  "Evaluate Dape config with KEY and OPTIONS."
+  "Evaluate config with KEY and OPTIONS."
   (let ((base-config (alist-get key dape-configs)))
     (unless base-config
-      (user-error "Unable to find `%s' in `dape-configs', available configurations: %s"
+      (user-error "Unable to find `%s' in `dape-configs', available \
+configurations: %s"
                   key (mapconcat (lambda (e) (symbol-name (car e)))
                                  dape-configs ", ")))
     (dape--config-eval-1 (seq-reduce (apply-partially 'apply 'plist-put)
