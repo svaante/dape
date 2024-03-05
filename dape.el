@@ -4352,8 +4352,9 @@ If LOOSE-PARSING is non nil ignore arg parsing failures."
                                  (1- (length config-str))))))))
 
 (defun dape--config-ensure (config &optional signal)
-  "Ensure that CONFIG is valid executable.
-If SIGNAL is non nil raises an `user-error'."
+  "Ensure that CONFIG is executable.
+If SIGNAL is non nil raises `user-error' on failure otherwise returns
+nil."
   (if-let ((ensure-fn (plist-get config 'ensure)))
       (let ((default-directory
              (or (when-let ((command-cwd (plist-get config 'command-cwd)))
