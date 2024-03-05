@@ -4310,8 +4310,12 @@ If LOOSE-PARSING is non nil ignore arg parsing failures."
         (user-error "No configuration named `%s'" name))
       (setq base-config (copy-tree (alist-get name dape-configs)))
       (condition-case _
-          ;; FIXME ugly
-          (while (not (string-empty-p (string-trim (buffer-substring (point) (point-max)))))
+          (while
+              ;; Do we have non whitespace chars after `point'?
+              (thread-first (buffer-substring (point) (point-max))
+                            (string-trim)
+                            (string-empty-p)
+                            (not))
             (push (read (current-buffer))
                   read-config))
         (error
