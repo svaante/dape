@@ -4292,7 +4292,9 @@ configurations: %s"
                                      (copy-tree base-config)))))
 
 (defun dape--config-from-string (str &optional loose-parsing)
-  "Parse list of name and config from STR.
+  "Return list of ALIST-KEY CONFIG from STR.
+Expects STR format of \”ALIST-KEY PLIST-KEY PLIST-VALUE\” etc.
+Where ALIST-KEY exists in `dape-configs'.
 If LOOSE-PARSING is non nil ignore arg parsing failures."
   (let ((buffer (current-buffer))
         name read-config base-config)
