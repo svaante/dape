@@ -4342,9 +4342,10 @@ If LOOSE-PARSING is non nil ignore arg parsing failures."
                         (and
                          ;; Does the key exist in `base-config'?
                          (plist-member base-config key)
-                         ;; Has value changed?
-                         (equal (dape--config-eval-value (plist-get base-config key)
-                                                         t)
+                         ;; Has value changed (skip functions)?
+                         (equal (dape--config-eval-value
+                                 (plist-get base-config key)
+                                 'skip-functions)
                                 value)))
              append (list key value))))
 
