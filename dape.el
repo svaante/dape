@@ -1769,12 +1769,10 @@ Sets `dape--thread-id' from BODY if not set."
 (cl-defmethod dape-handle-event (_conn (_event (eql output)) body)
   "Handle output events by printing BODY with `dape--repl-message'."
   (pcase (plist-get body :category)
-    ("stdout"
+    ((or "stdout" "console" "output")
      (dape--repl-message (plist-get body :output)))
     ("stderr"
-     (dape--repl-message (plist-get body :output) 'dape-repl-error-face))
-    ((or "console" "output")
-     (dape--repl-message (plist-get body :output)))))
+     (dape--repl-message (plist-get body :output) 'dape-repl-error-face))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql exited)) body)
   "Handle adapter CONNs exited events.
