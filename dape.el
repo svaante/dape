@@ -4246,6 +4246,7 @@ non nil and function uses the minibuffer."
      (cond
       (skip-functions value)
       (skip-interactive
+       ;; Try to eval function, but escape if functions spawns an minibuffer
        (condition-case _
            (let ((enable-recursive-minibuffers nil))
              (funcall-interactively value))
