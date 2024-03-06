@@ -2516,7 +2516,7 @@ When BACKWARD is non nil move backward instead."
 (define-minor-mode dape-breakpoint-global-mode
   "Adds fringe and margin breakpoint controls."
   :global t
-  :lighter "dape")
+  :lighter nil)
 
 (defvar dape--original-margin nil
   "Bookkeeping for buffer margin width.")
