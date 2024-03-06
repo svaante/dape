@@ -878,21 +878,29 @@ as is."
     (when (and (not (plist-get config 'prefix-local))
                (not (plist-get config 'prefix-remote))
                (plist-get config 'command))
-      ;; TODO Should probably log to repl here that prefix-local has
-      ;;      been modified.
-      (plist-put config 'prefix-local
-                 (tramp-completion-make-tramp-file-name
-                  (tramp-file-name-method parts)
-                  (tramp-file-name-user parts)
-                  (tramp-file-name-host parts)
-                  "")))
+      (let ((prefix-local
+             (tramp-completion-make-tramp-file-name
+              (tramp-file-name-method parts)
+              (tramp-file-name-user parts)
+              (tramp-file-name-host parts)
+              "")))
+        (dape--repl-message
+         (format "* Remote connection detected, setting %s to %S *"
+                 (propertize "prefix-local"
+                             'font-lock-face 'font-lock-keyword-face)
+                 prefix-local))
+        (plist-put config 'prefix-local prefix-local)))
     (when (and (plist-get config 'command)
                (plist-get config 'port)
                (not (plist-get config 'host))
                (equal (tramp-file-name-method parts) "ssh"))
-      ;; TODO Should probably log to repl here that host has been
-      ;;      modified.
-      (plist-put config 'host (file-remote-p default-directory 'host))))
+      (let ((host (file-remote-p default-directory 'host)))
+        (dape--repl-message
+         (format "* Remote connection detected, setting %s to %S *"
+                 (propertize "host"
+                             'font-lock-face 'font-lock-keyword-face)
+                 prefix-local))
+        (plist-put config 'host host))))
   config)
 
 (defun dape-ensure-command (config)
