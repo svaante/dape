@@ -1922,11 +1922,12 @@ symbol `dape-connection'."
                    (lambda (conn)
                      ;; error prints
                      (unless (dape--initialized-p conn)
-                       (dape--repl-message (concat "Adapter "
-                                                   (when (dape--parent conn)
-                                                     "child ")
-                                                   "connection shutdown without successfully initializing")
-                                           'dape-repl-error-face)
+                       (dape--repl-message
+                        (concat "Adapter "
+                                (when (dape--parent conn)
+                                  "child ")
+                                "connection shutdown without successfully initializing")
+                        'dape-repl-error-face)
                        ;; barf config
                        (dape--repl-message
                         (format "Configuration:\n%s"
