@@ -4185,7 +4185,7 @@ Empty input will rerun last command.\n"
                                   (eq key 'ensure))
                        collect (concat
                                 (propertize (format "%s" key)
-                                            'face font-lock-keyword-face)
+                                            'face 'font-lock-keyword-face)
                                 " "
                                 (with-current-buffer dape--minibuffer-last-buffer
                                   (condition-case err
