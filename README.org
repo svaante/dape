@@ -71,9 +71,7 @@ Currently =Dape= does not come with any debug adapter configuration.
     ;; (add-hook 'dape-compile-compile-hooks 'kill-buffer)
 
     ;; Save buffers on startup, useful for interpreted languages
-    ;; (add-hook 'dape-on-start-hooks
-    ;;           (defun dape--save-on-start ()
-    ;;             (save-some-buffers t t)))
+    ;; (add-hook 'dape-on-start-hooks (lambda () (save-some-buffers t t)))
 
     ;; Projectile users
     ;; (setq dape-cwd-fn 'projectile-project-root)

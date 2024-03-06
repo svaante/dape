@@ -4625,17 +4625,18 @@ See `eldoc-documentation-functions', for more infomation."
 
 ;;; Hooks
 
+(defun dape-kill-busy-wait ()
+  (let (done)
+    (dape--with-request (dape-kill dape--connection)
+      (setf done t))
+    ;; Busy wait for response at least 2 seconds
+    (cl-loop with max-iterations = 20
+             for i from 1 to max-iterations
+             until done
+             do (accept-process-output nil 0.1))))
+
 ;; Cleanup conn before bed time
-(add-hook 'kill-emacs-hook
-          (defun dape-kill-busy-wait ()
-            (let (done)
-              (dape--with-request (dape-kill dape--connection)
-                (setf done t))
-              ;; Busy wait for response at least 2 seconds
-              (cl-loop with max-iterations = 20
-                       for i from 1 to max-iterations
-                       until done
-                       do (accept-process-output nil 0.1)))))
+(add-hook 'kill-emacs-hook #'dape-kill-busy-wait)
 
 (provide 'dape)
 
