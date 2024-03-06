@@ -656,7 +656,7 @@ The hook is run with one argument, the compilation buffer."
   "Guard var for *dape-repl* buffer text updates.")
 
 (define-minor-mode dape-active-mode
-  "On when dape debuggin session is active.
+  "On when dape debugging session is active.
 Non interactive global minor mode."
   :global t
   :interactive nil)
