@@ -901,7 +901,7 @@ as is."
          (format "* Remote connection detected, setting %s to %S *"
                  (propertize "host"
                              'font-lock-face 'font-lock-keyword-face)
-                 prefix-local))
+                 host))
         (plist-put config 'host host))))
   config)
 
