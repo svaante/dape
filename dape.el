@@ -1830,7 +1830,6 @@ Killing the adapter and it's CONN."
   "Create symbol `dape-connection' instance from CONFIG.
 If started by an startDebugging request expects PARENT to
 symbol `dape-connection'."
-  (dape--repl-message "\n")
   (unless (plist-get config 'command-cwd)
     (plist-put config 'command-cwd default-directory))
   (let ((default-directory (plist-get config 'command-cwd))
@@ -4100,7 +4099,7 @@ Send INPUT to DUMMY-PROCESS."
     (insert (format
              "* Welcome to Dape REPL! *
 Available Dape commands: %s
-Empty input will rerun last command.\n"
+Empty input will rerun last command.\n\n"
              (mapconcat
               (pcase-lambda (`(,str . ,command))
                 (setq str (concat str))
