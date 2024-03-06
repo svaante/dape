@@ -341,10 +341,10 @@ In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
 
-Symbol Keys (Used by dape):
+Symbol keys (Used by dape):
 - fn: Function or list of functions, takes config and returns config.
-  If list functions are applied in order.  Used for hiding unnecessary
-  configuration details from config history.
+  If list functions are applied in order.
+  See `dape-default-config-functions'.
 - ensure: Function to ensure that adapter is available.
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
@@ -358,24 +358,23 @@ Symbol Keys (Used by dape):
   completions.
 - compile: Executes a shell command with `dape-compile-fn'.
 
-Debug adapter conn in configuration:
-- If only command is specified (without host and port), dape
-  will communicate with the debug adapter through stdin/stdout.
-- If both host and port are specified, Dape will connect to the
-  debug adapter.  If `command is specified, Dape will wait until the
-  command is initiated before it connects with host and port.
+Connection to Debug Adapter:
+- If command is specified and not port, dape communicates with the
+  debug adapter through stdin/stdout.
+- If host and port are specified, dape connects to the debug adapter.
+  If command is specified, dape waits until the command initializes
+  before connecting to host and port.
 
 Keywords in configuration:
-  Keywords are transmitted to the adapter during the initialize and
-  launch/attach requests.  Refer to `json-serialize' for detailed
-  information on how Dape serializes these keyword elements.  Dape
-  uses nil as false.
+  Keywords (symbols starting with colon) are transmitted to the
+  adapter during the initialize and launch/attach requests.  Refer to
+  `json-serialize' for detailed information on how dape serializes
+  these keyword elements. Dape uses nil as false.
 
-Functions and symbols in configuration:
- If a value in a key is a function, the function's return value will
- replace the key's value before execution.
- If a value in a key is a symbol, the symbol will recursively resolve
- at runtime."
+Functions and symbols:
+  - If a value is a function, its return value replaces the key's
+    value before execution.  The function is called with no arguments.
+  - If a value is a symbol, it resolves recursively before execution."
    :type '(alist :key-type (symbol :tag "Name")
                  :value-type
                  (plist :options
@@ -396,8 +395,11 @@ Functions and symbols in configuration:
 (defcustom dape-default-config-functions
   '(dape-config-autoport dape-config-tramp)
   "Functions applied on config before starting debugging session.
+Each function is called with one argument CONFIG and should return an
+PLIST of following the format specified in `dape-configs'.
+
 Functions are evaluated after functions defined in fn symbol in `dape-configs'.
-See `fn' in `dape-configs' function signature."
+See fn in `dape-configs' function signature."
   :type '(repeat function))
 
 (defcustom dape-command nil
