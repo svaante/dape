@@ -1822,7 +1822,6 @@ Killing the adapter and it's CONN."
   "Create symbol `dape-connection' instance from CONFIG.
 If started by an startDebugging request expects PARENT to
 symbol `dape-connection'."
-  (run-hooks 'dape-on-start-hooks)
   (dape--repl-message "\n")
   (unless (plist-get config 'command-cwd)
     (plist-put config 'command-cwd default-directory))
@@ -2282,6 +2281,9 @@ Use SKIP-COMPILE to skip compilation."
   (interactive (list (dape--read-config)))
   (dape--with-request (dape-kill (dape--live-connection 'parent t))
     (dape--config-ensure config t)
+    ;; Hooks need to be run before any repl messaging but after we
+    ;; have ensured that config is executable.
+    (run-hooks 'dape-on-start-hooks)
     (when-let ((fn (or (plist-get config 'fn) 'identity))
                (fns (or (and (functionp fn) (list fn))
                         (and (listp fn) fn))))
