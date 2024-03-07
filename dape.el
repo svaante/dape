@@ -1284,11 +1284,28 @@ timeout period is configurable with `dape-request-timeout' *"
       (setf (dape--capabilities conn) body)
       (dape--with-request-bind
           (_body error)
-          (dape-request conn
-                        (or (plist-get (dape--config conn) :request) "launch")
-                        (cl-loop for (key value) on (dape--config conn) by 'cddr
-                                 when (keywordp key)
-                                 append (list key (or value :json-false))))
+          (dape-request
+           conn
+           (or (plist-get (dape--config conn) :request) "launch")
+           ;; Transform config to jsonrpc serializable format
+           ;; Remove all non `keywordp' keys and transform null to
+           ;; :json-false
+           (cl-labels
+               ((transform-value (value)
+                  (pcase value
+                    ('nil :json-false)
+                    ;; FIXME Need a way to create json null values
+                    ;;       see #72, :null could be an candidate.
+                    ((pred vectorp)
+                     (cl-map 'vector #'transform-value value))
+                    ((pred listp)
+                     (create-body value))
+                    (_ value)))
+                (create-body (config)
+                  (cl-loop for (key value) on config by 'cddr
+                           when (keywordp key)
+                           append (list key (transform-value value)))))
+             (create-body (dape--config conn))))
         (if error
             (progn (dape--repl-message error 'dape-repl-error-face)
                    (dape-kill conn))
