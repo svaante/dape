@@ -1296,6 +1296,13 @@ timeout period is configurable with `dape-request-timeout' *"
                     ('nil :json-false)
                     ;; FIXME Need a way to create json null values
                     ;;       see #72, :null could be an candidate.
+                    ;;       Using :null is quite harmless as it has
+                    ;;       no friction with `dape-configs'
+                    ;;       evaluation.  So it should be fine to keep
+                    ;;       supporting it even if it's not the way
+                    ;;       forwards.
+                    (:null
+                     nil)
                     ((pred vectorp)
                      (cl-map 'vector #'transform-value value))
                     ((pred listp)
