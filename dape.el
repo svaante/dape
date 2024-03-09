@@ -288,7 +288,7 @@
                     (user-error "No eglot instance active in buffer %s" (current-buffer)))
                   (unless (seq-contains-p (eglot--server-capable :executeCommandProvider :commands)
         			          "vscode.java.resolveClasspath")
-        	    (user-error "jdtls instance does not bundle java-debug-server, please install")))))
+        	    (user-error "Jdtls instance does not bundle java-debug-server, please install")))))
      fn (lambda (config)
           (with-current-buffer
               (find-file-noselect (dape-config-get config :filePath))
@@ -369,7 +369,7 @@ Keywords in configuration:
   Keywords (symbols starting with colon) are transmitted to the
   adapter during the initialize and launch/attach requests.  Refer to
   `json-serialize' for detailed information on how dape serializes
-  these keyword elements. Dape uses nil as false.
+  these keyword elements.  Dape uses nil as false.
 
 Functions and symbols:
   - If a value is a function, its return value replaces the key's
@@ -595,7 +595,7 @@ The hook is run with one argument, the compilation buffer."
   :type 'boolean)
 
 (defcustom dape-debug nil
-  "Print debug info in *dape-repl* and *dape-connection events*."
+  "Print debug info in *dape-repl* *dape-connection events* buffers."
   :type 'boolean)
 
 (defcustom dape-request-timeout jsonrpc-default-request-timeout
@@ -1013,7 +1013,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
        (_ (user-error "Invalid value of `dape-buffer-window-arrangement'"))))))
 
 (defmacro dape--mouse-command (name doc command)
-  "Create mouse command with NAME, DOC which runs COMMANDS."
+  "Create mouse command with NAME, DOC which call COMMAND."
   (declare (indent 1))
   `(defun ,name (event)
      ,doc
@@ -1027,7 +1027,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
 
 (defmacro dape--buffer-map (name fn &rest body)
   "Helper macro to create info buffer map with NAME.
-FN is executed on mouse-2 and ?r, BODY is executed inside of let stmt."
+FN is executed on mouse-2 and \r, BODY is executed with `map' bound."
   (declare (indent defun))
   `(defvar ,name
      (let ((map (make-sparse-keymap)))
@@ -1059,7 +1059,7 @@ them then executes BODY."
          (error "Not recognized as %s line" 'name)))))
 
 (defun dape--emacs-grab-focus ()
-  "If `display-graphic-p' focus emacs."
+  "If `display-graphic-p' focus Emacs."
   (select-frame-set-input-focus (selected-frame)))
 
 
@@ -1693,7 +1693,7 @@ BODY is an plist of adapter capabilities."
   (dape--configure-exceptions conn))
 
 (cl-defmethod dape-handle-event (conn (_event (eql breakpoint)) body)
-  "Handle breakpoint events.
+  "Handle adapter CONNs breakpoint events.
 Update `dape--breakpoints' according to BODY."
   (when-let* ((breakpoint (plist-get body :breakpoint))
               (id (plist-get breakpoint :id))
@@ -2375,9 +2375,9 @@ Using BUFFER and STR."
   (let* ((conn (dape--live-connection 'last))
          (write-capable-p (dape--capable-p conn :supportsWriteMemoryRequest)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
-      (user-error "Adapter not capable of reading memory."))
+      (user-error "Adapter not capable of reading memory"))
     (unless dape--memory-address
-      (user-error "`dape--memory-address' not set."))
+      (user-error "`dape--memory-address' not set"))
     (dape--with-request-bind
         ((&key address data &allow-other-keys) error)
         (dape-request conn "readMemory"
@@ -2487,7 +2487,7 @@ When BACKWARD is non nil move backward instead."
            do (with-current-buffer buffer (revert-buffer))))
 
 (defun dape-read-memory (address)
-  "Read `dape-memory-page-size' bytes of memory at MEMORY-REFERENCE."
+  "Read `dape-memory-page-size' bytes of memory at ADDRESS."
   (interactive
    (list (string-trim
           (read-string "Address: "
@@ -2495,7 +2495,7 @@ When BACKWARD is non nil move backward instead."
                          (format "0x%08x" number))))))
   (let ((conn (dape--live-connection 'stopped)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
-      (user-error "Adapter not capable of reading memory."))
+      (user-error "Adapter not capable of reading memory"))
     (let ((buffer
            (or (cl-find-if (lambda (buffer)
                              (eq 'dape-memory-mode
@@ -2703,7 +2703,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (run-hooks 'dape-update-ui-hooks))
 
 (defun dape--breakpoint-update (conn overlay breakpoint)
-  "Update breakpoint OVERLAY with BREAKPOINT plist."
+  "Update breakpoint OVERLAY with BREAKPOINT plist from CONN."
   (let ((id (plist-get breakpoint :id))
         (verified (eq (plist-get breakpoint :verified) t)))
     (overlay-put overlay 'dape-id id)
@@ -3033,7 +3033,7 @@ Header line is custructed from buffer local
 
 (defun dape--info-call-update-with (fn &optional buffer)
   "Helper for `dape--info-revert' functions.
-Erase buffer content and updates `header-line-format'.
+Erase BUFFER content and updates `header-line-format'.
 FN is expected to update insert buffer contents, update
 `dape--info-buffer-related' and `header-line-format'."
   (setq buffer (or buffer (current-buffer)))
@@ -3060,7 +3060,7 @@ FN is expected to update insert buffer contents, update
         (select-window old-window)))))
 
 (defmacro dape--info-update-with (&rest body)
-  "Creates an update function from BODY.
+  "Create an update function from BODY.
 See `dape--info-call-update-with'."
   (declare (indent 0))
   `(dape--info-call-update-with (lambda () ,@body)))
@@ -3095,9 +3095,9 @@ See `dape--info-call-update-with'."
 (defun dape-info (&optional maybe-kill kill)
   "Update and display *dape-info* buffers.
 When called interactively MAYBE-KILL is non nil.
-When optional MAYBE-KILL is non nil kill buffers if all *dape-info*
-buffers are already displayed.
-When optional kill is non nil kill buffers *dape-info* buffers.
+When MAYBE-KILL is non nil kill buffers if all *dape-info* buffers
+are already displayed.
+When KILL is non nil kill buffers *dape-info* buffers.
 
 See `dape-info-buffer-window-groups' to customize which buffers get
 displayed."
@@ -3142,7 +3142,7 @@ displayed."
               (error "Unable to create mode from %s with %s" mode identifier)))))
 
 (defun dape--info-set-related-buffers ()
-  "Store related buffers "
+  "Store related buffers in `dape--info-buffer-related'."
   (setq dape--info-buffer-related
         (cl-loop with group =
                  (cl-find-if (lambda (group) (memq major-mode group))
@@ -3222,7 +3222,7 @@ displayed."
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-breakpoints-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
-  "Revert buffer function for `dape-info-breakpoints-mode'."
+  "Revert buffer function for MAJOR-MODE `dape-info-breakpoints-mode'."
   (dape--info-update-with
     (let ((table (make-gdb-table)))
       (gdb-table-add-row table '("Type" "On" "Where" "What"))
@@ -3322,7 +3322,7 @@ See `dape-request' for expected CB signature."
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-threads-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
-  "Revert buffer function for `dape-info-threads-mode'."
+  "Revert buffer function for MAJOR-MODE `dape-info-threads-mode'."
   (if-let ((conn (or (dape--live-connection 'stopped t)
                      (dape--live-connection 'last t)))
            (threads (dape--threads conn)))
@@ -3438,7 +3438,7 @@ current buffer with CONN config."
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-stack-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
-  "Revert buffer function for `dape-info-stack-mode'."
+  "Revert buffer function for MAJOR-MODE `dape-info-stack-mode'."
   (let* ((conn (or (dape--live-connection 'stopped t)
                    (dape--live-connection 'last t)))
          (current-thread (dape--current-thread conn))
@@ -3494,7 +3494,7 @@ current buffer with CONN config."
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-modules-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
-  "Revert buffer function for `dape-info-modules-mode'."
+  "Revert buffer function for MAJOR-MODE `dape-info-modules-mode'."
   (dape--info-update-with
     ;; Use last connection if current is dead
     (when-let ((conn (or (dape--live-connection 'stopped t)
@@ -3545,7 +3545,7 @@ current buffer with CONN config."
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-sources-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
-  "Revert buffer function for `dape-info-sources-mode'."
+  "Revert buffer function for MAJOR-MODE `dape-info-sources-mode'."
   (dape--info-update-with
     ;; Use last connection if current is dead
     (when-let ((conn (or (dape--live-connection 'stopped t)
@@ -3708,7 +3708,7 @@ plist are used as keymap for each sections defined by the key."
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-scope-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
-  "Revert buffer function for `dape-info-scope-mode'."
+  "Revert buffer function for MAJOR-MODE `dape-info-scope-mode'."
   (when-let* ((conn (or (dape--live-connection 'stopped t)
                         (dape--live-connection 'last t)))
               (frame (dape--current-stack-frame conn))
@@ -3758,7 +3758,7 @@ plist are used as keymap for each sections defined by the key."
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
-  "Revert buffer function for `dape-info-watch-mode'."
+  "Revert buffer function for MAJOR-MODE `dape-info-watch-mode'."
   (let ((conn (dape--live-connection 'stopped t)))
     (cond
      ((not dape--watched)
@@ -3912,6 +3912,8 @@ VARIABLE is expected to be the string representation of a varable."
 (dape--buffer-map dape-repl-variable-prefix-map dape-repl-scope-toggle)
 
 (defun dape--repl-create-variable-table (conn variable cb)
+  "Create VARIABLE string representation with CONN.
+Call CB with the variable as string for insertion into *dape-repl*."
   (dape--with-request (dape--variables conn variable)
     (dape--with-request
         (dape--variables-recursive conn variable
@@ -4651,7 +4653,8 @@ See `eldoc-documentation-functions', for more infomation."
 
 ;;; Hooks
 
-(defun dape-kill-busy-wait ()
+(defun dape--kill-busy-wait ()
+  "Kill connection and wait until finished."
   (let (done)
     (dape--with-request (dape-kill dape--connection)
       (setf done t))
@@ -4662,7 +4665,7 @@ See `eldoc-documentation-functions', for more infomation."
              do (accept-process-output nil 0.1))))
 
 ;; Cleanup conn before bed time
-(add-hook 'kill-emacs-hook #'dape-kill-busy-wait)
+(add-hook 'kill-emacs-hook #'dape--kill-busy-wait)
 
 (provide 'dape)
 
