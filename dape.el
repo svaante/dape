@@ -472,9 +472,9 @@ present in an group."
 
 (define-obsolete-variable-alias
   'dape-read-memory-default-count
-  'dape-read-memory-bytes "0.8.0")
+  'dape-memory-page-size "0.8.0")
 
-(defcustom dape-read-memory-bytes 1024
+(defcustom dape-memory-page-size 1024
   "The bytes read with `dape-read-memory'."
   :type 'natnum)
 
@@ -2363,17 +2363,12 @@ Using BUFFER and STR."
 
 ;;; Memory viewer
 
-(defvar-local dape--memory-offset nil
-  "Buffer local var to keep track of current offset/address.")
+(defvar-local dape--memory-address nil
+  "Buffer local var to keep track of current address.")
 
-(defun dape--memory-print-current-point-info (&rest _ignored)
-  "Print address at point."
-  (let ((addr (+ (hexl-current-address) (dape--memory-offset-number))))
-    (format "Current address is %d/0x%08x" addr addr)))
-
-(defun dape--memory-offset-number ()
-  "Return `dape--memory-offset' as an number."
-  (thread-first dape--memory-offset (substring 2) (string-to-number 16)))
+(defun dape--memory-address-number ()
+  "Return `dape--memory-address' as an number."
+  (thread-first dape--memory-address (substring 2) (string-to-number 16)))
 
 (defun dape--memory-revert (&optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-memory-mode'."
@@ -2381,55 +2376,38 @@ Using BUFFER and STR."
          (write-capable-p (dape--capable-p conn :supportsWriteMemoryRequest)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
       (user-error "Adapter not capable of reading memory."))
-    (unless dape--memory-offset
-      (user-error "`dape--memory-offset' not set."))
-    (cl-labels ((button-fn (fn) (lambda (_) (call-interactively fn))))
-      (setq header-line-format
-            (mapconcat
-             'identity
-             `("Offset:"
-               ,(buttonize dape--memory-offset
-                           (button-fn #'dape-memory-set-offset))
-               "Bytes:"
-               ,(buttonize (format "%s" dape-read-memory-bytes)
-                           (lambda (_)
-                             (setopt dape-read-memory-bytes
-                                     (read-number "Set bytes: " dape-read-memory-bytes))
-                             (revert-buffer)))
-               ,(buttonize "Backward" (button-fn #'dape-memory-backward))
-               ,(buttonize "Forward" (button-fn #'dape-memory-forward))
-               ,@(when write-capable-p
-                   (list (substitute-command-keys
-                          "write memory `\\[save-buffer]'"))))
-             " ")))
+    (unless dape--memory-address
+      (user-error "`dape--memory-address' not set."))
     (dape--with-request-bind
         ((&key address data &allow-other-keys) error)
         (dape-request conn "readMemory"
-                      (list :memoryReference dape--memory-offset
-                            :count dape-read-memory-bytes))
+                      (list :memoryReference dape--memory-address
+                            :count dape-memory-page-size))
       (cond
        (error (message "Failed to read memory: %s" error))
        ((not data) (message "No bytes returned from adapter"))
        (t
-        (let ((inhibit-read-only t))
-          (setq dape--memory-offset address
-                buffer-undo-list nil)
-          (save-excursion
-            (erase-buffer)
+        (setq dape--memory-address address
+              buffer-undo-list nil)
+        (let ((inhibit-read-only t)
+              (temp-buffer (generate-new-buffer " *temp*" t))
+              (address (dape--memory-address-number)))
+          (with-current-buffer temp-buffer
             (insert (base64-decode-string data))
             (let (buffer-undo-list)
               (hexlify-buffer))
             ;; Now we need to translate the address fields after the
             ;; fact ugghh
             (goto-char (point-min))
-            (let ((offset (dape--memory-offset-number)))
-              (while (re-search-forward "^[0-9a-f]+" nil t)
-                (let ((address
-                       (format "%08x" (+ offset
-                                         (string-to-number (match-string 0) 16)))))
-                  (delete-region (match-beginning 0) (match-end 0))
-                  ;; `hexl' does not support address over 8 hex chars
-                  (insert (append (substring address (- (length address) 8)))))))))
+            (while (re-search-forward "^[0-9a-f]+" nil t)
+              (let ((address
+                     (format "%08x" (+ address
+                                       (string-to-number (match-string 0) 16)))))
+                (delete-region (match-beginning 0) (match-end 0))
+                ;; `hexl' does not support address over 8 hex chars
+                (insert (append (substring address (- (length address) 8)))))))
+          (replace-buffer-contents temp-buffer)
+          (kill-buffer temp-buffer))
         (set-buffer-modified-p nil)
         (when write-capable-p
 	  (add-hook 'write-contents-functions #'dape--memory-write))
@@ -2441,30 +2419,35 @@ Using BUFFER and STR."
         (buffer (current-buffer))
         (start (point-min))
         (end (point-max))
-        (offset dape--memory-offset))
+        (address dape--memory-address))
     (with-temp-buffer
       (insert-buffer-substring buffer start end)
       (dehexlify-buffer)
       (dape--with-request-bind
           (_body error)
           (dape-request conn "writeMemory"
-                        (list :memoryReference offset
+                        (list :memoryReference address
                               :data (base64-encode-string (buffer-string) t)))
         (if error
             (message "Failed to write memory: %s" error)
           (with-current-buffer buffer
             (set-buffer-modified-p nil))
-          (message "Memory written successfully at %s" offset)
+          (message "Memory written successfully at %s" address)
           (dape--update conn nil t t)))))
   ;; Return `t' to signal buffer written
   t)
+
+(defun dape--memory-print-current-point-info (&rest _ignored)
+  "Print address at point."
+  (let ((addr (+ (hexl-current-address) (dape--memory-address-number))))
+    (format "Current address is %d/0x%08x" addr addr)))
 
 (define-derived-mode dape-memory-mode hexl-mode "Memory"
   "Mode for reading and writing memory."
   :interactive nil
   ;; TODO Replace or improve hexl.
   ;;      hexl is not really fitted for our use case as it does
-  ;;      support offsets in any way.  The buffer is created with the
+  ;;      support offset in any way.  The buffer is created with the
   ;;      hexl binary as is.  Filling the buffer with junk before
   ;;      `hexlify-buffer' is not an option as it might be extremely
   ;;      large.
@@ -2474,29 +2457,24 @@ Using BUFFER and STR."
   ;;       as most of the work is done in an callback.
   (setq revert-buffer-function #'dape--memory-revert))
 
-(define-key dape-memory-mode-map [remap hexl-goto-address] #'dape-memory-set-offset)
-(define-key dape-memory-mode-map [remap hexl-goto-hex-address] #'dape-memory-set-offset)
+(define-key dape-memory-mode-map "\C-x]" #'dape-memory-next-page)
+(define-key dape-memory-mode-map "\C-x[" #'dape-memory-previous-page)
 
-(defun dape-memory-set-offset (offset)
-  "Set memory OFFSET."
-  (interactive (list (read-string "Set offset: " dape--memory-offset)))
-  (setq dape--memory-offset offset)
-  (revert-buffer))
-
-(defun dape-memory-forward (&optional backward)
-  "Move offset half `dape-read-memory-bytes' forward.
+(defun dape-memory-next-page (&optional backward)
+  "Move address `dape-memory-page-size' forward.
 When BACKWARD is non nil move backward instead."
   (interactive nil dape-memory-mode)
   (let ((op (if backward '- '+)))
-    (dape-memory-set-offset
+    (dape-read-memory
      (format "0x%08x"
-             (funcall op (dape--memory-offset-number)
-                      (thread-first dape-read-memory-bytes (/ 2) (floor)))))))
+             (funcall op
+                      (dape--memory-address-number)
+                      dape-memory-page-size)))))
 
-(defun dape-memory-backward ()
-  "Move offset half `dape-read-memory-bytes' backward."
+(defun dape-memory-previous-page ()
+  "Move address `dape-memory-page-size' backward."
   (interactive nil dape-memory-mode)
-  (dape-memory-forward 'backward))
+  (dape-memory-next-page 'backward))
 
 (defun dape-memory-revert ()
   "Revert all `dape-memory-mode' buffers."
@@ -2505,23 +2483,32 @@ When BACKWARD is non nil move backward instead."
                     'dape-memory-mode)
            do (with-current-buffer buffer (revert-buffer))))
 
-(defun dape-read-memory (offset)
-  "Read `dape-read-memory-bytes' bytes of memory at MEMORY-REFERENCE."
+(defun dape-read-memory (address)
+  "Read `dape-memory-page-size' bytes of memory at MEMORY-REFERENCE."
   (interactive
    (list (string-trim
-          (read-string "Offset: "
+          (read-string "Address: "
                        (when-let ((number (thing-at-point 'number)))
                          (format "0x%08x" number))))))
   (let ((conn (dape--live-connection 'stopped)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
       (user-error "Adapter not capable of reading memory."))
     (let ((buffer
-           (generate-new-buffer (format "*dape-memory @ %s*" offset))))
+           (or (cl-find-if (lambda (buffer)
+                             (eq 'dape-memory-mode
+                                 (with-current-buffer buffer major-mode)))
+                           (buffer-list))
+               (generate-new-buffer (format "*dape-memory @ %s*" address)))))
       (with-current-buffer buffer
-        (dape-memory-mode)
-        (setq dape--memory-offset offset)
+        (unless (eq major-mode 'dape-memory-mode)
+          (dape-memory-mode)
+          (when (dape--capable-p conn :supportsWriteMemoryRequest)
+            (message (substitute-command-keys
+                      "Write memory with `\\[save-buffer]'"))))
+        (setq dape--memory-address address)
         (revert-buffer))
-      (display-buffer buffer))))
+      (select-window
+       (display-buffer buffer)))))
 
 ;;; Breakpoints
 
