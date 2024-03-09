@@ -2644,7 +2644,8 @@ that breakpoint as DAP only supports one breakpoint per line."
                                 'help-echo "mouse-1: edit log message"
                                 'keymap
                                 (let ((map (make-sparse-keymap)))
-                                  (define-key map [mouse-1] #'dape-mouse-breakpoint-log)
+                                  (define-key map [mouse-1]
+                                              #'dape-mouse-breakpoint-log)
                                   map)))))
      (expression
       (overlay-put breakpoint 'dape-expr-message expression)
