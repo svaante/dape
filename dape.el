@@ -2391,7 +2391,8 @@ Using BUFFER and STR."
               buffer-undo-list nil)
         (let ((inhibit-read-only t)
               (temp-buffer (generate-new-buffer " *temp*" t))
-              (address (dape--memory-address-number)))
+              (address (dape--memory-address-number))
+              (buffer-empty-p (zerop (buffer-size))))
           (with-current-buffer temp-buffer
             (insert (base64-decode-string data))
             (let (buffer-undo-list)
@@ -2407,6 +2408,8 @@ Using BUFFER and STR."
                 ;; `hexl' does not support address over 8 hex chars
                 (insert (append (substring address (- (length address) 8)))))))
           (replace-buffer-contents temp-buffer)
+          (when buffer-empty-p
+            (goto-char (point-min)))
           (kill-buffer temp-buffer))
         (set-buffer-modified-p nil)
         (when write-capable-p
