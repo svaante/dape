@@ -198,9 +198,11 @@
      :type "server"
      :cwd dape-cwd)
     ,@(let ((js-debug
-             `(modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
-               ensure ,(lambda (config)
+             `(ensure ,(lambda (config)
                          (dape-ensure-command config)
+                         (when-let ((runtime-executable
+                                     (dape-config-get config :runtimeExecutable)))
+                           (dape--ensure-executable runtime-executable))
                          (let ((dap-debug-server-path
                                 (car (plist-get config 'command-args))))
                            (unless (file-exists-p dap-debug-server-path)
@@ -214,22 +216,26 @@
                              :autoport)
                port :autoport)))
         `((js-debug-node
+           modes (js-mode js-ts-mode)
            ,@js-debug
            :type "pwa-node"
            :cwd dape-cwd
            :program dape-buffer-default
-           :outputCapture "console"
-           :sourceMapRenames t
-           :pauseForSourceMap nil
-           :autoAttachChildProcesses t
-           :console "internalConsole"
-           :killBehavior "forceful")
+           :console "internalConsole")
+          (js-debug-ts-node
+           modes (typescript-mode typescript-ts-mode)
+           ,@js-debug
+           :type "pwa-node"
+           :runtimeExecutable "ts-node"
+           :cwd dape-cwd
+           :program dape-buffer-default
+           :console "internalConsole")
           (js-debug-chrome
+           modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
            ,@js-debug
            :type "pwa-chrome"
            :url "http://localhost:3000"
-           :webRoot dape-cwd
-           :outputCapture "console")))
+           :webRoot dape-cwd)))
     (lldb-vscode
      modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode)
      ensure dape-ensure-command
@@ -905,14 +911,16 @@ as is."
         (plist-put config 'host host))))
   config)
 
+(defun dape--ensure-executable (executable)
+  "Ensure that EXECUTABLE exist on system."
+  (unless (or (file-executable-p executable)
+              (executable-find executable t))
+    (user-error "Unable to locate %S (default-directory %s)"
+                executable default-directory)))
+
 (defun dape-ensure-command (config)
   "Ensure that `command' from CONFIG exist system."
-  (let ((command
-         (dape-config-get config 'command)))
-    (unless (or (file-executable-p command)
-                (executable-find command t))
-      (user-error "Unable to locate %S with default-directory %s"
-                  command default-directory))))
+  (dape--ensure-executable (dape-config-get config 'command)))
 
 (defun dape--overlay-region (&optional extended)
   "List of beg and end of current line.
