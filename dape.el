@@ -2890,6 +2890,9 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
                     (pulse-momentary-highlight-region (line-beginning-position)
                                                       (line-beginning-position 2)
                                                       'next-error))))))
+                ;; FIXME Should be called with idle-timer as to
+                ;;       guarantee that we are not in `save-excursion'
+                ;;       context.  But this makes tests hard write.
           (with-current-buffer (marker-buffer marker)
             (dape--add-eldoc-hook)
             (save-excursion
