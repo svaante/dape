@@ -1910,7 +1910,7 @@ symbol `dape-connection'."
                                                    command " ")))))
         ;; FIXME Why do I need this?
         (when (file-remote-p default-directory)
-          (sleep-for 0 300)))
+          (sleep-for 0.300)))
       ;; connect to server
       (let ((host (or (plist-get config 'host) "localhost")))
         (while (and (not process)
@@ -1924,7 +1924,7 @@ symbol `dape-connection'."
                                         :coding 'utf-8-emacs-unix
                                         :service (plist-get config 'port)
                                         :noquery t)))
-          (sleep-for 0 100)
+          (sleep-for 0.100)
           (setq retries (1- retries)))
         (if (zerop retries)
             (progn
