@@ -5,12 +5,14 @@
 
 #+html: <a href="https://elpa.gnu.org/packages/dape.html"><img alt="GNU ELPA" src="https://elpa.gnu.org/packages/dape.svg"/></a>
 
-See the variable ~dape-configs~ to browse pre-defined debug adapter configurations for different languages, or to add your own.
-To initiate debugging sessions, use the command ~dape~. In the minibuffer that appears, type in a debug adapter configuration name from ~dape-configs~.
+=Dape= is a debug adapter client for Emacs. The debug adapter protocol, much like its more well-known counterpart, the language server protocol, aims to establish a common API for programming tools. However, instead of functionalities such as code completions, it provides a standardized interface for debuggers.
 
-For complete functionality, activate ~eldoc-mode~ in your source buffers and enable ~repeat-mode~ for ergonomics.
+To begin a debugging session, invoke the ~dape~ command. In the minibuffer prompt, enter a debug adapter configuration name from ~dape-configs~.
+
+For complete functionality, make sure to enable ~eldoc-mode~ in your source buffers and ~repeat-mode~ for more pleasant key mappings.
 
 * Features
++ Batteries included support (~describe-variable~ ~dape-configs~)
 + Log breakpoints
 + Conditional breakpoints
 + Variable explorer
@@ -18,14 +20,14 @@ For complete functionality, activate ~eldoc-mode~ in your source buffers and ena
 + Variable hover with ~eldoc~
 + REPL
 + gdb-mi.el like interface
-+ Memory viewer with ~hexl~
-+ ~compile~ integration
++ Memory editor with ~hexl~
++ Integration with ~compile~
 + Debug adapter configuration ergonomics
-+ No dependencies (except for jsonrpc which is part of emacs but needed version is not part of latest stable emacs release 29.1-1 but available on elpa)
++ No external dependencies outside of core Emacs
 
-With =(setq dape-buffer-window-arrangement 'right)=:
+With ~(setq dape-buffer-window-arrangement 'right)~:
 [[https://raw.githubusercontent.com/svaante/dape/resources/dape_0_4_0_right.png]]
-And with =(setq dape-buffer-window-arrangement 'gud)= + =corfu= as =completion-in-region-function=:
+And with ~(setq dape-buffer-window-arrangement 'gud)~ + =corfu= as ~completion-in-region-function~:
 [[https://raw.githubusercontent.com/svaante/dape/resources/dape_0_4_0_gud.png]]
 And with minibuffer config hints:
 [[https://raw.githubusercontent.com/svaante/dape/resources/dape_0_4_0_hint.png]]
@@ -33,17 +35,14 @@ And with minibuffer config hints:
 Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-operandi-tinted]].
 
 * Configuration
-=Dape= comes with pre-defined debug adapter configurations for different languages. See ~dape-configs~ for more information. 
+=Dape= includes pre-defined debug adapter configurations for various programming languages. Refer to ~dape-configs~ for more details. If =dape= doesn't include a configuration suitable for your needs, you can implement your own.
 
 #+begin_src emacs-lisp
   (use-package dape
+    :preface
     ;; By default dape shares the same keybinding prefix as `gud'
     ;; If you do not want to use any prefix, set it to nil.
-    ;; :preface
     ;; (setq dape-key-prefix "\C-x\C-a")
-    ;;
-    ;; May also need to set/change gud (gdb-mi) key prefix
-    ;; (setq gud-key-prefix "\C-x\C-a")
 
     :hook
     ;; Save breakpoints on quit
@@ -58,6 +57,9 @@ Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-oper
     :config
     ;; Info buffers to the right
     ;; (setq dape-buffer-window-arrangement 'right)
+
+    ;; Global bindings for setting breakpoints with mouse
+    ;; (dape-breakpoint-global-mode)
 
     ;; To not display info and/or buffers on startup
     ;; (remove-hook 'dape-on-start-hooks 'dape-info)
@@ -79,14 +81,13 @@ Screenshots taken with [[https://git.sr.ht/~protesilaos/modus-themes][modus-oper
 #+end_src
 
 * Differences with dap-mode
-Dape has no dependencies outside of packages included in emacs, and tries to use get as much out of them possible.
+Dape has no dependencies outside of core Emacs packages, and tries to use get as much out of them possible.
 
 Dape takes a slightly different approach to configuration.
-+ Dape does not support ~launch.json~ files, if per project configuration is needed use ~dir-locals~.
-+ Tries to simplify configuration, by having just a plist.
-+ Dape tries to improve config ergonomics in ~dape~ completing-read by using options to change/add plist entries in an already existing config, example: ~adapter-config :program ＂/home/user/b.out＂ compile ＂gcc -g -o b.out main.c＂~.
-+ No magic, no special variables. Instead, functions and variables are resolved before starting a new session.
-+ Tries to be envision to how debug adapter configuration would be implemented in emacs if vscode never existed.
++ =Dape= does not support ~launch.json~ files, if per project configuration is needed use ~dir-locals~ and ~dape-command~.
++ =Dape= enhances ergonomics within the minibuffer by allowing users to modify or add PLIST entries to an existing configuration using options. For example ~dape-config :cwd default-directory :program ＂/home/user/b.out＂ :compile ＂gcc -g -o b.out main.c＂~.
++ No magic, no special variables like =${workspaceFolder}=. Instead, functions and variables are resolved before starting a new session.
++ Tries to be envision to how debug adapter configuration would be implemented in Emacs if vscode never existed.
 
 * Supported debug adapters
 In theory all debug adapters should be compatible with =Dape=.
@@ -94,7 +95,7 @@ In theory all debug adapters should be compatible with =Dape=.
 ** Javascript - vscode-js-*
 1. Install =node=
 2. Visit https://github.com/microsoft/vscode-js-debug/releases/ and download the asset =js-debug-dap-<version>.tar.gz=
-3. Unpack =mkdir -p ~/.emacs.d/debug-adapters && tar -xvzf js-debug-dap-<version>.tar.gz -C ~/.emacs.d/debug-adapters=
+3. Unpack ~mkdir -p ~/.emacs.d/debug-adapters && tar -xvzf js-debug-dap-<version>.tar.gz -C ~/.emacs.d/debug-adapters~
 
 For more information see [[https://github.com/microsoft/vscode-js-debug/blob/main/OPTIONS.md][OPTIONS.md]].
 
@@ -107,28 +108,28 @@ Ensure that your GDB version is 14.1 or newer.
 For further details, consult the [[https://sourceware.org/gdb/current/onlinedocs/gdb.html/Debugger-Adapter-Protocol.html][documentation]].
 
 ** C, C++ and Rust - codelldb
-1. Download latest ~vsix~ [[https://github.com/vadimcn/codelldb/releases][release]] for your platform =codelldb-<platform>-<os>.vsix=
-2. Unpack =mkdir -p ~/.emacs.d/debug-adapters && unzip codelldb-<platform>-<os>.vsix -d ~/.emacs.d/debug-adapters/codelldb=
+1. Download latest =vsix= [[https://github.com/vadimcn/codelldb/releases][release]] for your platform =codelldb-<platform>-<os>.vsix=
+2. Unpack ~mkdir -p ~/.emacs.d/debug-adapters && unzip codelldb-<platform>-<os>.vsix -d ~/.emacs.d/debug-adapters/codelldb~
 
 See [[https://github.com/vadimcn/codelldb/blob/v1.10.0/MANUAL.md][manual]] for more information.
 
 ** C and C++ - cpptools
-Download latesnd unpack ~vsix~ file with your favorite unzipper.
+Download latesnd unpack =vsix= file with your favorite unzipper.
 
-1. Download latest ~vsix~ [[https://github.com/microsoft/vscode-cpptools/releases][release]] for your platform =cpptools-<platform>-<os>.vsix=
-2. Unpack =mkdir -p ~/.emacs.d/debug-adapters && unzip cpptools-<os>-<platform>.vsix -d ~/.emacs.d/debug-adapters/cpptools=
-3. Then =chmod +x ~/.emacs.d/debug-adapters/cpptools/extension/debugAdapters/bin/OpenDebugAD7=
-4. And =chmod +x ~/.emacs.d/debug-adapters/cpptools/extension/debugAdapters/lldb-mi/bin/lldb-mi=
+1. Download latest =vsix= [[https://github.com/microsoft/vscode-cpptools/releases][release]] for your platform =cpptools-<platform>-<os>.vsix=
+2. Unpack ~mkdir -p ~/.emacs.d/debug-adapters && unzip cpptools-<os>-<platform>.vsix -d ~/.emacs.d/debug-adapters/cpptools~
+3. Then ~chmod +x ~/.emacs.d/debug-adapters/cpptools/extension/debugAdapters/bin/OpenDebugAD7~
+4. And ~chmod +x ~/.emacs.d/debug-adapters/cpptools/extension/debugAdapters/lldb-mi/bin/lldb-mi~
 
 See [[https://code.visualstudio.com/docs/cpp/launch-json-reference][options]].
 
 ** Python - debugpy
-Install debugpy with pip =pip install debugpy=
+Install debugpy with pip ~pip install debugpy~
 
 See [[https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings][options]].
 
 ** Godot
-Configure debug adapter port under "Editor" -> "Editor Settings" -> "Debug Adapter".
+Configure debug adapter port under "Editor" > "Editor Settings" > "Debug Adapter".
 
 ** Dart - flutter
 See for installation https://docs.flutter.dev/get-started/install
@@ -159,24 +160,15 @@ If you find a working configuration for any other debug adapter please submit a 
 
 See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/][microsofts list]] for other adapters, your mileage will vary.
 
-* Performance
-If your are having issues with adapter output in =*dape-repl*= and startup time =jsonrpc.el= could be the culprit.
-This has been reported upstream (#69241), but until the issue has been fixed there exists an fork of =jsonrpc.el=.
-
-#+begin_src emacs-lisp
-  (use-package jsonrpc
-    :straight (jsonrpc :type git :host github :repo "svaante/jsonrpc"))
-#+end_src
-
 * Contribute
-~dape~ is subject to the same copyright assignment policy as GNU Emacs.
+=dape= is subject to the same copyright assignment policy as GNU Emacs.
 
 Any legally [[https://www.gnu.org/prep/maintain/html_node/Legally-Significant.html#Legally-Significant][significant]] contributions can only be merged after the author has completed their paperwork.
 See [[https://www.fsf.org/licensing/contributor-faq][Contributor's Frequently Asked Questions (FAQ)]] for more information.
 
 * Bugs and issues
-Before reporting any issues =(setq dape-debug t)= and take a look at =*dape-repl*= buffer. Please share your =*dape-repl*= and =*dape-connection events*= in the buffer contents with the bug report.
-Master is used is for all case and purposes a development branch still and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.
+Before reporting any issues ~(setq dape-debug t)~ and take a look at =*dape-repl*= buffer. Please share your =*dape-repl*= and =*dape-connection events*= in the buffer contents with the bug report.
+The =master= branch is used as an development branch and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.
 
 * Acknowledgements
 Big thanks to João Távora for the input and jsonrpc; the project wouldn't be where it is without João.
