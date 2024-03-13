@@ -2,6 +2,34 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.8
+- Add new mode for memory view =dape-memory-mode= with write support
+- Enable persistent breakpoint support with =dape-breakpoint-save= and =dape-breakpoint-load=
+- Remove gdb disclaimer, gdb seams to be fully supported by =dape=
+- Add =js-debug-ts-node= batteries included configuration
+- Add =debugpy-module= batteries included configuration
+- Switch =debugpy= connection to stdio, improves tramp usage (no need for exposing ports)
+- Prefer the current file when having multiple Java main classes (=jdtls=)
+- Add module information in stack buffer with =dape-info-stack-buffer-modules=
+- Show threads information in running state
+- Add dape buffer window customization =dape-info-buffer-window-groups=
+- Improve repl shorthand, support for multi char shorthand and completion
+- Use autoport and tramp config transformations as default (=dape-default-config-functions=)
+- Add info messaging for tramp detection
+- Add =:null= as json null symbol
+- Bump jsonrpc version 1.0.25 (improved performance on large messages batches)
+- Improve =dape-configs= documentation
+- Rework core dape macros into hygienic macros
+- Improve =dape-pause= connection inferring
+- Ensure stopped buffer for watch buffer var fetching, remove flickering
+- Rework function evaluation in minibuffer hints
+- Rework dape-info to use revert-buffer
+- Rework runInTerminal to use =make-process= directly
+- Fix recursive nil to :json-false translation
+- Fix goto module with remote debugging
+- Remove dependency on undefined behaviour (defun return value)
+- Fix usage of locally defined =dape-configs=
+
 * Version 0.7
 - Add GDB as an "supported" adapter (see =dape--info-threads-all-stack-trace-disable=)
 - Change thread up/down bindings to match gud bindings
