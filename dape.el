@@ -8,7 +8,7 @@
 ;; License: GPL-3.0-or-later
 ;; Version: 0.7.0
 ;; Homepage: https://github.com/svaante/dape
-;; Package-Requires: ((emacs "29.1") (jsonrpc "1.0.24"))
+;; Package-Requires: ((emacs "29.1") (jsonrpc "1.0.25"))
 
 ;; This file is not part of GNU Emacs.
 
