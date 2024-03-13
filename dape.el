@@ -2128,8 +2128,11 @@ CONN is inferred for interactive invocations."
   (dape--kill-buffers 'skip-process-buffers)
   (if (not conn)
       (dape--kill-buffers)
-    (dape--with-request (dape-kill conn)
-      (dape--kill-buffers))))
+    (let (;; Use a lower timeout, if trying to kill an to kill an
+          ;; unresponsive adapter 10s is an log time to wait.
+          (dape-request-timeout 3))
+      (dape--with-request (dape-kill conn)
+        (dape--kill-buffers)))))
 
 (defun dape-breakpoint-toggle ()
   "Add or remove breakpoint at current line."
