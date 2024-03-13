@@ -183,6 +183,17 @@
      :program "lib/main.dart"
      :toolArgs ["-d" "all"])
     (gdb
+     ensure (lambda (config)
+              (dape-ensure-command config)
+              (let* ((default-directory
+                      (or (dape-config-get config 'command-cwd)
+                          default-directory))
+                     (output (shell-command-to-string "gdb --version"))
+                     (version (save-match-data
+                                (when (string-match "GNU gdb \\(?:(.*) \\)?\\([0-9.]+\\)" output)
+                                  (string-to-number (match-string 1 output))))))
+                (unless (>= version 14.1)
+                  (user-error "Requires gdb version >= 14.1"))))
      modes (c-mode c-ts-mode c++-mode c++-ts-mode)
      command-cwd dape-command-cwd
      command "gdb"
