@@ -2,6 +2,9 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.8.1
+- Revert =debugpy= connection changes, breaks process debugging
+
 * Version 0.8
 - Add new mode for memory view =dape-memory-mode= with write support
 - Enable persistent breakpoint support with =dape-breakpoint-save= and =dape-breakpoint-load=
