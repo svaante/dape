@@ -413,7 +413,7 @@ Functions and symbols:
   '(dape-config-autoport dape-config-tramp)
   "Functions applied on config before starting debugging session.
 Each function is called with one argument CONFIG and should return an
-PLIST of following the format specified in `dape-configs'.
+PLIST of the format specified in `dape-configs'.
 
 Functions are evaluated after functions defined in fn symbol in `dape-configs'.
 See fn in `dape-configs' function signature."
