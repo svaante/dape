@@ -4110,6 +4110,8 @@ Send INPUT to DUMMY-PROCESS."
   ;;       - compleation is messed up if point is in text and
   ;;         compleation is triggered
   ;;       - compleation is done on whole line for `debugpy'
+  ;;       - compleation for dape commands should only be valid when
+  ;;         command is starts at `bolp'
   (when (or (symbol-at-point)
             (member (buffer-substring-no-properties (1- (point)) (point))
                     (or (thread-first (dape--live-connection 'last t)
