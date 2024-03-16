@@ -3352,10 +3352,9 @@ displayed."
 (defvar dape-info--threads-tt-bench 2
   "Time to Bench.")
 
-(dape--command-at-line dape-info-select-thread (dape--info-thread)
+(dape--command-at-line dape-info-select-thread (dape--info-thread dape--info-conn)
   "Select thread at line in dape info buffer."
-  (dape-select-thread (dape--live-connection 'stopped)
-                      (plist-get dape--info-thread :id)))
+  (dape-select-thread dape--info-conn (plist-get dape--info-thread :id)))
 
 (defvar dape--info-threads-font-lock-keywords
   (append gdb-threads-font-lock-keywords
