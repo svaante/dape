@@ -3479,7 +3479,12 @@ current buffer with CONN config."
           (not (dape--stopped-threads conn)))
       (dape--info-update-with
         (set-marker dape--info-stack-position nil)
-        (insert "No stopped threads.")))
+        (cond
+         (current-thread
+          (insert (format "Thread \"%s\" is not stopped."
+                          (plist-get current-thread :name))))
+         (t
+          (insert "No stack information.")))))
      (t
       ;; Why are we updating it twice? Calls to `dape--stack-trace'
       ;; with an large nof can be expensive, therefore 1 nof is fetchd
