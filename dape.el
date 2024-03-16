@@ -672,6 +672,10 @@ The hook is run with one argument, the compilation buffer."
   "List of watched expressions.")
 (defvar dape--connection nil
   "Debug adapter connection.")
+(defvar dape--connection-selected nil
+  "Selected debug adapter connection.
+If valid connection, this connection will be of highest priority when
+querying for connections with `dape--live-connection'.")
 
 (defvar-local dape--source nil
   "Store source plist in fetched source buffer.")
@@ -1089,7 +1093,7 @@ them then executes BODY."
 
 ;;; Connection
 
-(defun dape--live-connection (type &optional nowarn)
+(defun dape--live-connection (type &optional nowarn require-selected)
   "Get live connection of TYPE.
 TYPE is expected to be one of the following symbols:
 
@@ -1101,36 +1105,34 @@ running  last created child connection or parent which has an active
 stopped  last created child connection or parent which has stopped
          threads.
 
-If NOWARN does not error on no active process."
-  (let (conn)
-    (when-let* (dape--connection
-                (ordered-connections
-                 (append (dape--children dape--connection)
-                         (list dape--connection))))
-      (setq conn
-            (pcase type
-              ('parent
-               (when (jsonrpc-running-p dape--connection)
-                 dape--connection))
-              ('last
-               (seq-find (lambda (conn)
-                           (and (jsonrpc-running-p conn)
-                                (dape--thread-id conn)))
-                         ordered-connections))
-              ('running
-               (seq-find (lambda (conn)
-                           (and (jsonrpc-running-p conn)
-                                (dape--thread-id conn)
-                                (not (dape--stopped-threads conn))))
-                         ordered-connections))
-              ('stopped
-               (seq-find (lambda (conn)
-                           (and (jsonrpc-running-p conn)
-                                (dape--stopped-threads conn)))
-                         ordered-connections)))))
-    (unless nowarn
-      (unless conn
-        (user-error "No %s debug connection live" type)))
+If NOWARN is non nil does not error on no active process.
+If REQUIRE-SELECTED is non nil require returned connection to be the
+selected one, this has no effect when TYPE is parent.
+See `dape--connection-selected'."
+  (let* ((connections (dape--live-connections))
+         (selected (cl-find dape--connection-selected connections))
+         (ordered
+          `(,@(when selected
+               (list selected))
+            ,@(unless (and require-selected selected)
+                (reverse connections))))
+         (conn
+          (pcase type
+            ('parent
+             (car connections))
+            ('last
+             (seq-find 'dape--thread-id ordered))
+            ('running
+             (seq-find (lambda (conn)
+                         (and (dape--thread-id conn)
+                              (not (dape--stopped-threads conn))))
+                       ordered))
+            ('stopped
+             (seq-find (lambda (conn)
+                         (and (dape--stopped-threads conn)))
+                       ordered)))))
+    (unless (or nowarn conn)
+      (user-error "No %s debug connection live" type))
     conn))
 
 (defun dape--live-connections ()
@@ -1138,7 +1140,7 @@ If NOWARN does not error on no active process."
   (when (and dape--connection (jsonrpc-running-p dape--connection))
     (cons dape--connection
           (seq-filter 'jsonrpc-running-p
-                      (dape--children dape--connection)))))
+                      (reverse (dape--children dape--connection))))))
 
 (defclass dape-connection (jsonrpc-process-connection)
   ((last-id
@@ -2068,6 +2070,7 @@ CONN is inferred for interactive invocations."
   (cond
    ((and conn
          (dape--capable-p conn :supportsRestartRequest))
+    (setq dape--connection-selected nil)
     (setf (dape--threads conn) nil)
     (setf (dape--thread-id conn) nil)
     (setf (dape--modules conn) nil)
@@ -2219,6 +2222,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
             nil t)))
      (list conn (alist-get thread-name collection nil nil 'equal))))
   (setf (dape--thread-id conn) thread-id)
+  (setq dape--connection-selected conn)
   (dape--update conn t))
 
 (defun dape-select-stack (conn stack-id)
