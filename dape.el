@@ -154,7 +154,7 @@
                :justMyCode nil
                :console "integratedTerminal"
                :showReturnValue t
-               :stopAtEntry t)))
+               :stopOnEntry t)))
         `((debugpy ,@debugpy
                    :program dape-buffer-default
                    ,@common)
