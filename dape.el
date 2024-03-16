@@ -3347,6 +3347,10 @@ displayed."
 
 (defvar dape--info-thread-position nil
   "`dape-info-thread-mode' marker for `overlay-arrow-variable-list'.")
+(defvar dape-info--threads-bench nil
+  "List of benched connections.")
+(defvar dape-info--threads-tt-bench 2
+  "Time to Bench.")
 
 (dape--command-at-line dape-info-select-thread (dape--info-thread)
   "Select thread at line in dape info buffer."
@@ -3364,17 +3368,47 @@ displayed."
   ;; TODO Add bindings for individual threads.
   )
 
-(defun dape--info-threads-all-stack-trace (conn cb)
-  "Populate CONN stack frame data for non selected threads.
+(defun dape--info-threads-stack-info (conn cb)
+  "Populate stack frame info for CONNs threads.
 See `dape-request' for expected CB signature."
-  (if (not (dape--threads conn))
-      (dape--request-return cb)
-    (let ((responses 0))
-      (dolist (thread (dape--threads conn))
-        (dape--with-request (dape--stack-trace conn thread 1)
-          (setf responses (1+ responses))
-          (when (length= (dape--threads conn) responses)
-            (dape--request-return cb)))))))
+  (let (threads)
+    (cond
+     ;; Current CONN is benched
+     ((member conn dape-info--threads-bench)
+      (dape--request-return cb))
+     ;; Stopped threads
+     ((setq threads
+            (cl-remove-if (lambda (thread)
+                            (plist-get thread :request-in-flight))
+                          (dape--stopped-threads conn)))
+      (let ((start-time (current-time))
+            (responses 0))
+        (dolist (thread threads)
+          ;; HACK Keep track of requests in flight as `revert-buffer'
+          ;;      might be called at any time, and we want keep
+          ;;      uneasy chatter at a minimum.
+          (plist-put thread :request-in-flight t)
+          (dape--with-request (dape--stack-trace conn thread 1)
+            (plist-put thread :request-in-flight nil)
+            ;; Time response, if slow bench that CONN
+            (when (and (time-less-p (timer-relative-time
+                                     start-time dape-info--threads-tt-bench)
+                                    (current-time))
+                       (not (member conn dape-info--threads-bench)))
+              (dape--repl-message
+               "* Disabling stack trace info in Threads buffer for connection (slow) *"
+               'dape-repl-error-face)
+              (push conn dape-info--threads-bench))
+            ;; When all request have resolved return
+            (when (length= threads (setf responses (1+ responses)))
+              (dape--request-return cb))))))
+     ;; No stopped threads
+     (t (dape--request-return cb))))
+  ;; House keeping, no need to keep dead connections in bench
+  (when dape-info--threads-bench
+    (let ((conns (dape--live-connections)))
+      (cl-delete-if-not (lambda (conn) (member conn conns))
+                        dape-info--threads-bench))))
 
 (define-derived-mode dape-info-threads-mode dape-info-parent-mode "Threads"
   "Major mode for Dape info threads."
@@ -3386,54 +3420,63 @@ See `dape-request' for expected CB signature."
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-threads-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for MAJOR-MODE `dape-info-threads-mode'."
-  (if-let ((conn (or (dape--live-connection 'stopped t)
-                     (dape--live-connection 'last t)))
-           (threads (dape--threads conn)))
-      (dape--with-request (dape--info-threads-all-stack-trace conn)
-        (dape--info-update-with
-          (let ((table (make-gdb-table))
-                (current-thread (dape--current-thread conn)))
-            (set-marker dape--info-thread-position nil)
-            (dolist (thread threads)
-              (gdb-table-add-row
-               table
-               (list
-                (format "%s" (plist-get thread :id))
-                (concat
-                 (when dape-info-thread-buffer-verbose-names
-                   (concat (plist-get thread :name) " "))
-                 (or (plist-get thread :status)
-                     "unknown")
-                 ;; Include frame information for stopped threads
-                 (if-let* (((equal (plist-get thread :status) "stopped"))
-                           (top-stack (thread-first thread
-                                                    (plist-get :stackFrames)
-                                                    (car))))
-                     (concat
-                      " in " (plist-get top-stack :name)
-                      (when-let* ((dape-info-thread-buffer-locations)
-                                  (path (thread-first top-stack
-                                                      (plist-get :source)
-                                                      (plist-get :path)))
-                                  (path (dape--path conn path 'local))
-                                  (line (plist-get top-stack :line)))
-                        (concat " of " (dape--format-file-line path line)))
-                      (when-let ((dape-info-thread-buffer-addresses)
-                                 (addr
-                                  (plist-get top-stack :instructionPointerReference)))
-                        (concat " at " addr))
-                      " "))))
-               (list
-                'dape--info-thread thread
-                'mouse-face 'highlight
-                'keymap dape-info-threads-line-map
-                'help-echo "mouse-2, RET: select thread")))
-            (insert (gdb-table-string table " "))
-            (when current-thread
-              (cl-loop for thread in threads
-                       for line from 1
-                       until (eq current-thread thread)
-                       finally (gdb-mark-line line dape--info-thread-position))))))
+  (if-let ((conn (dape--live-connection 'last t)))
+      (dape--with-request (dape--info-threads-stack-info conn)
+        (cl-loop
+         initially do (set-marker dape--info-thread-position nil)
+         with table = (make-gdb-table)
+         with conns = (dape--live-connections)
+         with current-thread = (dape--current-thread conn)
+         with conn-prefix-p = (length> (cl-remove-if-not 'dape--threads conns) 1)
+         with line-count = 0
+         with selected-line = nil
+         for conn in conns
+         for index upfrom 1 do
+         (cl-loop
+          for thread in (dape--threads conn) do
+          (setq line-count (1+ line-count))
+          (when (eq current-thread thread)
+            (setq selected-line line-count))
+          (gdb-table-add-row
+           table
+           (append
+            (when conn-prefix-p
+              (list (format "%s:" index)))
+            (list (format "%s" (plist-get thread :id)))
+            (list
+             (concat
+              (when dape-info-thread-buffer-verbose-names
+                (concat (plist-get thread :name) " "))
+              (or (plist-get thread :status)
+                  "unknown")
+              ;; Include frame information for stopped threads
+              (if-let* (((equal (plist-get thread :status) "stopped"))
+                        (top-stack (car (plist-get thread :stackFrames))))
+                  (concat
+                   " in " (plist-get top-stack :name)
+                   (when-let* ((dape-info-thread-buffer-locations)
+                               (path (thread-first top-stack
+                                                   (plist-get :source)
+                                                   (plist-get :path)))
+                               (path (dape--path conn path 'local))
+                               (line (plist-get top-stack :line)))
+                     (concat " of " (dape--format-file-line path line)))
+                   (when-let ((dape-info-thread-buffer-addresses)
+                              (addr
+                               (plist-get top-stack :instructionPointerReference)))
+                     (concat " at " addr))
+                   " ")))))
+           (list
+            'dape--info-conn conn
+            'dape--info-thread thread
+            'mouse-face 'highlight
+            'keymap dape-info-threads-line-map
+            'help-echo "mouse-2, RET: select thread")))
+         finally do
+         (dape--info-update-with
+           (insert (gdb-table-string table " "))
+           (when selected-line
+             (gdb-mark-line selected-line dape--info-thread-position)))))
     (dape--info-update-with
       (set-marker dape--info-thread-position nil)
       (insert "No thread information available."))))
