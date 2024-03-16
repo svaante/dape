@@ -742,6 +742,37 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
           (plist-put thread :status "running"))
         (run-hooks 'dape-update-ui-hooks)))))
 
+(defun dape--maybe-select-thread (conn thread-id force)
+  "Maybe set selected THREAD-ID and CONN.
+If FORCE is non nil force thread selection.
+If thread is selected, select CONN as well if no previously connection
+has been selected or if current selected connection does not have any
+stopped threads.
+See `dape--connection-selected'."
+  (when (and thread-id
+             (or force (not (dape--thread-id conn))))
+    (setf (dape--thread-id conn) thread-id)
+    (unless (and (member dape--connection-selected (dape--live-connections))
+                 (dape--stopped-threads dape--connection-selected))
+      (setq dape--connection-selected conn))))
+
+(defun dape--threads-set-status (conn thread-id all-threads status)
+  "Set string STATUS thread(s) for CONN.
+If THREAD-ID is non nil set status for thread with :id equal to
+THREAD-ID to STATUS.
+If ALL-THREADS is non nil set status of all all threads to STATUS."
+  (cond
+   ((not status) nil)
+   (all-threads
+    (cl-loop for thread in (dape--threads conn)
+             do (plist-put thread :status status)))
+   (thread-id
+    (plist-put
+     (cl-find-if (lambda (thread)
+                   (equal (plist-get thread :id) thread-id))
+                 (dape--threads conn))
+     :status status))))
+
 (defun dape--thread-id-object (conn)
   "Construct a thread id object for CONN."
   (when-let ((thread-id (dape--thread-id conn)))
@@ -1450,33 +1481,25 @@ See `dape-request' for expected CB signature."
               (dape--request-return cb)))))
     (dape--request-return cb)))
 
-(defun dape--update-threads (conn stopped-id all-threads-stopped cb)
-  "Helper for the stopped event to update `dape--threads'.
-Update adapter CONN threads with STOPPED-ID and ALL-THREADS-STOPPED.
+(defun dape--update-threads (conn cb)
+  "Update threads for CONN in-place if possible.
 See `dape-request' for expected CB signature."
+  ;; TODO Should debouce these request as they really flood the pipe
+  ;;      when triggered from "thread" event.
   (dape--with-request-bind
       ((&key threads &allow-other-keys) error)
       (dape-request conn "threads" nil)
     (setf (dape--threads conn)
-          (cl-map
-           'list
+          (mapcar
            (lambda (new-thread)
-             (let ((thread
-                    (or (seq-find
-                         (lambda (old-thread)
-                           (eq (plist-get new-thread :id)
-                               (plist-get old-thread :id)))
-                         (dape--threads conn))
-                        new-thread)))
-               (plist-put thread :name
-                          (plist-get new-thread :name))
-               (cond
-                (all-threads-stopped
-                 (plist-put thread :status "stopped"))
-                ((eq (plist-get thread :id) stopped-id)
-                 (plist-put thread :status "stopped"))
-                (t thread))))
-           threads))
+             (if-let ((old-thread
+                       (cl-find-if (lambda (old-thread)
+                                     (eql (plist-get new-thread :id)
+                                          (plist-get old-thread :id)))
+                                   (dape--threads conn))))
+                 (plist-put old-thread :name (plist-get new-thread :name))
+             new-thread))
+           (append threads nil)))
     (dape--request-return cb error)))
 
 (defun dape--stack-trace (conn thread nof cb)
@@ -1779,56 +1802,63 @@ Logs and sets state based on BODY contents."
   "Handle adapter CONNs thread events.
 Stores `dape--thread-id' and updates/adds thread in
 `dape--thread' from BODY."
-  (if-let ((thread
-            (seq-find (lambda (thread)
-                        (eq (plist-get thread :id)
-                            (plist-get body :threadId)))
-                      (dape--threads conn))))
-      (progn
-        (plist-put thread :status (plist-get body :reason))
-        (plist-put thread :name (or (plist-get thread :name)
-                                    "unnamed")))
-    ;; If new thread use thread state as global state
-    (dape--update-state conn (intern (plist-get body :reason)))
-    (push (list :status (plist-get body :reason)
-                :id (plist-get body :threadId)
-                :name "unnamed")
-          (dape--threads conn)))
-  ;; Select thread if we don't have any thread selected
-  (unless (dape--thread-id conn)
-    (setf (dape--thread-id conn) (plist-get body :threadId)))
-  (run-hooks 'dape-update-ui-hooks))
+  (cl-destructuring-bind (&key threadId reason &allow-other-keys)
+      body
+    (when (equal reason "started")
+      (dape--maybe-select-thread conn (plist-get body :threadId) nil))
+    (dape--with-request (dape--update-threads conn)
+      (dape--threads-set-status conn threadId nil
+                                (if (equal reason "exited")
+                                    "exited"
+                                  "running"))
+      (run-hooks 'dape-update-ui-hooks))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql stopped)) body)
   "Handle adapter CONNs stopped events.
 Sets `dape--thread-id' from BODY and invokes ui refresh with
 `dape--update'."
-  (dape--update-state conn 'stopped)
-  (setf (dape--thread-id conn) (plist-get body :threadId))
-  (setf (dape--stack-id conn) nil)
-  (dape--with-request
-      (dape--update-threads conn
-                            (plist-get body :threadId)
-                            (plist-get body :allThreadsStopped))
-    (dape--update conn))
-  (if-let (((equal "exception" (plist-get body :reason)))
-           (texts
-            (seq-filter 'stringp
-                        (list (plist-get body :text)
-                              (plist-get body :description)))))
-      (let ((str (mapconcat 'identity texts ":\n\t")))
-        (setf (dape--exception-description conn) str)
-        (dape--repl-message str 'dape-repl-error-face))
-    (setf (dape--exception-description conn) nil))
-  (run-hooks 'dape-on-stopped-hooks))
+  (cl-destructuring-bind
+      (&key threadId reason allThreadsStopped &allow-other-keys)
+      body
+    (dape--update-state conn 'stopped)
+    (dape--maybe-select-thread conn threadId 'force)
+    ;; Reset stack id to force a new frame in
+    ;; `dape--current-stack-frame'.
+    (setf (dape--stack-id conn) nil)
+    ;; Important to do this before `dape--update' to be able to setup
+    ;; exception overlay.
+    (pcase reason
+      ;; Output exception info in overlay and repl
+      ("exception"
+       (let* ((texts
+               (seq-filter 'stringp
+                           (list (plist-get body :text)
+                                 (plist-get body :description))))
+              (str (mapconcat 'identity texts ":\n\t")))
+         (setf (dape--exception-description conn) str)
+         (dape--repl-message str 'dape-repl-error-face)))
+      ;; TODO Would be nice to display other `reasons'
+      (_
+       ;; Cleanup exception for
+       (setf (dape--exception-description conn) nil)))
+    (dape--with-request (dape--update-threads conn)
+      (dape--threads-set-status conn threadId (eq allThreadsStopped t)
+                                "stopped")
+      (dape--update conn))
+    (run-hooks 'dape-on-stopped-hooks)))
 
 (cl-defmethod dape-handle-event (conn (_event (eql continued)) body)
   "Handle adapter CONN continued events.
 Sets `dape--thread-id' from BODY if not set."
-  (dape--update-state conn 'running)
-  (dape--remove-stack-pointers)
-  (unless (dape--thread-id conn)
-    (setf (dape--thread-id conn) (plist-get body :threadId))))
+  (cl-destructuring-bind
+      (&key threadId allThreadsContinued &allow-other-keys)
+      body
+    (dape--update-state conn 'running)
+    (dape--remove-stack-pointers)
+    (dape--maybe-select-thread conn threadId nil)
+    (dape--threads-set-status conn threadId (eq allThreadsContinued t)
+                              "running")
+    (run-hooks 'dape-update-ui-hooks)))
 
 (cl-defmethod dape-handle-event (_conn (_event (eql output)) body)
   "Handle output events by printing BODY with `dape--repl-message'."
