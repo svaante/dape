@@ -2937,15 +2937,14 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
                         (memq major-mode '(dape-repl-mode)))
                 (select-window window))
               (unless skip-stack-pointer-flash
-                (with-current-buffer (marker-buffer marker)
-                  (with-selected-window window
-                    (goto-char (marker-position marker))
-                    (pulse-momentary-highlight-region (line-beginning-position)
-                                                      (line-beginning-position 2)
-                                                      'next-error))))))
                 ;; FIXME Should be called with idle-timer as to
                 ;;       guarantee that we are not in `save-excursion'
-                ;;       context.  But this makes tests hard write.
+                ;;       context.  But this makes tests to hard write.
+                (with-selected-window window
+                  (goto-char (marker-position marker))
+                  (pulse-momentary-highlight-region (line-beginning-position)
+                                                    (line-beginning-position 2)
+                                                    'next-error)))))
           (with-current-buffer (marker-buffer marker)
             (dape--add-eldoc-hook)
             (save-excursion
