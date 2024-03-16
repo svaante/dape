@@ -1556,8 +1556,8 @@ See `dape-request' for expected CB signature."
                                            (cons (plist-get object :name)
                                                  path)
                                            pred)
-              (setf responses (1+ responses))
-              (when (length= objects responses)
+              (when (length= objects
+                             (setf responses (1+ responses)))
                 (dape--request-return cb)))))))))
 
 (defun dape--evaluate-expression (conn frame-id expression context cb)
@@ -1766,13 +1766,12 @@ Stores `dape--sources' from BODY."
 (cl-defmethod dape-handle-event (conn (_event (eql process)) body)
   "Handle adapter CONNs process events.
 Logs and sets state based on BODY contents."
-  (let ((start-method (format "%sed"
-                              (or (plist-get body :startMethod)
-                                  "start"))))
+  (let ((start-method
+         (format "%sed" (or (plist-get body :startMethod)
+                            "start"))))
     (dape--update-state conn (intern start-method))
-    (dape--repl-message (format "Process %s %s"
-                                start-method
-                                (plist-get body :name)))))
+    (dape--repl-message
+     (format "Process %s %s" start-method (plist-get body :name)))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql thread)) body)
   "Handle adapter CONNs thread events.
@@ -1842,11 +1841,11 @@ Sets `dape--thread-id' from BODY if not set."
 Prints exit code from BODY."
   (dape--update-state conn 'exited)
   (dape--remove-stack-pointers)
-  (dape--repl-message (format "* Exit code: %d *"
-                              (plist-get body :exitCode))
-                      (if (zerop (plist-get body :exitCode))
-                          'dape-repl-success-face
-                        'dape-repl-error-face)))
+  (dape--repl-message
+   (format "* Exit code: %d *" (plist-get body :exitCode))
+   (if (zerop (plist-get body :exitCode))
+       'dape-repl-success-face
+     'dape-repl-error-face)))
 
 (cl-defmethod dape-handle-event (conn (_event (eql terminated)) _body)
   "Handle adapter CONNs terminated events.
@@ -3350,7 +3349,6 @@ See `dape-request' for expected CB signature."
         dape--info-thread-position (make-marker))
   (add-to-list 'overlay-arrow-variable-list 'dape--info-thread-position))
 
-
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-threads-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for MAJOR-MODE `dape-info-threads-mode'."
@@ -3815,8 +3813,7 @@ plist are used as keymap for each sections defined by the key."
             (unless error
               (cl-loop for (key value) on body by 'cddr
                        do (plist-put plist key value)))
-            (setf responses (1+ responses))
-            (when (length= dape--watched responses)
+            (when (length= dape--watched (setf responses (1+ responses)))
               (dape--with-request
                   (dape--variables-recursive conn
                                              (list :variables dape--watched)
