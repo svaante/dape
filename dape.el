@@ -3544,8 +3544,8 @@ current buffer with CONN config."
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-stack-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for MAJOR-MODE `dape-info-stack-mode'."
-  (let* ((conn (or (dape--live-connection 'stopped t)
-                   (dape--live-connection 'last t)))
+  (let* ((conn (or (dape--live-connection 'stopped t t)
+                   (dape--live-connection 'last t t)))
          (current-thread (dape--current-thread conn))
          (stack-frames (plist-get current-thread :stackFrames))
          (current-stack-frame (dape--current-stack-frame conn)))
