@@ -738,8 +738,7 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
       (unless error
         (dape--update-state conn 'running)
         (dape--remove-stack-pointers)
-        (dolist (thread (dape--threads conn))
-          (plist-put thread :status "running"))
+        (dape--threads-set-status conn nil t 'running)
         (run-hooks 'dape-update-ui-hooks)))))
 
 (defun dape--maybe-select-thread (conn thread-id force)
@@ -782,7 +781,7 @@ If ALL-THREADS is non nil set status of all all threads to STATUS."
   "List of stopped threads for CONN."
   (and conn
        (mapcan (lambda (thread)
-                 (when (equal (plist-get thread :status) "stopped")
+                 (when (equal (plist-get thread :status) 'stopped)
                    (list thread)))
                (dape--threads conn))))
 
@@ -1509,7 +1508,7 @@ See `dape-request' for expected CB signature."
         (delayed-stack-trace-p
          (dape--capable-p conn :supportsDelayedStackTraceLoading)))
     (cond
-     ((or (not (equal (plist-get thread :status) "stopped"))
+     ((or (not (equal (plist-get thread :status) 'stopped))
           (not (integerp (plist-get thread :id)))
           (and delayed-stack-trace-p (<= nof current-nof))
           (and (not delayed-stack-trace-p) (> current-nof 0)))
@@ -1809,8 +1808,8 @@ Stores `dape--thread-id' and updates/adds thread in
     (dape--with-request (dape--update-threads conn)
       (dape--threads-set-status conn threadId nil
                                 (if (equal reason "exited")
-                                    "exited"
-                                  "running"))
+                                    'exited
+                                  'running))
       (run-hooks 'dape-update-ui-hooks))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql stopped)) body)
@@ -1843,7 +1842,7 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
        (setf (dape--exception-description conn) nil)))
     (dape--with-request (dape--update-threads conn)
       (dape--threads-set-status conn threadId (eq allThreadsStopped t)
-                                "stopped")
+                                'stopped)
       (dape--update conn))
     (run-hooks 'dape-on-stopped-hooks)))
 
@@ -1856,8 +1855,7 @@ Sets `dape--thread-id' from BODY if not set."
     (dape--update-state conn 'running)
     (dape--remove-stack-pointers)
     (dape--maybe-select-thread conn threadId nil)
-    (dape--threads-set-status conn threadId (eq allThreadsContinued t)
-                              "running")
+    (dape--threads-set-status conn threadId (eq allThreadsContinued t) 'running)
     (run-hooks 'dape-update-ui-hooks)))
 
 (cl-defmethod dape-handle-event (_conn (_event (eql output)) body)
@@ -2079,7 +2077,7 @@ CONN is inferred for interactive invocations."
       (dape--update-state conn 'running)
       (dape--remove-stack-pointers)
       (dolist (thread (dape--threads conn))
-        (plist-put thread :status "running"))
+        (plist-put thread :status 'running))
       (run-hooks 'dape-update-ui-hooks))))
 
 (defun dape-pause (conn)
@@ -3457,10 +3455,11 @@ See `dape-request' for expected CB signature."
              (concat
               (when dape-info-thread-buffer-verbose-names
                 (concat (plist-get thread :name) " "))
-              (or (plist-get thread :status)
+              (or (and-let* ((status (plist-get thread :status)))
+                    (format "%s" status))
                   "unknown")
               ;; Include frame information for stopped threads
-              (if-let* (((equal (plist-get thread :status) "stopped"))
+              (if-let* (((equal (plist-get thread :status) 'stopped))
                         (top-stack (car (plist-get thread :stackFrames))))
                   (concat
                    " in " (plist-get top-stack :name)
