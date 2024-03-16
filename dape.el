@@ -1991,55 +1991,56 @@ symbol `dape-connection'."
         (when dape-debug
           (dape--repl-message (format "* Adapter started with %S *"
                                       (mapconcat 'identity command " ")))))))
-    (make-instance 'dape-connection
-                   :name "dape-connection"
-                   :config config
-                   :parent parent
-                   :server-process server-process
-                   :events-buffer-config `(:size ,(if dape-debug nil 0)
-                                                 :format full)
-                   :on-shutdown
-                   (lambda (conn)
-                     ;; error prints
-                     (unless (dape--initialized-p conn)
-                       (dape--repl-message
-                        (concat "Adapter "
-                                (when (dape--parent conn)
-                                  "child ")
-                                "connection shutdown without successfully initializing")
-                        'dape-repl-error-face)
-                       ;; barf config
-                       (dape--repl-message
-                        (format "Configuration:\n%s"
-                                (cl-loop for (key value) on (dape--config conn) by 'cddr
-                                         concat (format "  %s %S\n" key value)))
-                        'dape-repl-error-face)
-                       ;; barf connection stderr
-                       (when-let* ((proc (jsonrpc--process conn))
-                                   (buffer (process-get proc 'jsonrpc-stderr)))
-                         (with-current-buffer buffer
-                           (dape--repl-message (buffer-string) 'dape-repl-error-face)))
-                       ;; barf server stderr
-                       (when-let* ((server-proc (dape--server-process conn))
-                                   (buffer (process-get server-proc 'stderr-buffer)))
-                         (with-current-buffer buffer
-                           (dape--repl-message (buffer-string) 'dape-repl-error-face))))
-                     ;; cleanup server process
-                     (unless (dape--parent conn)
-                       (dape--remove-stack-pointers)
-                       (when-let ((server-process
-                                   (dape--server-process conn)))
-                         (delete-process server-process)
-                         (while (process-live-p server-process)
-                           (accept-process-output nil nil 0.1))))
-                     ;; ui
-                     (run-with-timer 1 nil (lambda ()
-                                             (when (eq dape--connection conn)
-                                               (dape-active-mode -1)
-                                               (force-mode-line-update t)))))
-                   :request-dispatcher 'dape-handle-request
-                   :notification-dispatcher 'dape-handle-event
-                   :process process)))
+    (make-instance
+     'dape-connection
+     :name "dape-connection"
+     :config config
+     :parent parent
+     :server-process server-process
+     :events-buffer-config `(:size ,(if dape-debug nil 0)
+                                   :format full)
+     :on-shutdown
+     (lambda (conn)
+       ;; error prints
+       (unless (dape--initialized-p conn)
+         (dape--repl-message
+          (concat "Adapter "
+                  (when (dape--parent conn)
+                    "child ")
+                  "connection shutdown without successfully initializing")
+          'dape-repl-error-face)
+         ;; barf config
+         (dape--repl-message
+          (format "Configuration:\n%s"
+                  (cl-loop for (key value) on (dape--config conn) by 'cddr
+                           concat (format "  %s %S\n" key value)))
+          'dape-repl-error-face)
+         ;; barf connection stderr
+         (when-let* ((proc (jsonrpc--process conn))
+                     (buffer (process-get proc 'jsonrpc-stderr)))
+           (with-current-buffer buffer
+             (dape--repl-message (buffer-string) 'dape-repl-error-face)))
+         ;; barf server stderr
+         (when-let* ((server-proc (dape--server-process conn))
+                     (buffer (process-get server-proc 'stderr-buffer)))
+           (with-current-buffer buffer
+             (dape--repl-message (buffer-string) 'dape-repl-error-face))))
+       ;; cleanup server process
+       (unless (dape--parent conn)
+         (dape--remove-stack-pointers)
+         (when-let ((server-process
+                     (dape--server-process conn)))
+           (delete-process server-process)
+           (while (process-live-p server-process)
+             (accept-process-output nil nil 0.1))))
+       ;; ui
+       (run-with-timer 1 nil (lambda ()
+                               (when (eq dape--connection conn)
+                                 (dape-active-mode -1)
+                                 (force-mode-line-update t)))))
+     :request-dispatcher 'dape-handle-request
+     :notification-dispatcher 'dape-handle-event
+     :process process)))
 
 
 ;;; Commands
