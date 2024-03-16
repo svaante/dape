@@ -2163,7 +2163,7 @@ CONN is inferred for interactive invocations."
   (if (not conn)
       (dape--kill-buffers)
     (let (;; Use a lower timeout, if trying to kill an to kill an
-          ;; unresponsive adapter 10s is an log time to wait.
+          ;; unresponsive adapter 10s is an long time to wait.
           (dape-request-timeout 3))
       (dape--with-request (dape-kill conn)
         (dape--kill-buffers)))))
