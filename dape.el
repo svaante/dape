@@ -1684,9 +1684,10 @@ Starts a new adapter CONNs from ARGUMENTS."
 Starts a new adapter connection as per request of the debug adapter."
   (let ((config (plist-get arguments :configuration))
         (request (plist-get arguments :request)))
-    (cl-loop for (key value) on (dape--config conn) by 'cddr
+    (cl-loop with socket-conn-p = (plist-get config 'port)
+             for (key value) on (dape--config conn) by 'cddr
              unless (or (keywordp key)
-                        (eq key 'command))
+                        (and socket-conn-p (eq key 'command)))
              do (plist-put config key value))
     (when request
       (plist-put config :request request))
