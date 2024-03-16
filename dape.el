@@ -2237,20 +2237,32 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
 (defun dape-select-thread (conn thread-id)
   "Select currrent thread for adapter CONN by THREAD-ID."
   (interactive
-   (let* ((conn (dape--live-connection 'stopped))
+   (let* ((conn (dape--live-connection 'last))
           (collection
-           (mapcar (lambda (thread) (cons (plist-get thread :name)
-                                          (plist-get thread :id)))
-                   (dape--threads conn)))
+           (cl-loop
+            with conns = (dape--live-connections)
+            with conn-prefix-p = (length>
+                                  (cl-remove-if-not 'dape--threads conns) 1)
+            for conn in conns
+            for index upfrom 1
+            append (cl-loop
+                    for thread in (dape--threads conn)
+                    for name = (concat
+                                (when conn-prefix-p
+                                  (format "%s: " index))
+                                (format "%s %s"
+                                        (plist-get thread :id)
+                                        (plist-get thread :name)))
+                    collect (list name conn (plist-get thread :id)))))
           (thread-name
            (completing-read
             (format "Select thread (current %s): "
-                    (thread-first conn
-                                  (dape--current-stack-frame)
+                    ;; TODO Show current thread with connection prefix
+                    (thread-first conn (dape--current-thread)
                                   (plist-get :name)))
             collection
             nil t)))
-     (list conn (alist-get thread-name collection nil nil 'equal))))
+     (alist-get thread-name collection nil nil 'equal)))
   (setf (dape--thread-id conn) thread-id)
   (setq dape--connection-selected conn)
   (dape--update conn t))
