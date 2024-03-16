@@ -4706,7 +4706,12 @@ See `eldoc-documentation-functions', for more infomation."
             (propertize
              (format "%s" (or (and conn (dape--state conn))
                               'unknown))
-             'face 'font-lock-doc-face))))
+             'face 'font-lock-doc-face)
+            (when-let* ((conns (dape--live-connections))
+                        (nof-conns
+                         (length (cl-remove-if-not 'dape--threads conns)))
+                        ((> nof-conns 1)))
+              (propertize (format "(%s)" nof-conns) 'face 'shadow)))))
 
 (add-to-list 'mode-line-misc-info
              `(dape-active-mode
