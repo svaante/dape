@@ -3421,7 +3421,7 @@ See `dape-request' for expected CB signature."
                         dape-info--threads-bench))))
 
 (define-derived-mode dape-info-threads-mode dape-info-parent-mode "Threads"
-  "Major mode for Dape info threads."
+  "Major mode for dape info threads."
   :interactive nil
   (setq font-lock-defaults '(dape--info-threads-font-lock-keywords)
         dape--info-thread-position (make-marker))
