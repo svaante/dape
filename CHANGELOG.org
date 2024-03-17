@@ -2,6 +2,13 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.9.0
+- Enhanced support for multi-connection adapters
+- Threads buffer shows all threads across connections
+- Thread selection works across all connections
+- Modeline indicates active child connections
+- Threads buffer displays names of non-stopped threads
+
 * Version 0.8.1
 - Revert =debugpy= connection changes, breaks process debugging
 
