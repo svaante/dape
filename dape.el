@@ -4724,7 +4724,9 @@ See `eldoc-documentation-functions', for more infomation."
                         (nof-conns
                          (length (cl-remove-if-not 'dape--threads conns)))
                         ((> nof-conns 1)))
-              (propertize (format "(%s)" nof-conns) 'face 'shadow)))))
+              (propertize (format "(%s)" nof-conns)
+                          'face 'shadow
+                          'help-echo "Active child connections")))))
 
 (add-to-list 'mode-line-misc-info
              `(dape-active-mode
