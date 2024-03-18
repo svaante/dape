@@ -246,6 +246,12 @@
            :cwd dape-cwd
            :program dape-buffer-default
            :console "internalConsole")
+	  (js-debug-node-attach
+           modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
+           ,@js-debug
+           :type "pwa-node"
+	   :request "attach"
+	   :port 9229)
           (js-debug-chrome
            modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
            ,@js-debug
