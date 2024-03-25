@@ -2688,7 +2688,7 @@ contents."
 (defun dape--breakpoints-reset ()
   "Reset breakpoints hits."
   (cl-loop for ov in dape--breakpoints
-           do (overlay-put ov 'dape-hits 0)))
+           do (overlay-put ov 'dape-hits nil)))
 
 (defun dape--breakpoints-stopped (hit-breakpoint-ids)
   "Increment `dape-hits' from array of HIT-BREAKPOINT-IDS."
@@ -2696,7 +2696,8 @@ contents."
            for ov = (cl-find id dape--breakpoints
                              :key (lambda (ov) (overlay-get ov 'dape-id)))
            when ov
-           do (overlay-put ov 'dape-hits (1+ (overlay-get ov 'dape-hits)))))
+           do (overlay-put ov 'dape-hits
+                           (1+ (or (overlay-get ov 'dape-hits) 0)))))
 
 (defun dape--breakpoints-at-point ()
   "Dape overlay breakpoints at point."
@@ -3356,9 +3357,8 @@ displayed."
                   (dape--format-file-line file line)
                 (buffer-name buffer))
              ,@(when with-hits-p
-                 (if (overlay-get breakpoint 'dape-verified)
-                     (let ((hits (or (overlay-get breakpoint 'dape-hits) 0)))
-                       (list (format "%s" hits)))
+                 (if-let ((hits (overlay-get breakpoint 'dape-hits)))
+                     (list (format "%s" hits))
                    '("")))
              ,(cond
                ((overlay-get breakpoint 'dape-log-message)
