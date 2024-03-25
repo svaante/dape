@@ -131,6 +131,12 @@ Helper for `dape-test--with-files'."
                       (jsonrpc-continuation-count parent)
                       (mapcar 'jsonrpc-continuation-count (dape--children parent)))))))
 
+(defun dape-test--should-stopped ()
+  "Using `dape-test--should' assert that connection is stopped."
+  (dape-test--should
+   (and (dape-test--no-pending-p)
+        (dape-test--stopped-p))))
+
 (defun dape-test--revert-buffer ()
   "Revert buffer and wait for all pending request to resolve."
   (revert-buffer)
@@ -157,21 +163,19 @@ Expects line with string \"breakpoint\" in source."
         (dape-test--goto-line line)
         (dape-breakpoint-toggle)))
     (apply 'dape-test--debug buffer key args)
-    ;; at breakpoint and stopped
+    ;; stopped and at breakpoint
+    (dape-test--should-stopped)
     (dape-test--should
-     (and (dape-test--stopped-p)
-          (dape-test--no-pending-p)
-          (equal (line-number-at-pos)
-                 (dape-test--line-at-regex "breakpoint"))))
+     (equal (line-number-at-pos)
+            (dape-test--line-at-regex "breakpoint")))
     ;; restart
     (goto-char (point-min))
     (dape-restart)
-    ;; at breakpoint and stopped
+    ;; stopped and at breakpoint
+    (dape-test--should-stopped)
     (dape-test--should
-     (and (dape-test--stopped-p)
-          (dape-test--no-pending-p)
-          (equal (line-number-at-pos)
-                 (dape-test--line-at-regex "breakpoint"))))))
+     (equal (line-number-at-pos)
+            (dape-test--line-at-regex "breakpoint")))))
 
 (ert-deftest dape-test-restart ()
   "Restart with restart."
@@ -215,20 +219,19 @@ Expects line with string \"breakpoint\" in source."
         (dape-breakpoint-toggle)))
     (apply 'dape-test--debug buffer dape-args)
     ;; at breakpoint and stopped
+    ;; stopped and at breakpoint
+    (dape-test--should-stopped)
     (dape-test--should
-     (and (dape-test--stopped-p)
-          (dape-test--no-pending-p)
-          (equal (line-number-at-pos)
-                 (dape-test--line-at-regex "breakpoint"))))
+     (equal (line-number-at-pos)
+            (dape-test--line-at-regex "breakpoint")))
     ;; restart
     (goto-char (point-min))
     (apply 'dape-test--debug buffer dape-args)
-    ;; at breakpoint and stopped
+    ;; stopped and at breakpoint
+    (dape-test--should-stopped)
     (dape-test--should
-     (and (dape-test--stopped-p)
-          (dape-test--no-pending-p)
-          (equal (line-number-at-pos)
-                 (dape-test--line-at-regex "breakpoint"))))))
+     (equal (line-number-at-pos)
+            (dape-test--line-at-regex "breakpoint")))))
 
 (ert-deftest dape-test-restart-with-dape ()
   "Should be able to restart with `dape' even though session active."
@@ -272,7 +275,8 @@ Expects line with string \"breakpoint\" in source."
         (dape-test--goto-line line)
         (dape-breakpoint-toggle))))
   (apply 'dape-test--debug buffer dape-args)
-  ;; we are at breakpoint and stopped
+  ;; stopped and at breakpoint
+  (dape-test--should-stopped)
   (with-current-buffer buffer
     (dape-test--should
      (equal (line-number-at-pos)
@@ -359,14 +363,12 @@ Expects line with string \"breakpoint\" in source."
           (dape-breakpoint-toggle))))
     ;; start debugging
     (dape-test--debug main-buffer 'debugpy)
-    ;; at breakpoint and stopped
+    ;; stopped and at breakpoint
+    (dape-test--should-stopped)
     (with-current-buffer main-buffer
       (dape-test--should
        (equal (line-number-at-pos)
               (dape-test--line-at-regex "breakpoint"))))
-    (dape-test--should
-     (and (dape-test--stopped-p)
-          (dape-test--no-pending-p)))
     ;; contents of watch buffer
     (with-current-buffer (dape-test--should
                           (dape--info-get-live-buffer 'dape-info-watch-mode))
@@ -414,7 +416,8 @@ Expects line with string \"breakpoint\" in source."
           (dape-breakpoint-toggle))))
     ;; start debugging
     (dape-test--debug main-buffer 'debugpy)
-    ;; at breakpoint and stopped
+    ;; stopped and at breakpoint
+    (dape-test--should-stopped)
     (with-current-buffer main-buffer
       (dape-test--should
        (= (line-number-at-pos)
@@ -467,7 +470,8 @@ Expects line with string \"breakpoint\" in source."
           (dape-breakpoint-toggle))))
     ;; start debugging
     (dape-test--debug main-buffer 'debugpy)
-    ;; at breakpoint and stopped
+    ;; stopped and at breakpoint
+    (dape-test--should-stopped)
     (with-current-buffer main-buffer
       (dape-test--should
        (= (line-number-at-pos)
@@ -491,7 +495,6 @@ Expects line with string \"breakpoint\" in source."
       (dape-test--should
        (dape-test--line-at-regex "^  thread_var")))
     (with-current-buffer (dape--info-get-buffer-create 'dape-info-threads-mode)
-      ()
       ;; select thread
       (dape-test--apply-to-match "^1 .* stopped in" 'dape-info-select-thread))
     (with-current-buffer (dape--info-get-buffer-create 'dape-info-threads-mode)
@@ -529,9 +532,9 @@ Expects line with string \"breakpoint\" in source."
           (dape-breakpoint-toggle))))
     ;; start debugging
     (dape-test--debug main-buffer 'debugpy)
-    ;; at breakpoint and stopped
-    (dape-test--should (and (dape-test--stopped-p)
-                            (dape-test--no-pending-p)))
+    ;; stopped
+    (dape-test--should-stopped)
+    ;; at breakpoint
     (with-current-buffer main-buffer
       (dape-test--should
        (= (line-number-at-pos)
@@ -539,20 +542,20 @@ Expects line with string \"breakpoint\" in source."
     (pop-to-buffer "*dape-repl*")
     (insert "next")
     (comint-send-input)
-    (dape-test--should (and (dape-test--stopped-p)
-                            (dape-test--no-pending-p)))
+    ;; stopped
+    (dape-test--should-stopped)
     (with-current-buffer main-buffer
       (dape-test--should
        (= (line-number-at-pos)
           (dape-test--line-at-regex "second line"))))
     (insert "next")
     (comint-send-input)
+    ;; stopped
+    (dape-test--should-stopped)
     (with-current-buffer main-buffer
       (dape-test--should
-       (and (= (line-number-at-pos)
-               (dape-test--line-at-regex "third line"))
-            (dape-test--stopped-p)
-            (dape-test--no-pending-p))))
+       (= (line-number-at-pos)
+          (dape-test--line-at-regex "third line"))))
     (insert "a = 99")
     (comint-send-input)
     (with-current-buffer (dape-test--should
@@ -575,8 +578,7 @@ Expects line with string \"breakpoint\" in source."
     ;; start debugging
     (dape-test--debug main-buffer 'debugpy)
     ;; at breakpoint and stopped
-    (dape-test--should (and (dape-test--stopped-p)
-                            (dape-test--no-pending-p)))
+    (dape-test--should-stopped)
     ;; contents
     (with-current-buffer (dape--info-get-buffer-create 'dape-info-modules-mode)
       (revert-buffer)
@@ -599,8 +601,7 @@ Expects line with string \"breakpoint\" in source."
     ;; start debugging
     (dape-test--debug index-buffer 'js-debug-node)
     ;; stopped
-    (dape-test--should (and (dape-test--stopped-p)
-                            (dape-test--no-pending-p)))
+    (dape-test--should-stopped)
     ;; contents
     (with-current-buffer (dape--info-get-buffer-create 'dape-info-sources-mode)
       (revert-buffer)
@@ -631,9 +632,7 @@ Expects line with string \"breakpoint\" in source."
     (apply 'dape-test--debug buffer key args)
     ;; Continue 4 times
     (dotimes (_ 5)
-      (dape-test--should
-       (and (dape-test--stopped-p)
-            (dape-test--no-pending-p)))
+      (dape-test--should-stopped)
       (dape-continue (dape--live-connection 'stopped)))
     ;; Debugging session over
     (dape-test--should (not (dape--live-connection 'parent t)))
