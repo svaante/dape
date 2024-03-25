@@ -54,15 +54,9 @@ failed."
          ret))))
 
 (defmacro dape-test--with-files (buffer-fixtures &rest body)
-  "Setup BUFFER-FIXTURES call body with bindings and clean up.
-FIXTURE is an alist of the form
-(BUFFER-BINDING (FILE-NAME . CONTENT-LIST).
-
-Inserts breakpoints based on string properties in elements in
-CONTENT-LIST.
-- bp: inserts breakpoint
-- condition: inserts condition breakpoint
-- log: inserts log breakpoint"
+  "Setup BUFFER-FIXTURES and call BODY with bindings and clean up.
+FIXTURE is an alist with form (BUFFER-BINDING (FILE-NAME . CONTENT-LIST).
+CONTENT-LIST is an list of strings which are joined with newline to create file."
   (declare (indent 1) (debug t))
   `(dape-test--call-with-files ',(mapcar 'cdr buffer-fixtures)
                                (lambda ,(mapcar 'car buffer-fixtures)
