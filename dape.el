@@ -3324,6 +3324,8 @@ displayed."
   "Revert buffer function for MAJOR-MODE `dape-info-breakpoints-mode'."
   (dape--info-update-with
     (let ((table (make-gdb-table))
+          ;; Show Hits only when it's supported e.i. when breakpoint
+          ;; id is included in the "stopped" event.
           (with-hits-p
            (cl-find-if (lambda (ov)
                          (when-let ((hits (overlay-get ov 'dape-hits)))
