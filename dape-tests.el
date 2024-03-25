@@ -631,15 +631,16 @@ Expects line with string \"breakpoint\" in source."
     ;; Start debugging
     (apply 'dape-test--debug buffer key args)
     ;; Continue 4 times
-    (dotimes (_ 5)
+    (dotimes (_ 4)
       (dape-test--should-stopped)
       (dape-continue (dape--live-connection 'stopped)))
     ;; Debugging session over
-    (dape-test--should (not (dape--live-connection 'parent t)))
+    (dape-test--should-stopped)
     ;; Breakpoint in *dape-info Breakpoints*
     (with-current-buffer breakpoints-buffer
-      (revert-buffer)
-      (dape-test--should (not (dape-test--line-at-regex "^break .*5 *$"))))))
+      (dape-test--revert-buffer)
+      (dape-test--should
+       (dape-test--line-at-regex "^break .*5 *$")))))
 
 (ert-deftest dape-test-breakpoint-hits ()
   "Test breakpoint hits."
