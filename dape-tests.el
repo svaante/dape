@@ -604,9 +604,8 @@ Expects line with string \"breakpoint\" in source."
     ;; contents
     (with-current-buffer (dape--info-get-buffer-create 'dape-info-sources-mode)
       (revert-buffer)
-      (dape-test--should
-       (dape-test--line-at-regex "^os ")
-       (dape-test--line-at-regex "^util "))
+      (dape-test--should (dape-test--line-at-regex "^os "))
+      (dape-test--should (dape-test--line-at-regex "^util "))
       (dape-test--apply-to-match "^os " 'dape-info-sources-goto))
     (dape-test--should
      (member "*dape-source os*" (mapcar 'buffer-name (buffer-list))))))
