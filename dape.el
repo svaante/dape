@@ -4151,8 +4151,6 @@ Send INPUT to DUMMY-PROCESS."
   ;;       - compleation is messed up if point is in text and
   ;;         compleation is triggered
   ;;       - compleation is done on whole line for `debugpy'
-  ;;       - compleation for dape commands should only be valid when
-  ;;         command is starts at `bolp'
   (when (or (symbol-at-point)
             (member (buffer-substring-no-properties (1- (point)) (point))
                     (or (thread-first (dape--live-connection 'last t)
@@ -4170,14 +4168,18 @@ Send INPUT to DUMMY-PROCESS."
                  (car bounds)
                  (cdr bounds)))
            (collection
-            (mapcar (lambda (cmd)
-                      (cons (car cmd)
-                            (format " %s"
-                                    (propertize (symbol-name (cdr cmd))
-                                                'face 'font-lock-builtin-face))))
-                    (append dape-repl-commands
-                            (when dape-repl-use-shorthand
-                              (dape--repl-shorthand-alist)))))
+            ;; Add `dape-repl-commands' only if completion starts at
+            ;; `bolp' as `dape-repl-commands' is only valid if input
+            ;; `equals' command key.
+            (when (eql (car bounds) (line-beginning-position))
+              (mapcar (lambda (cmd)
+                        (cons (car cmd)
+                              (format " %s"
+                                      (propertize (symbol-name (cdr cmd))
+                                                  'face 'font-lock-builtin-face))))
+                      (append dape-repl-commands
+                              (when dape-repl-use-shorthand
+                                (dape--repl-shorthand-alist))))))
            done)
       (list
        (car bounds)
