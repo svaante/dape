@@ -610,5 +610,47 @@ Expects line with string \"breakpoint\" in source."
     (dape-test--should
      (member "*dape-source os*" (mapcar 'buffer-name (buffer-list))))))
 
+(defun dape-test--breakpoint-hits (buffer key &rest args)
+  "Helper for ert test `dape-test-breakpoint-hits'."
+  (let ((breakpoints-buffer
+         (dape--info-get-buffer-create 'dape-info-breakpoints-mode)))
+    ;; No breakpoints in *dape-info Breakpoints*
+    (with-current-buffer breakpoints-buffer
+      (revert-buffer)
+      (dape-test--should (not (dape-test--line-at-regex "^break "))))
+    ;; Set breakpoint in loop
+    (with-current-buffer buffer
+      (save-excursion
+        (dape-test--goto-line (dape-test--line-at-regex "breakpoint"))
+        (dape-breakpoint-toggle)))
+    ;; Breakpoint in buffer
+    (with-current-buffer breakpoints-buffer
+      (revert-buffer)
+      (dape-test--should (dape-test--line-at-regex "^break ")))
+    ;; Start debugging
+    (apply 'dape-test--debug buffer key args)
+    ;; Continue 4 times
+    (dotimes (_ 5)
+      (dape-test--should
+       (and (dape-test--stopped-p)
+            (dape-test--no-pending-p)))
+      (dape-continue (dape--live-connection 'stopped)))
+    ;; Debugging session over
+    (dape-test--should (not (dape--live-connection 'parent t)))
+    ;; Breakpoint in *dape-info Breakpoints*
+    (with-current-buffer breakpoints-buffer
+      (revert-buffer)
+      (dape-test--should (not (dape-test--line-at-regex "^break .*5 *$"))))))
+
+(ert-deftest dape-test-breakpoint-hits ()
+  "Test breakpoint hits."
+  (dape-test--with-files
+   ((index-buffer
+     "index.js"
+     ("for (let i = 0; i < 5; i++) {"
+      "()=>{}; // breakpoint"
+      "}")))
+   (dape-test--breakpoint-hits index-buffer 'js-debug-node)))
+
 (provide 'dape-tests)
 ;;; dape-tests.el ends here
