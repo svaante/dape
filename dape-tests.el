@@ -609,3 +609,6 @@ Expects line with string \"breakpoint\" in source."
       (dape-test--apply-to-match "^os " 'dape-info-sources-goto))
     (dape-test--should
      (member "*dape-source os*" (mapcar 'buffer-name (buffer-list))))))
+
+(provide 'dape-tests)
+;;; dape-tests.el ends here
