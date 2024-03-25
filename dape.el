@@ -2418,7 +2418,7 @@ Use SKIP-COMPILE to skip compilation."
 
 ;;; Compile
 
-(defvar dape--compile-config nil)
+(defvar-local dape--compile-config nil)
 
 (defun dape--compile-compilation-finish (buffer str)
   "Hook for `dape--compile-compilation-finish'.
@@ -2437,12 +2437,13 @@ Using BUFFER and STR."
   "Start compilation for CONFIG."
   (let ((default-directory (dape--guess-root config))
         (command (plist-get config 'compile)))
-    (setq dape--compile-config config)
-    ;; FIXME: Kill current compilation before adding hook otherwise we
-    ;;        we might call `dape' on old compilation.
-    (add-hook 'compilation-finish-functions
-              #'dape--compile-compilation-finish)
-    (funcall dape-compile-fn command)))
+    ;; TODO Is it really necessary to have `dape-compile-fn' as an
+    ;;      option as `default-directory' is set.
+    (funcall dape-compile-fn command)
+    (with-current-buffer (compilation-find-buffer)
+      (setq dape--compile-config config)
+      (add-hook 'compilation-finish-functions
+                #'dape--compile-compilation-finish nil t))))
 
 
 ;;; Memory viewer
