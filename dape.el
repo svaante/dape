@@ -2427,8 +2427,8 @@ Using BUFFER and STR."
                #'dape--compile-compilation-finish)
   (cond
    ((equal "finished\n" str)
-    (run-hook-with-args 'dape-compile-compile-hooks buffer)
-    (dape dape--compile-config 'skip-compile))
+    (dape dape--compile-config 'skip-compile)
+    (run-hook-with-args 'dape-compile-compile-hooks buffer))
    (t
     (dape--repl-message (format "* Compilation failed %s *"
                                 (string-trim-right str))))))
