@@ -802,7 +802,9 @@ If ALL-THREADS is non nil set status of all all threads to STATUS."
   "Return translate absolute PATH in FORMAT from CONN config.
 Accepted FORMAT values are local and remote.
 See `dape-configs' symbols prefix-local prefix-remote."
-  (if-let* ((config (dape--config conn))
+  (if-let* ((config (dape--config
+                     ;; Fallback to last connection
+                     (or conn dape--connection)))
             (path
              (expand-file-name
               path
