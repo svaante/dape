@@ -85,7 +85,7 @@ Dape has no dependencies outside of core Emacs packages, and tries to use get as
 
 Dape takes a slightly different approach to configuration.
 + =Dape= does not support ~launch.json~ files, if per project configuration is needed use ~dir-locals~ and ~dape-command~.
-+ =Dape= enhances ergonomics within the minibuffer by allowing users to modify or add PLIST entries to an existing configuration using options. For example ~dape-config :cwd default-directory :program ＂/home/user/b.out＂ :compile ＂gcc -g -o b.out main.c＂~.
++ =Dape= enhances ergonomics within the minibuffer by allowing users to modify or add PLIST entries to an existing configuration using options. For example ~dape-config :cwd default-directory :program ＂/home/user/b.out＂ compile ＂gcc -g -o b.out main.c＂~.
 + No magic, no special variables like =${workspaceFolder}=. Instead, functions and variables are resolved before starting a new session.
 + Tries to be envision to how debug adapter configuration would be implemented in Emacs if vscode never existed.
 
