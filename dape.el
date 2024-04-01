@@ -1175,10 +1175,16 @@ See `dape--connection-selected'."
 
 (defun dape--live-connections ()
   "Get all live connections."
-  (when (and dape--connection (jsonrpc-running-p dape--connection))
-    (cons dape--connection
-          (seq-filter 'jsonrpc-running-p
-                      (reverse (dape--children dape--connection))))))
+  (cl-labels ((live-connections-1 (conn)
+                (when (and conn (jsonrpc-running-p conn))
+                  (cons conn
+                        (mapcan #'live-connections-1
+                                ;; New children are `push'ed onto the
+                                ;; children list, therefore children
+                                ;; are `reverse'd to guarantee LIFO
+                                ;; order.
+                                (reverse (dape--children conn)))))))
+    (live-connections-1 dape--connection)))
 
 (defclass dape-connection (jsonrpc-process-connection)
   ((last-id
