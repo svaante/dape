@@ -2036,9 +2036,10 @@ symbol `dape-connection'."
           'dape-repl-error-face)
          ;; barf connection stderr
          (when-let* ((proc (jsonrpc--process conn))
-                     (buffer (process-get proc 'jsonrpc-stderr)))
-           (with-current-buffer buffer
-             (dape--repl-message (buffer-string) 'dape-repl-error-face)))
+                     (buffer (process-get proc 'jsonrpc-stderr))
+                     ((buffer-live-p buffer))
+                     (stderr (with-current-buffer buffer (buffer-string))))
+           (dape--repl-message stderr 'dape-repl-error-face))
          ;; barf server stderr
          (when-let* ((server-proc (dape--server-process conn))
                      (buffer (process-get server-proc 'stderr-buffer)))
