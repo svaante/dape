@@ -2,6 +2,13 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.10.0
+- Remove "Selecting deleted buffer" in jsonrcp shutdown error message
+- Handle child connections of depth => 2
+- Make sure that =compile= starts a new compilation
+- Add "Hits" to breakpoint info buffer
+- Add node attach configuration
+
 * Version 0.9.0
 - Enhanced support for multi-connection adapters
 - Threads buffer shows all threads across connections
