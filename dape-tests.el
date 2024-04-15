@@ -370,8 +370,8 @@ Expects line with string \"breakpoint\" in source."
        (equal (line-number-at-pos)
               (dape-test--line-at-regex "breakpoint"))))
     ;; contents of watch buffer
-    (with-current-buffer (dape-test--should
-                          (dape--info-get-live-buffer 'dape-info-watch-mode))
+    (with-current-buffer (dape--info-get-buffer-create 'dape-info-watch-mode)
+      (dape-test--revert-buffer)
       (dape-test--should
        (and (dape-test--line-at-regex "^  a")
             (dape-test--line-at-regex "^\\+ b")))
@@ -388,11 +388,13 @@ Expects line with string \"breakpoint\" in source."
        (dape-test--line-at-regex "^  a *0"))
       (cl-letf (((symbol-function 'read-string)
                  (lambda (&rest _) "99")))
-        (dape-test--apply-to-match "^  a" 'dape-info-variable-edit))
+        (dape-test--apply-to-match "^  a *0" 'dape-info-variable-edit))
+      (dape-test--revert-buffer)
       (dape-test--should
        (dape-test--line-at-regex "^  a *99"))
       ;; watch removal
       (dape-test--apply-to-match "^  a" 'dape-info-scope-watch-dwim)
+      (dape-test--revert-buffer)
       (dape-test--should
        (not (dape-test--line-at-regex "^  a"))))))
 
