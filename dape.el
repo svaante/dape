@@ -3053,7 +3053,7 @@ Used there as scope index.")
 (defun dape--info-buffer-p (mode &optional identifier)
   "Is buffer of MODE with IDENTIFIER.
 Uses `dape--info-buffer-identifier' as IDENTIFIER."
-  (and (eq major-mode mode)
+  (and (derived-mode-p mode)
        (or (not identifier)
            (equal dape--info-buffer-identifier identifier))))
 
@@ -3224,7 +3224,7 @@ displayed."
           (unless (seq-find (lambda (buffer)
                               (and (get-buffer-window buffer)
                                    (with-current-buffer buffer
-                                     (memq major-mode group))))
+                                     (derived-mode-p group))))
                             (dape--info-buffer-list))
             (setq buffer-displayed-p t)
             (dape--display-buffer
@@ -3255,7 +3255,7 @@ displayed."
   "Store related buffers in `dape--info-buffer-related'."
   (setq dape--info-buffer-related
         (cl-loop with group =
-                 (cl-find-if (lambda (group) (memq major-mode group))
+                 (cl-find-if 'derived-mode-p
                              dape-info-buffer-window-groups)
                  with conn = (dape--live-connection 'stopped t)
                  with scopes = (plist-get (dape--current-stack-frame conn)
@@ -3920,7 +3920,10 @@ plist are used as keymap for each sections defined by the key."
 
 ;;; Info watch buffer
 
-(defvar dape-info-watch-mode-map (copy-keymap dape-info-scope-mode-map)
+(defvar dape-info-watch-mode-map
+  (let ((map (copy-keymap dape-info-scope-mode-map)))
+    (define-key map "\C-x\C-q" 'dape-info-watch-edit-mode)
+    map)
   "Local keymap for dape watch buffer.")
 
 (define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"
@@ -3982,6 +3985,51 @@ plist are used as keymap for each sections defined by the key."
                                                       'value dape-info-variable-value-map
                                                       'prefix dape-info-variable-prefix-map))
                  finally (insert (gdb-table-string table " "))))))))
+
+(defvar dape--info-watch-edit-font-lock-keywords
+  '(("\\(.+\\)"  (1 font-lock-variable-name-face))))
+
+(defvar dape-info-watch-edit-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map text-mode-map)
+    (define-key map "\C-c\C-c" 'dape-info-watch-finish-edit)
+    (define-key map "\C-c\C-k" 'dape-info-watch-abort-changes)
+    map)
+  "Local keymap for dape watch buffer in edit mode.")
+
+(define-derived-mode dape-info-watch-edit-mode dape-info-watch-mode "Watch Edit"
+  "Major mode for editing watch info."
+  (set-buffer-modified-p nil)
+  (setq revert-buffer-function #'dape--info-revert)
+  (revert-buffer)
+  (setq buffer-undo-list nil
+        buffer-read-only nil
+        font-lock-defaults '(dape--info-watch-edit-font-lock-keywords))
+  (message "%s" (substitute-command-keys
+	         "Press \\[dape-info-watch-finish-edit] when finished \
+or \\[dape-info-watch-abort-changes] to abort changes")))
+
+(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-edit-mode))
+                                          &optional _ignore-auto _noconfirm _preserve-modes)
+  "Revert buffer function for MAJOR-MODE `dape-info-watch-edit-mode'."
+  (dape--info-update-with
+    (cl-loop for watch in dape--watched
+             for name = (plist-get watch :name)
+             do (insert "  " name "\n"))))
+
+(defun dape-info-watch-abort-changes ()
+  "Abort changes and return to `dape-info-watch-mode'."
+  (interactive)
+  (dape-info-watch-mode)
+  (revert-buffer))
+
+(defun dape-info-watch-finish-edit ()
+  "Update watched variables and return to `dape-info-watch-mode'."
+  (interactive)
+  (setq dape--watched
+        (mapcar (lambda (name) (list :name name))
+                (split-string (buffer-string))))
+  (dape-info-watch-abort-changes))
 
 
 ;;; REPL buffer
