@@ -3224,7 +3224,7 @@ displayed."
           (unless (seq-find (lambda (buffer)
                               (and (get-buffer-window buffer)
                                    (with-current-buffer buffer
-                                     (derived-mode-p group))))
+                                     (apply 'derived-mode-p group))))
                             (dape--info-buffer-list))
             (setq buffer-displayed-p t)
             (dape--display-buffer
@@ -3255,7 +3255,8 @@ displayed."
   "Store related buffers in `dape--info-buffer-related'."
   (setq dape--info-buffer-related
         (cl-loop with group =
-                 (cl-find-if 'derived-mode-p
+                 (cl-find-if (lambda (group)
+                               (apply 'derived-mode-p group))
                              dape-info-buffer-window-groups)
                  with conn = (dape--live-connection 'stopped t)
                  with scopes = (plist-get (dape--current-stack-frame conn)
