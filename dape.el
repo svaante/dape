@@ -4791,7 +4791,7 @@ See `eldoc-documentation-functions', for more infomation."
                               'unknown))
              'face 'font-lock-doc-face)
             (when-let ((reason (and conn (dape--state-reason conn))))
-              (format "[%s]" (propertize reason
+              (format "/%s" (propertize reason
                                         'face 'font-lock-doc-face)))
             (when-let* ((conns (dape--live-connections))
                         (nof-conns
