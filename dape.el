@@ -3699,8 +3699,6 @@ current buffer with CONN config."
 
 (dape--command-at-line dape-info-sources-goto (dape--info-source)
   "Goto source."
-  ;; TODO Should be storing connection in `dape--info-source' instead of
-  ;;      guessing
   (let ((conn (dape--live-connection 'last t))
         (source (list :source dape--info-source)))
     (dape--with-request (dape--source-ensure conn source)
