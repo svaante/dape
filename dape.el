@@ -1226,6 +1226,9 @@ See `dape--connection-selected'."
    (state
     :accessor dape--state :initform nil
     :documentation "Session state.")
+   (state-reason
+    :accessor dape--state-reason :initform nil
+    :documentation "Reason for state.")
    (exception-description
     :accessor dape--exception-description :initform nil
     :documentation "Exception description.")
@@ -1834,7 +1837,7 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
       (&key threadId reason allThreadsStopped hitBreakpointIds
             &allow-other-keys)
       body
-    (dape--update-state conn 'stopped)
+    (dape--update-state conn 'stopped reason)
     (dape--maybe-select-thread conn threadId 'force)
     ;; Reset stack id to force a new frame in
     ;; `dape--current-stack-frame'.
@@ -1842,19 +1845,16 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
           ;; Reset exception description
           (dape--exception-description conn) nil)
     ;; Important to do this before `dape--update' to be able to setup
-    (pcase reason
-      ;; Output exception info in overlay and repl
-      ("exception"
-       (let* ((texts
-               (seq-filter 'stringp
-                           (list (plist-get body :text)
-                                 (plist-get body :description))))
-              (str (mapconcat 'identity texts ":\n\t")))
-         (setf (dape--exception-description conn) str)
-         (dape--repl-message str 'dape-repl-error-face)))
-      (_
-       ;; TODO Would be nice to display other `reasons'
-       ))
+    ;; breakpoints description.
+    (when (equal reason "exception")
+      ;; Output exception info in overlay and REPL
+      (let* ((texts
+              (seq-filter 'stringp
+                          (list (plist-get body :text)
+                                (plist-get body :description))))
+             (str (mapconcat 'identity texts ":\n\t")))
+        (setf (dape--exception-description conn) str)
+        (dape--repl-message str 'dape-repl-error-face)))
     ;; Update breakpoints hits
     (dape--breakpoints-stopped hitBreakpointIds)
     ;; Update `dape--threads'
@@ -4776,9 +4776,10 @@ See `eldoc-documentation-functions', for more infomation."
 
 ;;; Mode line
 
-(defun dape--update-state (conn state)
+(defun dape--update-state (conn state &optional reason)
   "Update Dape mode line with STATE symbol for adapter CONN."
   (setf (dape--state conn) state)
+  (setf (dape--state-reason conn) reason)
   (force-mode-line-update t))
 
 (defun dape--mode-line-format ()
@@ -4791,6 +4792,9 @@ See `eldoc-documentation-functions', for more infomation."
              (format "%s" (or (and conn (dape--state conn))
                               'unknown))
              'face 'font-lock-doc-face)
+            (when-let ((reason (and conn (dape--state-reason conn))))
+              (format "[%s]" (propertize reason
+                                        'face 'font-lock-doc-face)))
             (when-let* ((conns (dape--live-connections))
                         (nof-conns
                          (length (cl-remove-if-not 'dape--threads conns)))
