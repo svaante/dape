@@ -1500,7 +1500,7 @@ See `dape-request' for expected CB signature."
 (defun dape--update-threads (conn cb)
   "Update threads for CONN in-place if possible.
 See `dape-request' for expected CB signature."
-  ;; TODO Should debouce these request as they really flood the pipe
+  ;; TODO Should de-bounce these request as they really flood the pipe
   ;;      when triggered from "thread" event.
   (dape--with-request-bind
       ((&key threads &allow-other-keys) error)
