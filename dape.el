@@ -2868,7 +2868,7 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
      with breakpoints = (with-temp-buffer
                           (insert-file-contents file)
                           (goto-char (point-min))
-                          (read (current-buffer)))
+                          (nreverse (read (current-buffer))))
      for (file point . args) in breakpoints
      do (ignore-errors
           (with-current-buffer (find-file-noselect file)
