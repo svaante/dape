@@ -1039,7 +1039,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                (seq-filter (lambda (buffer)
                              (unless (and skip-process-buffers
                                           (get-buffer-process buffer))
-                               (string-match-p "\\*dape-.+\\*"
+                               (string-match-p "^\\*dape-.+\\*"
                                                (buffer-name buffer)))))
                (seq-do (lambda (buffer)
                          (condition-case err
