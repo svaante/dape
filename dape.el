@@ -4278,14 +4278,16 @@ Send INPUT to DUMMY-PROCESS."
   (let* ((bounds (or (bounds-of-thing-at-point 'word)
                      (cons (point) (point))))
          (trigger-chars
-          (or (thread-first (dape--live-connection 'last t)
-                            (dape--capabilities)
-                            ;; completionTriggerCharacters is an
-                            ;; unofficial array of string to trigger
-                            ;; completion on.
-                            (plist-get :completionTriggerCharacters)
-                            (append nil))
-              '(".")))
+          (when-let ((conn (or (dape--live-connection 'stopped t)
+                               (dape--live-connection 'last t))))
+            (or (thread-first conn
+                              (dape--capabilities)
+                              ;; completionTriggerCharacters is an
+                              ;; unofficial array of string to trigger
+                              ;; completion on.
+                              (plist-get :completionTriggerCharacters)
+                              (append nil))
+                '("."))))
          (collection
           ;; Add `dape-repl-commands' only if completion starts at
           ;; beginning of prompt line.
