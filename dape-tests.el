@@ -620,7 +620,7 @@ Expects line with string \"breakpoint\" in source."
     ;; No breakpoints in *dape-info Breakpoints*
     (with-current-buffer breakpoints-buffer
       (revert-buffer)
-      (dape-test--should (not (dape-test--line-at-regex "^break "))))
+      (dape-test--should (not (dape-test--line-at-regex "index.js:2"))))
     ;; Set breakpoint in loop
     (with-current-buffer buffer
       (save-excursion
@@ -629,7 +629,7 @@ Expects line with string \"breakpoint\" in source."
     ;; Breakpoint in buffer
     (with-current-buffer breakpoints-buffer
       (revert-buffer)
-      (dape-test--should (dape-test--line-at-regex "^break ")))
+      (dape-test--should (dape-test--line-at-regex "index.js:2")))
     ;; Start debugging
     (apply 'dape-test--debug buffer key args)
     ;; Continue 4 times
@@ -642,7 +642,7 @@ Expects line with string \"breakpoint\" in source."
     (with-current-buffer breakpoints-buffer
       (dape-test--revert-buffer)
       (dape-test--should
-       (dape-test--line-at-regex "^break .*5 *$")))))
+       (dape-test--line-at-regex "index.js:2 .*5 *$")))))
 
 (ert-deftest dape-test-breakpoint-hits ()
   "Test breakpoint hits."

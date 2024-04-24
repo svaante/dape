@@ -558,11 +558,17 @@ left-to-right display order of the properties."
   :type '(choice (const :tag "Truncate string at new line" line)
                  (const :tag "No formatting" nil)))
 
+(defcustom dape-info-breakpoint-source-line-width 15
+  "Width of source line in info breakpoint buffer."
+  :type '(choice
+          (const :tag "Don't show source line" nil)
+          integer))
+
 (defcustom dape-info-header-scope-max-name 15
   "Max length of scope name in `header-line-format'."
   :type 'integer)
 
-(defcustom dape-info-file-name-max 30
+(defcustom dape-info-file-name-max 25
   "Max length of file name in dape info buffers."
   :type 'integer)
 
@@ -3419,68 +3425,53 @@ displayed."
                            (> hits 0)))
                        dape--breakpoints)))
       (gdb-table-add-row table
-                         `("Type" "On" "Where"
-                           ,@(when with-hits-p '("Hits"))
-                           "What"))
+                         (list "A" "Where" (when with-hits-p "H") "What"))
       (dolist (breakpoint (reverse dape--breakpoints))
         (when-let* ((buffer (overlay-buffer breakpoint))
                     (line (with-current-buffer buffer
                             (line-number-at-pos (overlay-start breakpoint)))))
           (gdb-table-add-row
            table
-           `(,(cond
-               ((overlay-get breakpoint :log)
-                "log")
-               ((overlay-get breakpoint :expression)
-                "cond")
-               ((overlay-get breakpoint :hits)
-                "hits")
-               ("break"))
-             ,(if (overlay-get breakpoint 'dape-verified)
-                  (propertize "y" 'font-lock-face
-                              font-lock-warning-face)
-                (propertize "" 'font-lock-face
-                            font-lock-comment-face))
-             ,(if-let (file (buffer-file-name buffer))
-                  (dape--format-file-line file line)
-                (buffer-name buffer))
-             ,@(when with-hits-p
-                 (if-let ((hits (overlay-get breakpoint 'dape-hits)))
-                     (list (format "%s" hits))
-                   '("")))
-             ,(cond
-               ((overlay-get breakpoint :log)
-                (propertize (overlay-get breakpoint :log)
-                            'face 'dape-log-face))
-               ((overlay-get breakpoint :expression)
-                (propertize (overlay-get breakpoint :expression)
-                            'face 'dape-expression-face))
-               ((overlay-get breakpoint :hits)
-                (propertize (overlay-get breakpoint :hits)
-                            'face 'dape-hits-face))
-               ("")))
-           (list
-            'dape--info-breakpoint breakpoint
-            'keymap dape-info-breakpoints-line-map
-            'mouse-face 'highlight
-            'help-echo "mouse-2, RET: visit breakpoint"))))
+           `(,(if (overlay-get breakpoint 'dape-verified)
+                  (propertize "y" 'font-lock-face font-lock-warning-face)
+                "n")
+             ,(concat
+               (if-let (file (buffer-file-name buffer))
+                   (dape--format-file-line file line)
+                 (buffer-name buffer))
+               (with-current-buffer buffer
+                 (save-excursion
+                   (goto-char (overlay-start breakpoint))
+                   (truncate-string-to-width
+                    (concat " " (string-trim (thing-at-point 'line)))
+                    dape-info-breakpoint-source-line-width))))
+             ,(when with-hits-p
+                (if-let ((hits (overlay-get breakpoint 'dape-hits)))
+                    (format "%s" hits)
+                  ""))
+             ,(when-let ((after-string (overlay-get breakpoint 'after-string)))
+                (substring after-string 1)))
+           (append
+            (unless (overlay-get breakpoint 'dape-verified)
+              '(face shadow))
+            (list
+             'dape--info-breakpoint breakpoint
+             'keymap dape-info-breakpoints-line-map
+             'mouse-face 'highlight
+             'help-echo "mouse-2, RET: visit breakpoint")))))
       (dolist (exception dape--exceptions)
         (gdb-table-add-row
          table
-         `("excep"
-           ,(if (plist-get exception :enabled)
-                (propertize "y" 'font-lock-face
-                            font-lock-warning-face)
-              (propertize "n" 'font-lock-face
-                          font-lock-comment-face))
-           ,(plist-get exception :label)
-           ,@(when with-hits-p "")
-           "" "")
+         `(,(if (plist-get exception :enabled)
+                (propertize "y" 'font-lock-face font-lock-warning-face)
+              (propertize "n" 'font-lock-face font-lock-doc-face))
+           ,(format "Exceptions: %s" (plist-get exception :label)) nil nil)
          (list
           'dape--info-exception exception
           'mouse-face 'highlight
           'keymap dape-info-exceptions-line-map
           'help-echo "mouse-2, RET: toggle exception")))
+      (setf (gdb-table-right-align table) t)
       (insert (gdb-table-string table " ")))))
 
 
