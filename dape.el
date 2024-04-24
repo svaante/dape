@@ -1535,17 +1535,19 @@ See `dape-request' for expected CB signature."
   "Update stack trace in THREAD plist with NOF frames by adapter CONN.
 See `dape-request' for expected CB signature."
   (let ((current-nof (length (plist-get thread :stackFrames)))
+        (total-frames (plist-get thread :totalFrames))
         (delayed-stack-trace-p
          (dape--capable-p conn :supportsDelayedStackTraceLoading)))
     (cond
      ((or (not (equal (plist-get thread :status) 'stopped))
           (not (integerp (plist-get thread :id)))
+          (eql current-nof total-frames)
           (and delayed-stack-trace-p (<= nof current-nof))
           (and (not delayed-stack-trace-p) (> current-nof 0)))
       (dape--request-return cb))
      (t
       (dape--with-request-bind
-          ((&key stackFrames &allow-other-keys) error)
+          ((&key stackFrames totalFrames &allow-other-keys) error)
           (dape-request conn
                         "stackTrace"
                         `(:threadId
@@ -1567,6 +1569,8 @@ See `dape-request' for expected CB signature."
                      (append (plist-get thread :stackFrames)
                              stackFrames
                              nil))))
+        (plist-put thread :totalFrames
+                   (and (numberp totalFrames) totalFrames))
         (dape--request-return cb error))))))
 
 (defun dape--variables (conn object cb)
@@ -1693,6 +1697,7 @@ If SKIP-DISPLAY is non nil refrain from displaying selected stack."
   (let ((current-thread (dape--current-thread conn)))
     (unless skip-clear-stack-frames
       (dolist (thread (dape--threads conn))
+        (plist-put thread :totalFrames nil)
         (plist-put thread :stackFrames nil)))
     (dape--with-request (dape--stack-trace conn current-thread 1)
       (dape--update-stack-pointers conn skip-stack-pointer-flash skip-display)
