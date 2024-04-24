@@ -2863,6 +2863,9 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (delete-overlay overlay)
     (unless skip-update
       (dolist (conn (dape--live-connections))
+        ;; FIXME If breakpoints stick for one connections but fails
+        ;;       for another in the same tree connection tree, keep the
+        ;;       breakpoint verified
         (dape--set-breakpoints-in-buffer conn buffer)))
     (dape--margin-cleanup buffer))
   ;; If we have an stopped connection we also have an stack pointer
