@@ -3220,33 +3220,38 @@ Header line is custructed from buffer local
             " "))
          dape--info-buffer-related)))
 
-(defun dape--info-call-update-with (fn &optional buffer)
+(defun dape--info-call-update-with (fn)
   "Helper for `dape--info-revert' functions.
 Erase BUFFER content and updates `header-line-format'.
 FN is expected to update insert buffer contents, update
 `dape--info-buffer-related' and `header-line-format'."
-  (setq buffer (or buffer (current-buffer)))
-  (with-current-buffer buffer
-    (unless (derived-mode-p 'dape-info-parent-mode)
-      (error "Trying to update non info buffer"))
-    ;; Would be nice with replace-buffer-contents
-    ;; But it seams to messes up string properties
-    (let ((line (line-number-at-pos (point) t))
-          (old-window (selected-window)))
-      ;; Still don't know any better way of keeping window scroll?
-      (when-let ((window (get-buffer-window buffer)))
-        (select-window window))
-      (save-window-excursion
-        (let ((inhibit-read-only t))
-          (erase-buffer)
-          (funcall fn))
-        (ignore-errors
-          (goto-char (point-min))
-          (forward-line (1- line)))
-        (dape--info-set-related-buffers)
-        (dape--info-set-header-line-format))
-      (when old-window
-        (select-window old-window)))))
+  ;; Save buffer as `select-window' sets buffer
+  (save-current-buffer
+    ;; FIXME: This guarantees that only info buffers are erased if
+    ;;        something unexpected happens with the current-buffer.
+    ;;        If buffer is killed while waiting for an response in
+    ;;        an caller of this function current-buffer *will* change
+    ;;        and another dape info buffer will be reused for this
+    ;;        update and that is not correct.
+    (when (derived-mode-p 'dape-info-parent-mode)
+      ;; Would be nice with replace-buffer-contents
+      ;; But it seams to messes up string properties
+      (let ((line (line-number-at-pos (point) t))
+            (old-window (selected-window)))
+        ;; Still don't know any better way of keeping window scroll?
+        (when-let ((window (get-buffer-window)))
+          (select-window window))
+        (save-window-excursion
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (funcall fn))
+          (ignore-errors
+            (goto-char (point-min))
+            (forward-line (1- line)))
+          (dape--info-set-related-buffers)
+          (dape--info-set-header-line-format))
+        (when old-window
+          (select-window old-window))))))
 
 (defmacro dape--info-update-with (&rest body)
   "Create an update function from BODY.
