@@ -3191,6 +3191,22 @@ REVERSED selects previous."
   (when (derived-mode-p 'dape-info-parent-mode)
     (ignore-errors (revert-buffer))))
 
+;; TODO Should maybe be a custom
+(defvar dape--info-debounce-time 0.1
+  "Number of seconds to debounce `revert-buffer' of info buffers.")
+
+(defvar-local dape--info-debounce-timer nil
+  "Debounce context for `dape-info-parent-mode' buffers.")
+
+(cl-defmethod dape--info-revert :around (&rest _)
+  "Wrap `dape--info-revert' methods within an debounce context.
+Each buffers store its own debounce context."
+  (let ((buffer (current-buffer)))
+    (dape--with-debounce dape--info-debounce-timer dape--info-debounce-time
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (cl-call-next-method))))))
+
 (define-derived-mode dape-info-parent-mode special-mode ""
   "Generic mode to derive all other Dape gud buffer modes from."
   :interactive nil
@@ -3201,6 +3217,7 @@ REVERSED selects previous."
   (setq-local buffer-read-only t
               truncate-lines t
               cursor-in-non-selected-windows nil
+              dape--info-debounce-timer (timer-create)
               ;; FIXME Is `revert-buffer-in-progress-p' is not
               ;;       respected as most of the work is done in an
               ;;       callback.
