@@ -741,6 +741,27 @@ See `cl-destructuring-bind' for bind forms."
   (when (functionp cb)
     (funcall cb nil error)))
 
+(defun dape--call-with-debounce (timer backoff fn)
+  "Call FN with a debounce of BACKOFF seconds.
+This function utilizes TIMER to store state.  It cancels the TIMER
+and schedules FN to run after current time + BACKOFF seconds.
+If BACKOFF is non-zero, FN will be evaluated within timer context."
+  (cond
+   ((zerop backoff)
+    (cancel-timer timer)
+    (funcall fn))
+   (t
+    (cancel-timer timer)
+    (timer-set-time timer (timer-relative-time nil backoff))
+    (timer-set-function timer fn)
+    (timer-activate timer))))
+
+(defmacro dape--with-debounce (timer backoff &rest body)
+  "Eval BODY forms with a debounce of BACKOFF seconds using TIMER.
+Helper macro for `dape--call-with-debounce'."
+  (declare (indent 2))
+  `(dape--call-with-debounce ,timer ,backoff (lambda () ,@body)))
+
 (defun dape--next-like-command (conn command)
   "Helper for interactive step like commands.
 Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
