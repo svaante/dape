@@ -776,6 +776,9 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
                             (list :granularity
                                   (symbol-name dape-stepping-granularity)))))
       (unless error
+        ;; FIXME This is known to mess up state, needs some thorough
+        ;;       testing before removed,  state should be handled by
+        ;;       event not request responses.
         (dape--update-state conn 'running)
         (dape--remove-stack-pointers)
         (dape--threads-set-status conn nil t 'running)
