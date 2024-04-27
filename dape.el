@@ -4462,6 +4462,173 @@ Empty input will rerun last command.\n\n"
       (when (called-interactively-p 'interactive)
         (select-window window)))))
 
+
+;;; Inlay hints
+
+(defcustom dape-inlay-hints nil
+  "Inlay variable hints."
+  :type '(choice
+          (const :tag "No inlay hints." nil)
+          (const :tag "Inlay current line and previous line (same as 2)." t)
+          (natnum :tag "Number of lines with hints.")))
+
+(defcustom dape-inlay-hints-variable-name-max 25
+  "Max length of variable name in inlay hints."
+  :type 'integer)
+
+(defface dape-inlay-hint-face '((t (:height 0.8 :inherit shadow)))
+  "Face used for inlay-hint overlays.")
+
+(defface dape-inlay-hint-highlight-face '((t (:height 0.8 :inherit (bold highlight))))
+  "Face used for highlighting parts of inlay-hint overlays.")
+
+(defvar dape--inlay-hint-overlays nil)
+(defvar dape--inlay-hint-debounce-timer (timer-create))
+(defvar dape--inlay-hints-symbols-fn #'dape--inlay-hint-symbols)
+(defvar dape--inlay-hint-seperator (propertize " | " 'face 'dape-inlay-hint-face))
+
+(defun dape--inlay-hint-symbols (beg end)
+  "Return list of variable candidates from BEG to END."
+  (unless (<= (- end beg) 300)
+    ;; Sanity clamp beg and end
+    (setq end (+ beg 300)))
+  (save-excursion
+    (goto-char beg)
+    (cl-loop for symbol = (thing-at-point 'symbol)
+             when
+             (and symbol
+                  (not (memql (get-text-property 0 'face symbol)
+                              '(font-lock-string-face
+                                font-lock-doc-face
+                                font-lock-comment-face))))
+             collect (list symbol) into symbols
+             for last-point = (point)
+             do (forward-thing 'symbol)
+             while (and (< last-point (point))
+                        (<= (point) end))
+             finally return (delete-dups symbols))))
+
+(defun dape--inlay-hint-add ()
+  "Create inlay hint at current line."
+  (when-let* ((ov dape--stack-position)
+              (buffer (overlay-buffer ov))
+              (new-head
+               (with-current-buffer buffer
+                 (pcase-let ((`(,beg . ,end)
+                              (save-excursion
+                                (goto-char (overlay-start ov))
+                                (beginning-of-line)
+                                (cons (point) (line-end-position)))))
+                   (unless (cl-find-if (lambda (ov)
+                                         (eq (overlay-get ov 'category)
+                                             'dape-inlay-hint))
+                                       (overlays-in beg end))
+                     (let ((new-head (make-overlay beg end)))
+                       (overlay-put new-head 'category 'dape-inlay-hint)
+                       (overlay-put new-head 'dape-symbols
+                                    (funcall dape--inlay-hints-symbols-fn
+                                             beg end))
+                       new-head))))))
+    (setq dape--inlay-hint-overlays
+          (cl-loop for inlay-hint in (cons new-head dape--inlay-hint-overlays)
+                   for i from 0
+                   if (< i (if (eq dape-inlay-hints t)
+                               2
+                             dape-inlay-hints))
+                   collect inlay-hint
+                   else do (delete-overlay inlay-hint)))))
+
+(defun dape--inlay-hint-update-1 (scopes)
+  "Helper for `dape--inlay-hint-update-1'.
+Update `dape--inlay-hint-overlays' from SCOPES."
+  (cl-loop with symbols =
+           (cl-loop for inlay-hint in dape--inlay-hint-overlays
+                    when (overlayp inlay-hint)
+                    append (overlay-get inlay-hint 'dape-symbols))
+           for scope in scopes do
+           (cl-loop for variable in (plist-get scope :variables)
+                    while symbols do
+                    (cl-loop for name = (plist-get variable :name)
+                             for cons = (assoc name symbols)
+                             while cons
+                             for (_ old-value) = cons
+                             for value = (plist-get variable :value)
+                             for updated-p = (and old-value
+                                                  (not (equal old-value value)))
+                             do
+                             (setcdr cons (list value updated-p))
+                             (setf symbols (delq cons symbols)))))
+  (cl-loop for inlay-hint in dape--inlay-hint-overlays
+           when (overlayp inlay-hint) do
+           (cl-loop with symbols = (overlay-get inlay-hint 'dape-symbols)
+                    for (symbol value update) in  symbols
+                    when value
+                    collect
+                    (format
+                     "%s %s"
+                     (propertize
+                      (format "%s:" symbol)
+                      'face 'dape-inlay-hint-face
+                     'mouse-face 'highlight
+                     'keymap
+                     (let ((map (make-sparse-keymap))
+                           (sym symbol))
+                       (define-key map [mouse-1]
+                                   (lambda (event)
+                                     (interactive "e")
+                                     (save-selected-window
+                                       (let ((start (event-start event)))
+                                         (select-window (posn-window start))
+                                         (save-excursion
+                                           (goto-char (posn-point start))
+                                           (dape-watch-dwim sym nil t))))))
+                       map)
+                     'help-echo
+                     (format "mouse-2, RET: add `%s' to watch" symbol))
+                     (propertize
+                      (truncate-string-to-width
+                       (substring value
+                                  0 (string-match-p "\n" value))
+                       dape-inlay-hints-variable-name-max nil nil t)
+                      'mouse-face 'highlight
+                      'help-echo value
+                      'face (if update 'dape-inlay-hint-highlight-face
+                              'dape-inlay-hint-face)))
+                    into after-string
+                    finally do
+                    (thread-last
+                      (mapconcat 'identity after-string dape--inlay-hint-seperator)
+                      (format "  %s")
+                      (overlay-put inlay-hint 'after-string)))))
+
+(defun dape-inlay-hints-update ()
+  "Update inlay hints."
+  (when-let* (((or (eq dape-inlay-hints t)
+                   (and (numberp dape-inlay-hints)
+                        (< 0 dape-inlay-hints))))
+              (conn (dape--live-connection 'stopped t))
+              (stack (dape--current-stack-frame conn))
+              (scopes (plist-get stack :scopes)))
+    (dape--inlay-hint-add)
+    (dape--with-debounce dape--inlay-hint-debounce-timer 0.05
+      (let ((responses 0))
+        (dolist (scope scopes)
+          (dape--with-request (dape--variables conn scope)
+            (setf responses (1+ responses))
+            (when (length= scopes responses)
+              (dape--inlay-hint-update-1 scopes))))))))
+
+(defun dape--inlay-hints-clean-up ()
+  "Delete inlay hint overlays."
+  (unless dape-active-mode
+    (dolist (inlay-hint dape--inlay-hint-overlays)
+      (when (overlayp inlay-hint)
+        (delete-overlay inlay-hint)))
+    (setq dape--inlay-hint-overlays nil)))
+
+(add-hook 'dape-update-ui-hooks #'dape-inlay-hints-update)
+;; TODO Create hook for UI cleanup (restart, quit and disconnect)
+(add-hook 'dape-active-mode-hook #'dape--inlay-hints-clean-up)
 
 
 ;;; Minibuffer config hints
