@@ -712,10 +712,11 @@ Non interactive global minor mode."
 (defmacro dape--with-request-bind (vars fn-args &rest body)
   "Call FN with ARGS and execute BODY on callback with VARS bound.
 VARS are bound from the args that the callback was invoked with.
-FN-ARGS is be an cons pair as FN . ARGS, where FN is exected to
+FN-ARGS is be an cons pair as FN . ARGS, where FN is expected to
 take an function as an argument at ARGS + 1.
-BODY is guaranteed to be evaluated with the current buffer.
-See `cl-destructuring-bind'."
+BODY is guaranteed to be evaluated with the current buffer if it's
+still live.
+See `cl-destructuring-bind' for bind forms."
   (declare (indent 2))
   (let ((old-buffer (make-symbol "old-buffer")))
     `(let ((,old-buffer (current-buffer)))
@@ -729,8 +730,9 @@ See `cl-destructuring-bind'."
 (defmacro dape--with-request (fn-args &rest body)
   "Call `dape-request' like FN with ARGS and execute BODY on callback.
 FN-ARGS is be an cons pair as FN . ARGS.
-BODY is guaranteed to be evaluated with the current buffer.
-See `dape--with-request-bind'."
+BODY is guaranteed to be evaluated with the current buffer if it's
+still live.
+See `cl-destructuring-bind' for bind forms."
   (declare (indent 1))
   `(dape--with-request-bind (&rest _) ,fn-args ,@body))
 
