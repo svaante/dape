@@ -1452,32 +1452,33 @@ See `dape-request' for expected CB signature."
                    :path (dape--path conn (buffer-file-name buffer) 'remote)))))))
     (dape--with-request-bind
         ((&key breakpoints &allow-other-keys) error)
-        (dape-request conn
-                      "setBreakpoints"
-                      (list
-                       :source source
-                       :breakpoints
-                       (cl-map 'vector
-                               (lambda (overlay line)
-                                 (let (plist it)
-                                   (setq plist (list :line line))
-                                   (cond
-                                    ((setq it (overlay-get overlay :log))
-                                     (if (dape--capable-p conn :supportsLogPoints)
-                                         (setq plist (plist-put plist :logMessage it))
-                                       (dape--repl-message "* Adapter does not support log breakpoints *")))
-                                    ((setq it (overlay-get overlay :expression))
-                                     (if (dape--capable-p conn :supportsConditionalBreakpoints)
-                                         (setq plist (plist-put plist :condition it))
-                                       (dape--repl-message "* Adapter does not support expression breakpoints *")))
-                                    ((setq it (overlay-get overlay :hits))
-                                     (if (dape--capable-p conn :supportsHitConditionalBreakpoints)
-                                         (setq plist (plist-put plist :hitCondition it))
-                                       (dape--repl-message "* Adapter does not support hits breakpoints *"))))
-                                   plist))
-                               overlays
-                               lines)
-                       :lines (apply 'vector lines)))
+        (dape-request
+         conn
+         "setBreakpoints"
+         (list
+          :source source
+          :breakpoints
+          (cl-map 'vector
+                  (lambda (overlay line)
+                    (let (plist it)
+                      (setq plist (list :line line))
+                      (cond
+                       ((setq it (overlay-get overlay :log))
+                        (if (dape--capable-p conn :supportsLogPoints)
+                            (setq plist (plist-put plist :logMessage it))
+                          (dape--repl-message "* Adapter does not support log breakpoints *")))
+                       ((setq it (overlay-get overlay :expression))
+                        (if (dape--capable-p conn :supportsConditionalBreakpoints)
+                            (setq plist (plist-put plist :condition it))
+                          (dape--repl-message "* Adapter does not support expression breakpoints *")))
+                       ((setq it (overlay-get overlay :hits))
+                        (if (dape--capable-p conn :supportsHitConditionalBreakpoints)
+                            (setq plist (plist-put plist :hitCondition it))
+                          (dape--repl-message "* Adapter does not support hits breakpoints *"))))
+                      plist))
+                  overlays
+                  lines)
+          :lines (apply 'vector lines)))
       (cl-loop for breakpoint across breakpoints
                for overlay in overlays
                do (dape--breakpoint-update conn overlay breakpoint))
