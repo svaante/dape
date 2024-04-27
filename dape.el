@@ -2542,6 +2542,7 @@ Using BUFFER and STR."
 
 (defun dape--memory-revert (&optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-memory-mode'."
+  ;; TODO Add `dape--with-debounce'
   (let* ((conn (dape--live-connection 'last))
          (write-capable-p (dape--capable-p conn :supportsWriteMemoryRequest)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
