@@ -2779,8 +2779,9 @@ contents."
 
 (defun dape--breakpoints-reset ()
   "Reset breakpoints hits."
-  (cl-loop for ov in dape--breakpoints
-           do (overlay-put ov 'dape-hits nil)))
+  (cl-loop for ov in dape--breakpoints do
+           (overlay-put ov 'dape-verified-plist nil)
+           (overlay-put ov 'dape-hits nil)))
 
 (defun dape--breakpoints-stopped (hit-breakpoint-ids)
   "Increment `dape-hits' from array of HIT-BREAKPOINT-IDS."
@@ -2901,9 +2902,6 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (delete-overlay overlay)
     (unless skip-update
       (dolist (conn (dape--live-connections))
-        ;; FIXME If breakpoints stick for one connections but fails
-        ;;       for another in the same tree connection tree, keep the
-        ;;       breakpoint verified
         (dape--set-breakpoints-in-buffer conn buffer)))
     (dape--margin-cleanup buffer))
   ;; If we have an stopped connection we also have an stack pointer
@@ -2918,7 +2916,9 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (let ((id (plist-get breakpoint :id))
         (verified (eq (plist-get breakpoint :verified) t)))
     (overlay-put overlay 'dape-id id)
-    (overlay-put overlay 'dape-verified verified)
+    (overlay-put overlay 'dape-verified-plist
+                 (plist-put (overlay-get overlay 'dape-verified-plist)
+                            conn verified))
     (run-hooks 'dape-update-ui-hooks))
   (when-let* ((old-buffer (overlay-buffer overlay))
               (old-line (with-current-buffer old-buffer
@@ -3479,35 +3479,39 @@ displayed."
         (when-let* ((buffer (overlay-buffer breakpoint))
                     (line (with-current-buffer buffer
                             (line-number-at-pos (overlay-start breakpoint)))))
-          (gdb-table-add-row
-           table
-           `(,(if (overlay-get breakpoint 'dape-verified)
-                  (propertize "y" 'font-lock-face font-lock-warning-face)
-                "n")
-             ,(concat
-               (if-let (file (buffer-file-name buffer))
-                   (dape--format-file-line file line)
-                 (buffer-name buffer))
-               (with-current-buffer buffer
-                 (save-excursion
-                   (goto-char (overlay-start breakpoint))
-                   (truncate-string-to-width
-                    (concat " " (string-trim (thing-at-point 'line)))
-                    dape-info-breakpoint-source-line-width))))
-             ,(when with-hits-p
-                (if-let ((hits (overlay-get breakpoint 'dape-hits)))
-                    (format "%s" hits)
-                  ""))
-             ,(when-let ((after-string (overlay-get breakpoint 'after-string)))
-                (substring after-string 1)))
-           (append
-            (unless (overlay-get breakpoint 'dape-verified)
-              '(face shadow))
-            (list
-             'dape--info-breakpoint breakpoint
-             'keymap dape-info-breakpoints-line-map
-             'mouse-face 'highlight
-             'help-echo "mouse-2, RET: visit breakpoint")))))
+          (let* ((verified-plist (overlay-get breakpoint 'dape-verified-plist))
+                 (verified-p (cl-find-if (lambda (conn)
+                                           (plist-get verified-plist conn))
+                                         (dape--live-connections))))
+            (gdb-table-add-row
+             table
+             `(,(if verified-p
+                    (propertize "y" 'font-lock-face font-lock-warning-face)
+                  "n")
+               ,(concat
+                 (if-let (file (buffer-file-name buffer))
+                     (dape--format-file-line file line)
+                   (buffer-name buffer))
+                 (with-current-buffer buffer
+                   (save-excursion
+                     (goto-char (overlay-start breakpoint))
+                     (truncate-string-to-width
+                      (concat " " (string-trim (thing-at-point 'line)))
+                      dape-info-breakpoint-source-line-width))))
+               ,(when with-hits-p
+                  (if-let ((hits (overlay-get breakpoint 'dape-hits)))
+                      (format "%s" hits)
+                    ""))
+               ,(when-let ((after-string (overlay-get breakpoint 'after-string)))
+                  (substring after-string 1)))
+             (append
+              (unless verified-p
+                '(face shadow))
+              (list
+               'dape--info-breakpoint breakpoint
+               'keymap dape-info-breakpoints-line-map
+               'mouse-face 'highlight
+               'help-echo "mouse-2, RET: visit breakpoint"))))))
       (dolist (exception dape--exceptions)
         (gdb-table-add-row
          table
