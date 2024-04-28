@@ -558,8 +558,8 @@ left-to-right display order of the properties."
   :type '(choice (const :tag "Truncate string at new line" line)
                  (const :tag "No formatting" nil)))
 
-(defcustom dape-info-breakpoint-source-line-width 15
-  "Width of source line in info breakpoint buffer."
+(defcustom dape-info-breakpoint-source-line-max 15
+  "Max length of source line in info breakpoint buffer."
   :type '(choice
           (const :tag "Don't show source line" nil)
           integer))
@@ -3492,7 +3492,7 @@ displayed."
                      (goto-char (overlay-start breakpoint))
                      (truncate-string-to-width
                       (concat " " (string-trim (thing-at-point 'line)))
-                      dape-info-breakpoint-source-line-width))))
+                      dape-info-breakpoint-source-line-max))))
                ,(when with-hits-p
                   (if-let ((hits (overlay-get breakpoint 'dape-hits)))
                       (format "%s" hits)
