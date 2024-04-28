@@ -2608,7 +2608,7 @@ Using BUFFER and STR."
 (defun dape--memory-print-current-point-info (&rest _ignored)
   "Print address at point."
   (let ((addr (+ (hexl-current-address) (dape--memory-address-number))))
-    (format "Current address is %d/0x%08x" addr addr)))
+    (format "Current memory address is %d/0x%08x" addr addr)))
 
 (define-derived-mode dape-memory-mode hexl-mode "Memory"
   "Mode for reading and writing memory."
