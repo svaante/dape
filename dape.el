@@ -628,13 +628,17 @@ The hook is run with one argument, the compilation buffer."
   "Show hints in mini buffer."
   :type 'boolean)
 
-(defcustom dape-debug nil
-  "Print debug info in *dape-repl* *dape-connection events* buffers."
-  :type 'boolean)
+(defcustom dape-ui-debounce-time 0.1
+  "Number of seconds to debounce `revert-buffer' for UI buffers."
+  :type 'float)
 
 (defcustom dape-request-timeout jsonrpc-default-request-timeout
   "Number of seconds until a request is deemed to be timed out."
   :type 'natnum)
+
+(defcustom dape-debug nil
+  "Print debug info in *dape-repl* *dape-connection events* buffers."
+  :type 'boolean)
 
 
 ;;; Face
@@ -2528,13 +2532,15 @@ Using BUFFER and STR."
 (defvar-local dape--memory-address nil
   "Buffer local var to keep track of current address.")
 
+(defvar dape--memory-debounce-timer (timer-create)
+  "Debounce context for `dape-memory-revert'.")
+
 (defun dape--memory-address-number ()
   "Return `dape--memory-address' as an number."
   (thread-first dape--memory-address (substring 2) (string-to-number 16)))
 
 (defun dape--memory-revert (&optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for `dape-memory-mode'."
-  ;; TODO Add `dape--with-debounce'
   (let* ((conn (dape--live-connection 'last))
          (write-capable-p (dape--capable-p conn :supportsWriteMemoryRequest)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
@@ -2644,10 +2650,11 @@ When BACKWARD is non nil move backward instead."
 
 (defun dape-memory-revert ()
   "Revert all `dape-memory-mode' buffers."
-  (cl-loop for buffer in (buffer-list)
-           when (eq (with-current-buffer buffer major-mode)
-                    'dape-memory-mode)
-           do (with-current-buffer buffer (revert-buffer))))
+  (dape--with-debounce dape--memory-debounce-timer dape-ui-debounce-time
+    (cl-loop for buffer in (buffer-list)
+             when (eq (with-current-buffer buffer major-mode)
+                      'dape-memory-mode)
+             do (with-current-buffer buffer (revert-buffer)))))
 
 (defun dape-read-memory (address)
   "Read `dape-memory-page-size' bytes of memory at ADDRESS."
@@ -3188,10 +3195,6 @@ REVERSED selects previous."
   (when (derived-mode-p 'dape-info-parent-mode)
     (ignore-errors (revert-buffer))))
 
-;; TODO Should maybe be a custom
-(defvar dape--info-debounce-time 0.1
-  "Number of seconds to debounce `revert-buffer' of info buffers.")
-
 (defvar-local dape--info-debounce-timer nil
   "Debounce context for `dape-info-parent-mode' buffers.")
 
@@ -3199,7 +3202,7 @@ REVERSED selects previous."
   "Wrap `dape--info-revert' methods within an debounce context.
 Each buffers store its own debounce context."
   (let ((buffer (current-buffer)))
-    (dape--with-debounce dape--info-debounce-timer dape--info-debounce-time
+    (dape--with-debounce dape--info-debounce-timer dape-ui-debounce-time
       (when (buffer-live-p buffer)
         (with-current-buffer buffer
           (cl-call-next-method))))))
