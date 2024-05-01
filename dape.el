@@ -2136,15 +2136,9 @@ CONN is inferred for interactive invocations."
     (user-error "No stopped threads"))
   (dape--with-request-bind
       (_body error)
-      (dape-request conn
-                    "continue"
-                    (dape--thread-id-object conn))
-    (unless error
-      (dape--update-state conn 'running)
-      (dape--remove-stack-pointers)
-      (dolist (thread (dape--threads conn))
-        (plist-put thread :status 'running))
-      (run-hooks 'dape-update-ui-hooks))))
+      (dape-request conn "continue" (dape--thread-id-object conn))
+    (when error
+      (error "Failed to continue: %s" error))))
 
 (defun dape-pause (conn)
   "Pause execution.
@@ -2154,7 +2148,11 @@ CONN is inferred for interactive invocations."
   (when (dape--stopped-threads conn)
     ;; cpptools crashes on pausing an paused thread
     (user-error "Thread already is stopped"))
-  (dape-request conn "pause" (dape--thread-id-object conn)))
+  (dape--with-request-bind
+      (_body error)
+      (dape-request conn "pause" (dape--thread-id-object conn))
+    (when error
+      (error "Failed to pause: %s" error))))
 
 (defun dape-restart (&optional conn)
   "Restart debugging session.
