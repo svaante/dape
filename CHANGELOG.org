@@ -2,6 +2,17 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.11.0
+- Experimental: Add inlay hints for variables
+- Improve state handling by only using events for state changes
+- Fix false invalidation of breakpoints
+- Add debounce to dape-info and memory viewer buffer for improved performance
+- Add source line contents to breakpoints info buffer
+- Support hit condition breakpoints with =dape-breakpoint-hits=
+- Show reason for stoppage in mode-line
+- Improve REPL completions
+- Add edit watch buffer mode =dape-info-watch-edit-mode=
+
 * Version 0.10.0
 - Remove "Selecting deleted buffer" in jsonrcp shutdown error message
 - Handle child connections of depth => 2
