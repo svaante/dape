@@ -4404,7 +4404,7 @@ Send INPUT to DUMMY-PROCESS."
 
 (defvar dape-repl-mode nil)
 
-(define-derived-mode dape-repl-mode comint-mode "Dape REPL"
+(define-derived-mode dape-repl-mode comint-mode "REPL"
   "Mode for *dape-repl* buffer."
   :group 'dape
   :interactive nil
