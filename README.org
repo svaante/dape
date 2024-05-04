@@ -175,10 +175,17 @@ Some minor gains to performance in the debugger can be achieved in changing Emac
 This variable controls the frequency of garbage collection in Emacs.
 Too high a value will lead to increased system memory pressure and longer stalls, and too low a value will result in extra interruptions and context switches (poor performance).
 
-According to [[https://emacs-lsp.github.io/lsp-mode/page/performance/#adjust-gc-cons-threshold][lsp-doctor]], =100mb= is likely a better setting.
+According to [[https://www.reddit.com/r/emacs/comments/brc05y/comment/eofulix/][GNU Emacs Maintainer Eli Zaretskii]]:
+
+: My suggestion is to repeatedly multiply gc-cons-threshold by 2 until you stop seeing significant improvements in
+: responsiveness, and in any case not to increase by a factor larger than 100 or somesuch. If even a 100-fold increase
+: doesn't help, there's some deeper problem with the Lisp code which produces so much garbage, or maybe GC is not the
+: reason for slowdown.
+
+Abiding the upper end of that advice, you can try to set =gc-cons-threshold= to 100x the original value:
 
 #+begin_src elisp
-  (setq gc-cons-threshold 100000000) ;; 100mb
+  (setq gc-cons-threshold 80000000) ;; original value * 100
 #+end_src
 
 ** =read-process-output-max=
