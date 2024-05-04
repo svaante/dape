@@ -166,6 +166,65 @@ See [[https://microsoft.github.io/debug-adapter-protocol/implementors/adapters/]
 Any legally [[https://www.gnu.org/prep/maintain/html_node/Legally-Significant.html#Legally-Significant][significant]] contributions can only be merged after the author has completed their paperwork.
 See [[https://www.fsf.org/licensing/contributor-faq][Contributor's Frequently Asked Questions (FAQ)]] for more information.
 
+* Performance
+
+Some minor gains to performance in the debugger can be achieved in changing Emacs configuration values for process interaction and garbage collection.
+
+** =gc-cons-threshold=
+
+This variable controls the frequency of garbage collection in Emacs.
+Too high a value will lead to increased system memory pressure and longer stalls, and too low a value will result in extra interruptions and context switches (poor performance).
+
+According to [[https://www.reddit.com/r/emacs/comments/brc05y/comment/eofulix/][GNU Emacs Maintainer Eli Zaretskii]]:
+
+: My suggestion is to repeatedly multiply gc-cons-threshold by 2 until you stop seeing significant improvements in
+: responsiveness, and in any case not to increase by a factor larger than 100 or somesuch. If even a 100-fold increase
+: doesn't help, there's some deeper problem with the Lisp code which produces so much garbage, or maybe GC is not the
+: reason for slowdown.
+
+Abiding the upper end of that advice, you can try to set =gc-cons-threshold= to 100x the original value:
+
+#+begin_src elisp
+  (setq gc-cons-threshold 80000000) ;; original value * 100
+#+end_src
+
+** =read-process-output-max=
+
+The default =read-process-output-max= of 4096 bytes may inhibit performance to some degree, also.
+
+*** Linux
+
+On Linux, you should be able to set it up to about =1mb=.
+To check the max value, check the output of:
+
+#+begin_src sh
+  cat /proc/sys/fs/pipe-max-size
+#+end_src
+
+To set it:
+
+#+begin_src elisp
+  (setq read-process-output-max (* 1024 1024)) ;; 1mb
+#+end_src
+
+*** Mac OS
+
+For Mac OS, there isn't an easy way to see the operating system pipe-max-size.
+It's probably about =64kb=.
+
+#+begin_src elisp
+  (setq read-process-output-max (* 64 1024)) ;; 64k
+#+end_src
+
+*** Windows
+
+There doesn't seem to be a limit for Windows.
+You can try =1mb=.
+
+#+begin_src elisp
+  (setq read-process-output-max (* 1024 1024)) ;; 1mb
+#+end_src
+
 * Bugs and issues
 Before reporting any issues ~(setq dape-debug t)~ and take a look at =*dape-repl*= buffer. Please share your =*dape-repl*= and =*dape-connection events*= in the buffer contents with the bug report.
 The =master= branch is used as an development branch and releases on elpa should be more stable so in the mean time use elpa if the bug is a breaking you workflow.
