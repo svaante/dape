@@ -691,6 +691,8 @@ The hook is run with one argument, the compilation buffer."
   "List of available exceptions as plists.")
 (defvar dape--watched nil
   "List of watched expressions.")
+(defvar dape--data-breakpoints nil
+  "List of data breakpoints.")
 (defvar dape--connection nil
   "Debug adapter connection.")
 (defvar dape--connection-selected nil
@@ -1541,6 +1543,40 @@ See `dape-request' for expected CB signature."
               (dape--request-return cb)))))
     (dape--request-return cb)))
 
+(defun dape--set-data-breakpoints (conn cb)
+  "Set data breakpoints for adapter CONN.
+See `dape-request' for expected CB signature."
+  (if (dape--capable-p conn :supportsDataBreakpoints)
+      (dape--with-request-bind
+          ((&key breakpoints &allow-other-keys) error)
+          (dape-request conn "setDataBreakpoints"
+                        (list
+                         :breakpoints
+                         (cl-loop
+                          for plist in dape--data-breakpoints
+                          collect (list :dataId (plist-get plist :dataId)
+                                        :accessType (plist-get plist :accessType))
+                          into breakpoints
+                          finally return (apply 'vector breakpoints))))
+        (when error
+          (message "Failed to setup data breakpoints: %s" error))
+        (cl-loop
+         for req-breakpoint in dape--data-breakpoints
+         for res-breakpoint across (or breakpoints [])
+         if (eq (plist-get res-breakpoint :verified) t)
+         collect req-breakpoint into verfied-breakpoints else
+         collect req-breakpoint into unverfied-breakpoints
+         finally do
+         (when unverfied-breakpoints
+           (dape--repl-message
+            (format "Failed setting data breakpoints for %s"
+                    (mapconcat (lambda (plist) (plist-get plist :name))
+                               unverfied-breakpoints ", "))))
+         (setq dape--data-breakpoints verfied-breakpoints))
+        (dape--request-return cb error))
+    (setq dape--data-breakpoints nil)
+    (dape--request-return cb)))
+
 (defun dape--update-threads (conn cb)
   "Update threads for CONN in-place if possible.
 See `dape-request' for expected CB signature."
@@ -1799,7 +1835,8 @@ Starts a new adapter connection as per request of the debug adapter."
   (dape--update-state conn 'initialized)
   (dape--with-request (dape--configure-exceptions conn)
     (dape--with-request (dape--set-breakpoints conn)
-      (dape-request conn "configurationDone" nil))))
+      (dape--with-request (dape--set-data-breakpoints conn)
+        (dape-request conn "configurationDone" nil)))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql capabilities)) body)
   "Handle adapter CONNs capabilities events.
@@ -2772,7 +2809,7 @@ contents."
       (overlay-put overlay 'before-string before-string))))
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
-  "Make sure that Dape OVERLAY region covers line."
+  "Make sure that dape OVERLAY region covers line."
   (apply 'move-overlay overlay
          (dape--overlay-region (eq (overlay-get overlay 'category)
                                    'dape-stack-pointer))))
@@ -3442,6 +3479,19 @@ displayed."
   (define-key map "d" 'dape-info-breakpoint-delete)
   (define-key map "e" 'dape-info-breakpoint-log-edit))
 
+(dape--command-at-line dape-info-data-breakpoint-delete (dape--info-data-breakpoint)
+  "Delete data breakpoint at line in info buffer."
+  (setq dape--data-breakpoints
+        (delq dape--info-data-breakpoint
+              dape--data-breakpoints))
+  (when-let ((conn (dape--live-connection 'stopped t)))
+    (dape--with-request (dape--set-data-breakpoints conn)))
+  (run-hooks 'dape-update-ui-hooks))
+
+(dape--buffer-map dape-info-data-breakpoints-line-map nil
+  (define-key map "D" 'dape-info-data-breakpoint-delete
+  (define-key map "d" 'dape-info-data-breakpoint-delete)))
+
 (dape--command-at-line dape-info-exceptions-toggle (dape--info-exception)
   "Toggle exception at line in dape info buffer."
   (plist-put dape--info-exception :enabled
@@ -3508,6 +3558,23 @@ displayed."
                'keymap dape-info-breakpoints-line-map
                'mouse-face 'highlight
                'help-echo "mouse-2, RET: visit breakpoint"))))))
+      (cl-loop
+       for plist in dape--data-breakpoints do
+       (gdb-table-add-row
+        table
+        (list
+         (propertize "y" 'font-lock-face font-lock-warning-face)
+         (format "Data: %s on %s"
+                 (propertize
+                  (plist-get plist :name)
+                  'font-lock-face
+                  'font-lock-variable-name-face)
+                 (plist-get plist :accessType))
+         (when with-hits-p
+           nil)
+         nil)
+        (list 'dape--info-data-breakpoint plist
+              'keymap dape-info-data-breakpoints-line-map)))
       (dolist (exception dape--exceptions)
         (gdb-table-add-row
          table
@@ -3896,11 +3963,48 @@ current buffer with CONN config."
 
 (dape--buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
+(dape--command-at-line dape-info-scope-data-breakpoint (dape--info-ref dape--info-variable)
+  "Add data breakpoint on variable at line in info buffer."
+  (let ((conn (dape--live-connection 'stopped))
+        (name (or (plist-get dape--info-variable :evaluateName)
+                  (plist-get dape--info-variable :name))))
+    (unless (dape--capable-p conn :supportsDataBreakpoints)
+      (user-error "Adapter does not support data breakpoints"))
+    (dape--with-request-bind
+        ;; TODO Test if canPersist works, hanve not found an adapter
+        ;;      supporting it.
+        ((&key dataId description accessTypes &allow-other-keys) error)
+        (dape-request conn "dataBreakpointInfo"
+                      ;; TODO Find and test
+                      (if (eq dape--info-ref 'watch)
+                          (list :name name
+                                :frameId (plist-get (dape--current-stack-frame conn) :id))
+                        (list :variablesReference dape--info-ref
+                              :name name)))
+      (if (or error (not (stringp dataId)))
+          (message "Unable to set data breakpoint: %s" (or error description))
+        (push (list :name name
+                    :dataId dataId
+                    :accessType (completing-read
+                                 (format "Breakpoint type for `%s': " name)
+                                 (append accessTypes nil) nil t)
+                    ;; TODO Support :condition
+                    ;; TODO Support :hitCondition
+                    )
+              dape--data-breakpoints)
+        (dape--with-request
+            (dape--set-data-breakpoints conn)
+          ;; Make sure breakpoint buffer is displayed
+          (dape--display-buffer
+           (dape--info-get-buffer-create 'dape-info-breakpoints-mode))
+          (run-hooks 'dape-update-ui-hooks))))))
+
 (defvar dape-info-scope-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "e" 'dape-info-scope-toggle)
     (define-key map "W" 'dape-info-scope-watch-dwim)
     (define-key map "=" 'dape-info-variable-edit)
+    (define-key map "b" 'dape-info-scope-data-breakpoint)
     map)
   "Local keymap for dape scope buffers.")
 
