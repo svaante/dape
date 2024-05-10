@@ -1572,6 +1572,8 @@ See `dape-request' for expected CB signature."
             (format "Failed setting data breakpoints for %s"
                     (mapconcat (lambda (plist) (plist-get plist :name))
                                unverfied-breakpoints ", "))))
+         ;; FIXME Should not remove unverified-breakpoints as they
+         ;;       might be verified by another live connection.
          (setq dape--data-breakpoints verfied-breakpoints))
         (dape--request-return cb error))
     (setq dape--data-breakpoints nil)
