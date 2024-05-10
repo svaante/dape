@@ -2177,11 +2177,13 @@ CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'stopped)))
   (unless (dape--stopped-threads conn)
     (user-error "No stopped threads"))
-  (dape--with-request-bind
-      (_body error)
-      (dape-request conn "continue" (dape--thread-id-object conn))
-    (when error
-      (error "Failed to continue: %s" error))))
+  (let ((request-body (dape--thread-id-object conn)))
+    (dape--with-request-bind
+        (body error)
+        (dape-request conn "continue" request-body)
+      (if error
+          (error "Failed to continue: %s" error)
+        (dape-handle-event conn 'continued (append request-body body))))))
 
 (defun dape-pause (conn)
   "Pause execution.
