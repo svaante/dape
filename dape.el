@@ -781,8 +781,13 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
                         ,@(when (dape--capable-p conn :supportsSteppingGranularity)
                             (list :granularity
                                   (symbol-name dape-stepping-granularity)))))
-      (when error
-        (error "Failed to %s: %s" command error)))))
+      (if error
+          (error "Failed to %s: %s" command error)
+        ;; From specification [continued] event:
+        ;; A debug adapter is not expected to send this event in
+        ;; response to a request that implies that execution
+        ;; continues, e.g. launch or continue.
+        (dape-handle-event conn 'continued nil)))))
 
 (defun dape--maybe-select-thread (conn thread-id force)
   "Maybe set selected THREAD-ID and CONN.
@@ -1956,7 +1961,7 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
   "Handle adapter CONN continued events.
 Sets `dape--thread-id' from BODY if not set."
   (cl-destructuring-bind
-      (&key threadId allThreadsContinued &allow-other-keys)
+      (&key threadId (allThreadsContinued t) &allow-other-keys)
       body
     (dape--update-state conn 'running)
     (dape--remove-stack-pointers)
@@ -2177,13 +2182,21 @@ CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'stopped)))
   (unless (dape--stopped-threads conn)
     (user-error "No stopped threads"))
-  (let ((request-body (dape--thread-id-object conn)))
+  (let ((body (dape--thread-id-object conn)))
+    (unless body
+      (user-error "Unable to derive thread to continued"))
     (dape--with-request-bind
-        (body error)
-        (dape-request conn "continue" request-body)
+        ((&key (allThreadsContinued t) &allow-other-keys) error)
+        (dape-request conn "continue" body)
       (if error
           (error "Failed to continue: %s" error)
-        (dape-handle-event conn 'continued (append request-body body))))))
+        ;; From specification [continued] event:
+        ;; A debug adapter is not expected to send this event in
+        ;; response to a request that implies that execution
+        ;; continues, e.g. launch or continue.
+        (dape-handle-event
+         conn 'continued
+         `(,@body :allThreadsContinued ,allThreadsContinued))))))
 
 (defun dape-pause (conn)
   "Pause execution.
