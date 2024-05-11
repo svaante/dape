@@ -3538,43 +3538,44 @@ displayed."
                        dape--breakpoints)))
       (gdb-table-add-row table
                          (list "A" "Where" (when with-hits-p "H") "What"))
-      (dolist (breakpoint (reverse dape--breakpoints))
-        (when-let* ((buffer (overlay-buffer breakpoint))
-                    (line (with-current-buffer buffer
-                            (line-number-at-pos (overlay-start breakpoint)))))
-          (let* ((verified-plist (overlay-get breakpoint 'dape-verified-plist))
-                 (verified-p (cl-find-if (lambda (conn)
-                                           (plist-get verified-plist conn))
-                                         (dape--live-connections))))
-            (gdb-table-add-row
-             table
-             `(,(if verified-p
-                    (propertize "y" 'font-lock-face font-lock-warning-face)
-                  "n")
-               ,(concat
-                 (if-let (file (buffer-file-name buffer))
-                     (dape--format-file-line file line)
-                   (buffer-name buffer))
-                 (with-current-buffer buffer
-                   (save-excursion
-                     (goto-char (overlay-start breakpoint))
-                     (truncate-string-to-width
-                      (concat " " (string-trim (thing-at-point 'line)))
-                      dape-info-breakpoint-source-line-max))))
-               ,(when with-hits-p
-                  (if-let ((hits (overlay-get breakpoint 'dape-hits)))
-                      (format "%s" hits)
-                    ""))
-               ,(when-let ((after-string (overlay-get breakpoint 'after-string)))
-                  (substring after-string 1)))
-             (append
-              (unless verified-p
-                '(face shadow))
+      (cl-loop
+       for breakpoint in (reverse dape--breakpoints)
+       for buffer = (overlay-buffer breakpoint)
+       for verified-plist = (overlay-get breakpoint 'dape-verified-plist)
+       for verified-p = (cl-find-if (apply-partially 'plist-get verified-plist)
+                                    (dape--live-connections))
+       for line = (with-current-buffer buffer
+                    (line-number-at-pos (overlay-start breakpoint)))
+       do (gdb-table-add-row
+           table
+           (list
+            (if verified-p
+                (propertize "y" 'font-lock-face font-lock-warning-face)
+              "n")
+            (concat
+             (if-let (file (buffer-file-name buffer))
+                 (dape--format-file-line file line)
+               (buffer-name buffer))
+             (with-current-buffer buffer
+               (save-excursion
+                 (goto-char (overlay-start breakpoint))
+                 (truncate-string-to-width
+                  (concat " " (string-trim (thing-at-point 'line)))
+                  dape-info-breakpoint-source-line-max))))
+            (when with-hits-p
+              (if-let ((hits (overlay-get breakpoint 'dape-hits)))
+                  (format "%s" hits)
+                ""))
+            (when-let ((after-string (overlay-get breakpoint 'after-string)))
+              (substring after-string 1)))
+           (append
               (list
                'dape--info-breakpoint breakpoint
                'keymap dape-info-breakpoints-line-map
                'mouse-face 'highlight
-               'help-echo "mouse-2, RET: visit breakpoint"))))))
+               'help-echo "mouse-2, RET: visit breakpoint")
+              (unless verified-p
+                '(face shadow)))))
       (cl-loop
        for plist in dape--data-breakpoints do
        (gdb-table-add-row
@@ -3587,23 +3588,24 @@ displayed."
                   'font-lock-face
                   'font-lock-variable-name-face)
                  (plist-get plist :accessType))
-         (when with-hits-p
-           nil)
-         nil)
+         nil nil)
         (list 'dape--info-data-breakpoint plist
               'keymap dape-info-data-breakpoints-line-map)))
-      (dolist (exception dape--exceptions)
-        (gdb-table-add-row
-         table
-         `(,(if (plist-get exception :enabled)
-                (propertize "y" 'font-lock-face font-lock-warning-face)
-              (propertize "n" 'font-lock-face font-lock-doc-face))
-           ,(format "Exceptions: %s" (plist-get exception :label)) nil nil)
-         (list
-          'dape--info-exception exception
-          'mouse-face 'highlight
-          'keymap dape-info-exceptions-line-map
-          'help-echo "mouse-2, RET: toggle exception")))
+      (cl-loop
+       for exception in dape--exceptions do
+       (gdb-table-add-row
+        table
+        (list
+         (if (plist-get exception :enabled)
+             (propertize "y" 'font-lock-face font-lock-warning-face)
+           (propertize "n" 'font-lock-face font-lock-doc-face))
+         (format "Exceptions: %s" (plist-get exception :label))
+         nil nil)
+        (list
+         'dape--info-exception exception
+         'mouse-face 'highlight
+         'keymap dape-info-exceptions-line-map
+         'help-echo "mouse-2, RET: toggle exception")))
       (setf (gdb-table-right-align table) t)
       (insert (gdb-table-string table " ")))))
 
