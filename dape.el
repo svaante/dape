@@ -3542,8 +3542,12 @@ displayed."
        for breakpoint in (reverse dape--breakpoints)
        for buffer = (overlay-buffer breakpoint)
        for verified-plist = (overlay-get breakpoint 'dape-verified-plist)
-       for verified-p = (cl-find-if (apply-partially 'plist-get verified-plist)
-                                    (dape--live-connections))
+       for verified-p = (or
+                         ;; No live connection show every breakpoint
+                         ;; as verified
+                         (not (dape--live-connection 'last t))
+                         (cl-find-if (apply-partially 'plist-get verified-plist)
+                                     (dape--live-connections)))
        for line = (with-current-buffer buffer
                     (line-number-at-pos (overlay-start breakpoint)))
        do (gdb-table-add-row
