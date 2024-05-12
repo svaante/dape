@@ -2,6 +2,11 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.11.1
+- Show each breakpoint as verified when no connection active
+- Add basic support for data breakpoints
+- Fix "continued" state handling (breaking =lldb-vscode=)
+
 * Version 0.11.0
 - Experimental: Add inlay hints for variables
 - Improve state handling by only using events for state changes
