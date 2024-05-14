@@ -4784,7 +4784,8 @@ Update `dape--inlay-hint-overlays' from SCOPES."
       (ignore-errors
         (pcase-setq `(,hint-key ,hint-config) (dape--config-from-string str t)))
       (setq default-directory
-            (or (ignore-errors (dape--guess-root hint-config))
+            (or (with-current-buffer dape--minibuffer-last-buffer
+                  (ignore-errors (dape--guess-root hint-config)))
                 default-directory)
             use-cache
             (pcase-let ((`(,key ,config)
