@@ -558,7 +558,7 @@ left-to-right display order of the properties."
   :type '(choice (const :tag "Truncate string at new line" line)
                  (const :tag "No formatting" nil)))
 
-(defcustom dape-info-breakpoint-source-line-max 15
+(defcustom dape-info-breakpoint-source-line-max 14
   "Max length of source line in info breakpoint buffer."
   :type '(choice
           (const :tag "Don't show source line" nil)
@@ -2906,7 +2906,7 @@ Updates all breakpoints in all known connections."
                    (concat
                     " "
                     (propertize
-                     (format "Break: %s" expression)
+                     (format "Cond: %s" expression)
                      'face 'dape-expression-face
                      'mouse-face 'highlight
                      'help-echo "mouse-1: edit break expression"
@@ -3537,7 +3537,7 @@ displayed."
                            (> hits 0)))
                        dape--breakpoints)))
       (gdb-table-add-row table
-                         (list "A" "Where" (when with-hits-p "H") "What"))
+                         (list "A" "Type" "Where/On" (when with-hits-p "Hit")))
       (cl-loop
        for breakpoint in (reverse dape--breakpoints)
        for buffer = (overlay-buffer breakpoint)
@@ -3556,6 +3556,11 @@ displayed."
             (if verified-p
                 (propertize "y" 'font-lock-face font-lock-warning-face)
               "n")
+            (cond
+             ((overlay-get breakpoint :log) "Log")
+             ((overlay-get breakpoint :hits) "Hits")
+             ((overlay-get breakpoint :expression) "Cond")
+             (t "Break"))
             (concat
              (if-let (file (buffer-file-name buffer))
                  (dape--format-file-line file line)
@@ -3566,12 +3571,9 @@ displayed."
                  (truncate-string-to-width
                   (concat " " (string-trim (thing-at-point 'line)))
                   dape-info-breakpoint-source-line-max))))
-            (when with-hits-p
-              (if-let ((hits (overlay-get breakpoint 'dape-hits)))
-                  (format "%s" hits)
-                ""))
-            (when-let ((after-string (overlay-get breakpoint 'after-string)))
-              (substring after-string 1)))
+            (when-let* (with-hits-p
+                        (hits (overlay-get breakpoint 'dape-hits)))
+              (format "%s" hits)))
            (append
               (list
                'dape--info-breakpoint breakpoint
@@ -3586,13 +3588,16 @@ displayed."
         table
         (list
          (propertize "y" 'font-lock-face font-lock-warning-face)
-         (format "Data: %s on %s"
+         "Data"
+         (format "%s %s %s"
                  (propertize
                   (plist-get plist :name)
                   'font-lock-face
                   'font-lock-variable-name-face)
-                 (plist-get plist :accessType))
-         nil nil)
+                 (plist-get plist :accessType)
+                 (when-let ((data-id (plist-get plist :dataId)))
+                   (format "(%s)" data-id)))
+         nil)
         (list 'dape--info-data-breakpoint plist
               'keymap dape-info-data-breakpoints-line-map)))
       (cl-loop
@@ -3603,8 +3608,9 @@ displayed."
          (if (plist-get exception :enabled)
              (propertize "y" 'font-lock-face font-lock-warning-face)
            (propertize "n" 'font-lock-face font-lock-doc-face))
-         (format "Exceptions: %s" (plist-get exception :label))
-         nil nil)
+         "Excep"
+         (format "%s" (plist-get exception :label))
+         nil)
         (list
          'dape--info-exception exception
          'mouse-face 'highlight
