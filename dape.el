@@ -587,6 +587,8 @@ left-to-right display order of the properties."
     ("pause" . dape-pause)
     ("step" . dape-step-in)
     ("out" . dape-step-out)
+    ("up" . dape-stack-select-up)
+    ("down" . dape-stack-select-down)
     ("restart" . dape-restart)
     ("kill" . dape-kill)
     ("disconnect" . dape-disconnect-quit)
