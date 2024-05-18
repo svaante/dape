@@ -40,7 +40,7 @@
         (line-number-at-pos)))))
 
 (defmacro dape-test--should (pred &optional seconds)
-  "PRED should eventually be non nil during duration SECONDS.'
+  "PRED should eventually be non nil during duration SECONDS.
 If PRED does not eventually return nil, abort the current test as
 failed."
   (let ((seconds (or seconds 10)))
