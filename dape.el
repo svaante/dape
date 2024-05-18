@@ -4291,7 +4291,7 @@ or \\[dape-info-watch-abort-changes] to abort changes")))
              do (insert "  " name "\n"))))
 
 (defun dape-info-watch-abort-changes ()
-  "Abort changes and return to `dape-info-watch-mode'."
+  "Abort change and return to `dape-info-watch-mode'."
   (interactive)
   (dape-info-watch-mode)
   (revert-buffer))
