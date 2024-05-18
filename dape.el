@@ -5213,10 +5213,12 @@ See `eldoc-documentation-functions', for more information."
                 (funcall cb (gdb-table-string table " ")
                          :thing symbol
                          :face 'font-lock-variable-name-face
-                         :echo (format "%s %s" (or (plist-get body :value)
-                                                   (plist-get body :result)
-                                                   " ")
-                                       (plist-get body :type))))))))))
+                         :echo (format "%s %s"
+                                       (or (plist-get body :value)
+                                           (plist-get body :result)
+                                           "")
+                                       (or (plist-get body :type)
+                                           ""))))))))))
   t)
 
 (defun dape--add-eldoc-hook ()
