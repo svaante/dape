@@ -805,22 +805,32 @@ See `dape--connection-selected'."
                  (dape--stopped-threads dape--connection-selected))
       (setq dape--connection-selected conn))))
 
-(defun dape--threads-set-status (conn thread-id all-threads status)
+(defun dape--threads-make-update-handle (conn)
+  "Return an threads update update handle for CONN.
+See `dape--threads-set-status'."
+  (setf (dape--threads-update-handle conn)
+        (1+ (dape--threads-update-handle conn))))
+
+(defun dape--threads-set-status (conn thread-id all-threads status update-handle)
   "Set string STATUS thread(s) for CONN.
 If THREAD-ID is non nil set status for thread with :id equal to
 THREAD-ID to STATUS.
-If ALL-THREADS is non nil set status of all all threads to STATUS."
-  (cond
-   ((not status) nil)
-   (all-threads
-    (cl-loop for thread in (dape--threads conn)
-             do (plist-put thread :status status)))
-   (thread-id
-    (plist-put
-     (cl-find-if (lambda (thread)
-                   (equal (plist-get thread :id) thread-id))
-                 (dape--threads conn))
-     :status status))))
+If ALL-THREADS is non nil set status of all all threads to STATUS.
+Ignore status update if UPDATE-HANDLE is not the last handle created
+by `dape--threads-make-update-handle'."
+  (when (> update-handle (dape--threads-last-update-handle conn))
+    (setf (dape--threads-last-update-handle conn) update-handle)
+    (cond
+     ((not status) nil)
+     (all-threads
+      (cl-loop for thread in (dape--threads conn)
+               do (plist-put thread :status status)))
+     (thread-id
+      (plist-put
+       (cl-find-if (lambda (thread)
+                     (equal (plist-get thread :id) thread-id))
+                   (dape--threads conn))
+       :status status)))))
 
 (defun dape--thread-id-object (conn)
   "Construct a thread id object for CONN."
@@ -1252,6 +1262,12 @@ See `dape--connection-selected'."
    (threads
     :accessor dape--threads :initform nil
     :documentation "Session plist of thread data.")
+   (threads-update-handle
+    :initform 0 :accessor dape--threads-update-handle
+    :documentation "Current handle for updating thread state.")
+   (threads-last-update-handle
+    :initform 0 :accessor dape--threads-last-update-handle
+    :documentation "Last handle used when updating thread state")
    (capabilities
     :accessor dape--capabilities :initform nil
     :documentation "Session capabilities plist.")
@@ -1917,12 +1933,18 @@ Stores `dape--thread-id' and updates/adds thread in
       body
     (when (equal reason "started")
       (dape--maybe-select-thread conn (plist-get body :threadId) nil))
-    (dape--with-request (dape--update-threads conn)
-      (dape--threads-set-status conn threadId nil
-                                (if (equal reason "exited")
-                                    'exited
-                                  'running))
-      (run-hooks 'dape-update-ui-hooks))))
+    (let ((update-handle
+           ;; Need to store handle before threads request to guard
+           ;; against an overwriting thread status if event is firing
+           ;; while threads request is in flight
+           (dape--threads-make-update-handle conn)))
+      (dape--with-request (dape--update-threads conn)
+        (dape--threads-set-status conn threadId nil
+                                  (if (equal reason "exited")
+                                      'exited
+                                    'running)
+                                  update-handle)
+        (run-hooks 'dape-update-ui-hooks)))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql stopped)) body)
   "Handle adapter CONNs stopped events.
@@ -1953,10 +1975,15 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
     ;; Update breakpoints hits
     (dape--breakpoints-stopped hitBreakpointIds)
     ;; Update `dape--threads'
-    (dape--with-request (dape--update-threads conn)
-      (dape--threads-set-status conn threadId (eq allThreadsStopped t)
-                                'stopped)
-      (dape--update conn))
+    (let ((update-handle
+           ;; Need to store handle before threads request to guard
+           ;; against an overwriting thread status if event is firing
+           ;; while threads request is in flight
+           (dape--threads-make-update-handle conn)))
+      (dape--with-request (dape--update-threads conn)
+        (dape--threads-set-status conn threadId (eq allThreadsStopped t)
+                                  'stopped update-handle)
+        (dape--update conn)))
     (run-hooks 'dape-on-stopped-hooks)))
 
 (cl-defmethod dape-handle-event (conn (_event (eql continued)) body)
@@ -1968,7 +1995,8 @@ Sets `dape--thread-id' from BODY if not set."
     (dape--update-state conn 'running)
     (dape--remove-stack-pointers)
     (dape--maybe-select-thread conn threadId nil)
-    (dape--threads-set-status conn threadId (eq allThreadsContinued t) 'running)
+    (dape--threads-set-status conn threadId (eq allThreadsContinued t) 'running
+                              (dape--threads-make-update-handle conn))
     (run-hooks 'dape-update-ui-hooks)))
 
 (cl-defmethod dape-handle-event (_conn (_event (eql output)) body)
