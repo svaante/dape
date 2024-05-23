@@ -621,7 +621,7 @@ See `dape--default-cwd'."
 The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
-(defcustom dape-eldoc-variable-expand 2
+(defcustom dape-eldoc-variable-expand 1
   "Levels of variable expansion in `eldoc-doc-buffer'."
   :type 'natnum)
 
