@@ -1916,6 +1916,10 @@ Stores `dape--thread-id' and updates/adds thread in
   (cl-destructuring-bind (&key threadId reason &allow-other-keys)
       body
     (when (equal reason "started")
+      ;; For adapters that does not send an continued request use
+      ;; thread started as an way to switch from `initialized' to
+      ;; running.
+      (dape--update-state conn 'running)
       (dape--maybe-select-thread conn (plist-get body :threadId) nil))
     (let ((update-handle
            ;; Need to store handle before threads request to guard
