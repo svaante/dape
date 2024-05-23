@@ -2130,15 +2130,16 @@ symbol `dape-connection'."
        ;; error prints
        (unless (dape--initialized-p conn)
          (dape--repl-message
-          (concat "Adapter "
+          (concat "* Adapter "
                   (when (dape--parent conn)
                     "child ")
-                  "connection shutdown without successfully initializing")
+                  "connection shutdown without successfully initializing *")
           'dape-repl-error-face)
          ;; barf config
          (dape--repl-message
           (format "Configuration:\n%s"
                   (cl-loop for (key value) on (dape--config conn) by 'cddr
+                           unless (eq key '(ensure modes))
                            concat (format "  %s %S\n" key value)))
           'dape-repl-error-face)
          ;; barf connection stdout
