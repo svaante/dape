@@ -2141,6 +2141,11 @@ symbol `dape-connection'."
                   (cl-loop for (key value) on (dape--config conn) by 'cddr
                            concat (format "  %s %S\n" key value)))
           'dape-repl-error-face)
+         ;; barf connection stdout
+         (when-let* ((proc (jsonrpc--process conn))
+                     (buffer (process-buffer proc))
+                     ((buffer-live-p buffer)))
+           (dape--repl-message (with-current-buffer buffer (buffer-string))))
          ;; barf connection stderr
          (when-let* ((proc (jsonrpc--process conn))
                      (buffer (process-get proc 'jsonrpc-stderr))
