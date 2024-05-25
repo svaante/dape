@@ -125,6 +125,17 @@ Download latesnd unpack =vsix= file with your favorite unzipper.
 
 See [[https://code.visualstudio.com/docs/cpp/launch-json-reference][options]].
 
+** C, C++ and Rust - lldb-dap
+1. Install [[https://github.com/helix-editor/helix/wiki/Debugger-Configurations#install-debuggers][lldb-dap]] for your platform
+
+*** Example for MacOS using homebrew
+
+1. Install the =llvm= keg: =brew install llvm=
+2. Prepend the =llvm= path to the =PATH= variable (=$(brew --prefix --installed llvm)/bin=)
+3. =M-x dape= and pass in arguments of interest
+  - To pass arguments, use =:args ["arg1" "arg2" ..]=
+  - To use a different program instead of =a.out= (e.g., for Rust), use =:program "target/debug/<crate_name>"=
+
 ** Python - debugpy
 Install debugpy with pip ~pip install debugpy~
 
