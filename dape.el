@@ -3320,7 +3320,7 @@ with HELP-ECHO string, MOUSE-FACE and FACE."
 
 (defun dape--info-set-header-line-format ()
   "Helper for dape info buffers to set header line.
-Header line is custructed from buffer local
+Header line is constructed from buffer local
 `dape--info-buffer-related'."
   (setq header-line-format
         (mapcan
