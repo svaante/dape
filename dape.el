@@ -5234,32 +5234,37 @@ See `eldoc-documentation-functions', for more information."
   "Update Dape mode line with STATE symbol for adapter CONN."
   (setf (dape--state conn) state)
   (setf (dape--state-reason conn) reason)
+  (dape--mode-line-format)
   (force-mode-line-update t))
 
+(defvar dape--mode-line-format nil
+  "Dape mode line format.")
+
+(put 'dape--mode-line-format 'risky-local-variable t)
+
 (defun dape--mode-line-format ()
-  "Format Dape mode line."
+  "Update `dape--mode-line-format' format."
   (let ((conn (or (dape--live-connection 'last t)
                   dape--connection)))
-    (concat (propertize "dape" 'face 'font-lock-constant-face)
+    (setq dape--mode-line-format
+          `((:propertize "dape"
+                         face font-lock-constant-face)
             ":"
-            (propertize
-             (format "%s" (or (and conn (dape--state conn))
-                              'unknown))
-             'face 'font-lock-doc-face)
-            (when-let ((reason (and conn (dape--state-reason conn))))
-              (format "/%s" (propertize reason
-                                        'face 'font-lock-doc-face)))
-            (when-let* ((conns (dape--live-connections))
-                        (nof-conns
-                         (length (cl-remove-if-not 'dape--threads conns)))
-                        ((> nof-conns 1)))
-              (propertize (format "(%s)" nof-conns)
-                          'face 'shadow
-                          'help-echo "Active child connections")))))
+            (:propertize ,(format "%s" (or (and conn (dape--state conn))
+                                           'unknown))
+                         face font-lock-doc-face)
+            ,@(when-let ((reason (and conn (dape--state-reason conn))))
+                `("/" (:propertize ,reason face font-lock-doc-face)))
+            ,@(when-let* ((conns (dape--live-connections))
+                          (nof-conns
+                           (length (cl-remove-if-not 'dape--threads conns)))
+                          ((> nof-conns 1)))
+                `((:propertize ,(format "(%s)" nof-conns)
+                               face shadow
+                               help-echo "Active child connections")))))))
 
 (add-to-list 'mode-line-misc-info
-             `(dape-active-mode
-               (" [" (:eval (dape--mode-line-format)) "] ")))
+             `(dape-active-mode ("[" dape--mode-line-format "]")))
 
 
 ;;; Keymaps
