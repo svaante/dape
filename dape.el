@@ -621,12 +621,6 @@ See `dape--default-cwd'."
 The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
-(defcustom dape-eldoc-variable-expand 1
-  "Levels of variable expansion in `eldoc-doc-buffer'.
-Note: Expanding variable levels above 1 might have an noticeable
-performance hit."
-  :type 'natnum)
-
 (defcustom dape-minibuffer-hint-ignore-properties
   '(ensure fn modes command command-args :type :request)
   "Properties to be hidden in `dape--minibuffer-hint'."
@@ -5203,35 +5197,27 @@ See `dape--config-mode-p' how \"valid\" is defined."
   "Hook function to produce doc strings for `eldoc'.
 On success calls CB with the doc string.
 See `eldoc-documentation-functions', for more information."
-  (cl-flet ((expand-p (path &optional object)
-              (and (not (eq (plist-get object :expensive) t))
-                   (length< path dape-eldoc-variable-expand))))
-    (and-let* ((conn (dape--live-connection 'last t))
-               ((dape--capable-p conn :supportsEvaluateForHovers))
-               (symbol (thing-at-point 'symbol)))
-      (dape--with-request-bind
-          (body error)
-          (dape--evaluate-expression conn
-                                     (plist-get (dape--current-stack-frame conn) :id)
-                                     (substring-no-properties symbol)
-                                     "hover")
-        (unless error
-          (let ((table (make-gdb-table)))
-            (setf (gdb-table-right-align table)
-                  dape-info-variable-table-aligned)
-            (dape--with-request (dape--variables conn body)
-              (dape--with-request (dape--variables-recursive conn body nil #'expand-p)
-                (dape--info-scope-add-variable table body 'watch '(_) #'expand-p nil)
-                (funcall cb (gdb-table-string table " ")
-                         :thing symbol
-                         :face 'font-lock-variable-name-face
-                         :echo (format "%s %s"
-                                       (or (plist-get body :value)
-                                           (plist-get body :result)
-                                           "")
-                                       (or (plist-get body :type)
-                                           ""))))))))))
-  t)
+       (and-let* ((conn (dape--live-connection 'last t))
+                  ((dape--capable-p conn :supportsEvaluateForHovers))
+                  (symbol (thing-at-point 'symbol)))
+         (dape--with-request-bind
+             (body error)
+             (dape--evaluate-expression conn
+                                        (plist-get (dape--current-stack-frame conn) :id)
+                                        (substring-no-properties symbol)
+                                        "hover")
+           (unless error
+             (funcall cb
+                      (format "%s %s"
+                              (or (plist-get body :value)
+                                  (plist-get body :result)
+                                  "")
+                              (propertize
+                               (or (plist-get body :type) "")
+                               'face 'font-lock-type-face))
+                      :thing symbol
+                      :face 'font-lock-variable-name-face))))
+       t)
 
 (defun dape--add-eldoc-hook ()
   "Add `dape-hover-function' from eldoc hook."
