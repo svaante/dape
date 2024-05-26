@@ -30,7 +30,7 @@ With ~(setq dape-buffer-window-arrangement 'right)~:
 And with ~(setq dape-buffer-window-arrangement 'gud)~ + =corfu= as ~completion-in-region-function~:
 [[https://raw.githubusercontent.com/svaante/dape/resources/js-gud-12.0.0.png]]
 With =minibuffer= adapter configuration hints:
-https://raw.githubusercontent.com/svaante/dape/resources/minibuffer-hints-12.0.0.png]]
+[[https://raw.githubusercontent.com/svaante/dape/resources/minibuffer-hints-12.0.0.png]]
 Screenshots taken with [[https://elpa.gnu.org/packages/standard-themes.html][standard-light]].
 
 * Configuration
