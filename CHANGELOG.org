@@ -2,6 +2,15 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.12.0
+- Rework breakpoint info type display
+- Add stack select up/down repl commands
+- Cache mode line format to improve performance
+- Improve error printing on startup failure
+- Fix locked running state by atomizing thread status updates
+- Fix mode-line status switches from initialized to running
+- Fix minibuffer default-directory stuck at first guess
+
 * Version 0.11.1
 - Show each breakpoint as verified when no connection active
 - Add basic support for data breakpoints
