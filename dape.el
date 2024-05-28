@@ -258,6 +258,14 @@
            :type "pwa-chrome"
            :url "http://localhost:3000"
            :webRoot dape-cwd)))
+    (lldb-vscode
+     modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode)
+     ensure dape-ensure-command
+     command-cwd dape-command-cwd
+     command "lldb-vscode"
+     :type "lldb-vscode"
+     :cwd "."
+     :program "a.out")
     (lldb-dap
      modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode rustic-mode)
      ensure dape-ensure-command
