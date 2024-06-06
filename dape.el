@@ -3683,7 +3683,9 @@ See `dape-request' for expected CB signature."
         (dolist (thread threads)
           ;; HACK Keep track of requests in flight as `revert-buffer'
           ;;      might be called at any time, and we want keep
-          ;;      uneasy chatter at a minimum.
+          ;;      unnecessary chatter at a minimum.
+          ;; NOTE This is hack is still necessary if user sets
+          ;;      `dape-ui-debounce-time' to 0.0.
           (plist-put thread :request-in-flight t)
           (dape--with-request (dape--stack-trace conn thread 1)
             (plist-put thread :request-in-flight nil)
