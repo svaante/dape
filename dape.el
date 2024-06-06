@@ -1040,13 +1040,10 @@ as is."
   "Ensure that `command' from CONFIG exist system."
   (dape--ensure-executable (dape-config-get config 'command)))
 
-(defun dape--overlay-region (&optional extended)
-  "List of beg and end of current line.
-If EXTENDED end of line is after newline."
+(defun dape--overlay-region ()
+  "List of beg and end of current line."
   (list (line-beginning-position)
-        (if extended
-            (line-beginning-position 2)
-          (1- (line-beginning-position 2)))))
+        (1- (line-beginning-position 2))))
 
 (defun dape--format-file-line (file line)
   "Formats FILE and LINE to string."
@@ -2853,9 +2850,7 @@ contents."
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
   "Make sure that dape OVERLAY region covers line."
-  (apply 'move-overlay overlay
-         (dape--overlay-region (eq (overlay-get overlay 'category)
-                                   'dape-stack-pointer))))
+  (apply 'move-overlay overlay (dape--overlay-region)))
 
 (defun dape--breakpoints-reset ()
   "Reset breakpoints hits."
