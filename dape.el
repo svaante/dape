@@ -5320,7 +5320,10 @@ See `eldoc-documentation-functions', for more information."
                dape-breakpoint-remove-all
                dape-stack-select-up
                dape-stack-select-down
-               dape-watch-dwim))
+               dape-select-stack
+               dape-select-thread
+               dape-watch-dwim
+               dape-evaluate-expression))
   (put cmd 'repeat-map 'dape-global-map))
 
 (when dape-key-prefix (global-set-key dape-key-prefix dape-global-map))
