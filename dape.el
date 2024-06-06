@@ -3869,9 +3869,8 @@ current buffer with CONN config."
       ;; Start off with shoving available stack info into buffer
       (dape--info-update-with
         (dape--info-stack-buffer-insert conn current-stack-frame stack-frames))
-      (dape--with-request (dape--stack-trace conn
-                                             current-thread
-                                             dape-stack-trace-levels)
+      (dape--with-request
+          (dape--stack-trace conn current-thread dape-stack-trace-levels)
         ;; If stack trace lookup with `dape-stack-trace-levels' frames changed
         ;; the stack frame list, we need to update the buffer again
         (unless (eq stack-frames (plist-get current-thread :stackFrames))
