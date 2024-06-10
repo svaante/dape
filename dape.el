@@ -2726,7 +2726,8 @@ When BACKWARD is non nil move backward instead."
      (format "0x%08x"
              (funcall op
                       (dape--memory-address-number)
-                      dape-memory-page-size)))))
+                      dape-memory-page-size))
+     t)))
 
 (defun dape-memory-previous-page ()
   "Move address `dape-memory-page-size' backward."
@@ -2741,8 +2742,10 @@ When BACKWARD is non nil move backward instead."
                       'dape-memory-mode)
              do (with-current-buffer buffer (revert-buffer)))))
 
-(defun dape-read-memory (address)
-  "Read `dape-memory-page-size' bytes of memory at ADDRESS."
+(defun dape-read-memory (address &optional reuse-buffer)
+  "Read `dape-memory-page-size' bytes of memory at ADDRESS.
+If REUSE-BUFFER is non nil reuse the current buffer to display result
+of memory read."
   (interactive
    (list (string-trim
           (read-string "Address: "
@@ -2752,10 +2755,7 @@ When BACKWARD is non nil move backward instead."
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
       (user-error "Adapter not capable of reading memory"))
     (let ((buffer
-           (or (cl-find-if (lambda (buffer)
-                             (eq 'dape-memory-mode
-                                 (with-current-buffer buffer major-mode)))
-                           (buffer-list))
+           (or (and reuse-buffer (current-buffer))
                (generate-new-buffer (format "*dape-memory @ %s*" address)))))
       (with-current-buffer buffer
         (unless (eq major-mode 'dape-memory-mode)
