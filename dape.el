@@ -2088,9 +2088,13 @@ symbol `dape-connection'."
           (setq retries (1- retries)))
         (if (zerop retries)
             (progn
-              (dape--repl-message (format "Unable to connect to server %s:%d"
+              (dape--repl-message (format "* Unable to connect to dap server at %s:%d *"
                                           host (plist-get config 'port))
                                   'dape-repl-error-face)
+              (dape--repl-message
+               (format "* Connection is configurable by %s and %s keys *"
+                       (propertize "host" 'font-lock-face 'font-lock-keyword-face)
+                       (propertize "port" 'font-lock-face 'font-lock-keyword-face)))
               ;; barf server std-err
               (when-let ((buffer
                           (and server-process
