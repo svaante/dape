@@ -2434,7 +2434,8 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
      (alist-get thread-name collection nil nil 'equal)))
   (setf (dape--thread-id conn) thread-id)
   (setq dape--connection-selected conn)
-  (dape--update conn t))
+  (dape--update conn t)
+  (dape--mode-line-format))
 
 (defun dape-select-stack (conn stack-id)
   "Selected current stack for adapter CONN by STACK-ID."
