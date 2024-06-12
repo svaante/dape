@@ -3599,7 +3599,7 @@ displayed."
                (save-excursion
                  (goto-char (overlay-start breakpoint))
                  (truncate-string-to-width
-                  (concat " " (string-trim (thing-at-point 'line)))
+                  (concat " " (string-trim (or (thing-at-point 'line) "")))
                   dape-info-breakpoint-source-line-max))))
             (when-let* (with-hits-p
                         (hits (overlay-get breakpoint 'dape-hits)))
