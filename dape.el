@@ -4727,48 +4727,43 @@ Update `dape--inlay-hint-overlays' from SCOPES."
                              do
                              (setcdr cons (list value updated-p))
                              (setf symbols (delq cons symbols)))))
-  (cl-loop for inlay-hint in dape--inlay-hint-overlays
-           when (overlayp inlay-hint) do
-           (cl-loop with symbols = (overlay-get inlay-hint 'dape-symbols)
-                    for (symbol value update) in  symbols
-                    when value
-                    collect
-                    (format
-                     "%s %s"
-                     (propertize
-                      (format "%s:" symbol)
-                      'face 'dape-inlay-hint-face
-                     'mouse-face 'highlight
-                     'keymap
-                     (let ((map (make-sparse-keymap))
-                           (sym symbol))
-                       (define-key map [mouse-1]
-                                   (lambda (event)
-                                     (interactive "e")
-                                     (save-selected-window
-                                       (let ((start (event-start event)))
-                                         (select-window (posn-window start))
-                                         (save-excursion
-                                           (goto-char (posn-point start))
-                                           (dape-watch-dwim sym nil t))))))
-                       map)
-                     'help-echo
-                     (format "mouse-2, RET: add `%s' to watch" symbol))
-                     (propertize
-                      (truncate-string-to-width
-                       (substring value
-                                  0 (string-match-p "\n" value))
-                       dape-inlay-hints-variable-name-max nil nil t)
-                      'mouse-face 'highlight
-                      'help-echo value
-                      'face (if update 'dape-inlay-hint-highlight-face
-                              'dape-inlay-hint-face)))
-                    into after-string
-                    finally do
-                    (thread-last
-                      (mapconcat 'identity after-string dape--inlay-hint-seperator)
-                      (format "  %s")
-                      (overlay-put inlay-hint 'after-string)))))
+  (cl-loop
+   for inlay-hint in dape--inlay-hint-overlays
+   when (overlayp inlay-hint) do
+   (cl-loop
+    with symbols = (overlay-get inlay-hint 'dape-symbols)
+    for (symbol value update) in  symbols
+    when value collect
+    (concat
+     (propertize (format "%s:" symbol)
+                 'face 'dape-inlay-hint-face
+                 'mouse-face 'highlight
+                 'keymap
+                 (let ((map (make-sparse-keymap))
+                       (sym symbol))
+                   (define-key map [mouse-1]
+                               (lambda (event)
+                                 (interactive "e")
+                                 (save-selected-window
+                                   (let ((start (event-start event)))
+                                     (select-window (posn-window start))
+                                     (save-excursion
+                                       (goto-char (posn-point start))
+                                       (dape-watch-dwim sym nil t))))))
+                   map)
+                 'help-echo
+                 (format "mouse-2: add `%s' to watch" symbol))
+     " "
+     (propertize (truncate-string-to-width
+                  (substring value 0 (string-match-p "\n" value))
+                  dape-inlay-hints-variable-name-max nil nil t)
+                 'help-echo value
+                 'face (if update 'dape-inlay-hint-highlight-face
+                         'dape-inlay-hint-face)))
+    into after-string finally do
+    (thread-last (mapconcat 'identity after-string dape--inlay-hint-seperator)
+                 (format "  %s")
+                 (overlay-put inlay-hint 'after-string)))))
 
 (defun dape-inlay-hints-update ()
   "Update inlay hints."
