@@ -3213,16 +3213,20 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
                       ov))
               (add-to-list 'fringe-indicator-alist
                            '(overlay-arrow . dape-right-triangle))
-              ;; Set face of overlay-arrow before updating marker
-              (set-fringe-bitmap-face
-               'dape-right-triangle
-               (cond
-                ((cl-find-if (lambda (ov) (overlay-get ov :breakpoint))
-                             (dape--breakpoints-at-point))
-                 'dape-breakpoint-face)
-                (deepest-p 'default)
-                ('shadow)))
-              (move-marker dape--overlay-arrow-position (line-beginning-position)))))))))
+              ;; If Emacs is compiled without without windows
+              ;; `set-fringe-bitmap-face' is not defined
+              (when (window-system)
+                ;; Set face of overlay-arrow before updating marker
+                (set-fringe-bitmap-face
+                 'dape-right-triangle
+                 (cond
+                  ((cl-find-if (lambda (ov) (overlay-get ov :breakpoint))
+                               (dape--breakpoints-at-point))
+                   'dape-breakpoint-face)
+                  (deepest-p 'default)
+                  ('shadow))))
+              (move-marker dape--overlay-arrow-position
+                           (line-beginning-position)))))))))
 
 ;;; Info Buffers
 
