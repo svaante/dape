@@ -2835,7 +2835,7 @@ contents."
   (when-let ((buffer (overlay-buffer overlay)))
     (let ((before-string
            (cond
-            ((and (window-system) ;; running in term
+            ((and (window-system)
                   (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
              (propertize " " 'display
                          `(left-fringe ,bitmap ,face)))
