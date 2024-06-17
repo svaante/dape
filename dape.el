@@ -3142,20 +3142,27 @@ See `dape-request' for expected CB signature."
 
 ;;; Stack pointers
 
-(defvar dape--stack-position (make-overlay 0 0)
-  "Dape stack position overlay for arrow.")
+(define-fringe-bitmap 'dape-right-triangle
+  "\xe0\xf0\xf8\xfc\xfc\xf8\xf0\xe0")
+
+(defvar dape--overlay-arrow-position (make-marker)
+  "Dape stack position marker.")
+
+(add-to-list 'overlay-arrow-variable-list 'dape--overlay-arrow-position)
 
 (defvar dape--stack-position-overlay nil
   "Dape stack position overlay for line.")
 
 (defun dape--remove-stack-pointers ()
   "Remove stack pointer marker."
-  (when-let ((buffer (overlay-buffer dape--stack-position)))
+  (when-let ((buffer (marker-buffer dape--overlay-arrow-position)))
     (with-current-buffer buffer
+      (setq fringe-indicator-alist
+            (delete '(overlay-arrow . dape-right-triangle) fringe-indicator-alist))
       (dape--remove-eldoc-hook)))
   (when (overlayp dape--stack-position-overlay)
     (delete-overlay dape--stack-position-overlay))
-  (delete-overlay dape--stack-position))
+  (set-marker dape--overlay-arrow-position nil))
 
 (defun dape--update-stack-pointers (conn &optional
                                          skip-stack-pointer-flash skip-display)
@@ -3165,8 +3172,8 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
   (when-let (((dape--stopped-threads conn))
              (frame (dape--current-stack-frame conn)))
     (dape--remove-stack-pointers)
-    (let ((deepest-p (eq frame (car (plist-get (dape--current-thread conn)
-                                               :stackFrames)))))
+    (let ((deepest-p
+           (eq frame (car (plist-get (dape--current-thread conn) :stackFrames)))))
       (dape--with-request (dape--source-ensure conn frame)
         (when-let ((marker (dape--object-to-marker conn frame)))
           (unless skip-display
@@ -3191,9 +3198,8 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
             (save-excursion
               (goto-char (marker-position marker))
               (setq dape--stack-position-overlay
-                    (let ((ov
-                           (make-overlay (line-beginning-position)
-                                         (line-beginning-position 2))))
+                    (let ((ov (make-overlay (line-beginning-position)
+                                            (line-beginning-position 2))))
                       (overlay-put ov 'face 'dape-stack-trace-face)
                       (when deepest-p
                         (when-let ((exception-description
@@ -3205,25 +3211,18 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
                                                     'dape-exception-description-face)
                                         "\n"))))
                       ov))
-              ;; HACK I don't believe that it's defined
-              ;;      behavior in which order fringe bitmaps
-              ;;      are displayed in, maybe it's the order
-              ;;      of overlay creation?
-              (setq dape--stack-position
-                    (make-overlay (line-beginning-position)
-                                  (line-beginning-position)))
-              (dape--overlay-icon dape--stack-position
-                                  overlay-arrow-string
-                                  'right-triangle
-                                  (cond
-                                   ((seq-filter (lambda (ov)
-                                                  (overlay-get ov :breakpoint))
-                                                (dape--breakpoints-at-point))
-                                    'dape-breakpoint-face)
-                                   (deepest-p
-                                    'default)
-                                   (t
-                                    'shadow))))))))))
+              (add-to-list 'fringe-indicator-alist
+                           '(overlay-arrow . dape-right-triangle))
+              ;; Set face of overlay-arrow before updating marker
+              (set-fringe-bitmap-face
+               'dape-right-triangle
+               (cond
+                ((cl-find-if (lambda (ov) (overlay-get ov :breakpoint))
+                             (dape--breakpoints-at-point))
+                 'dape-breakpoint-face)
+                (deepest-p 'default)
+                ('shadow)))
+              (move-marker dape--overlay-arrow-position (line-beginning-position)))))))))
 
 ;;; Info Buffers
 
@@ -4684,7 +4683,7 @@ Empty input will rerun last command.\n\n"
 
 (defun dape--inlay-hint-add ()
   "Create inlay hint at current line."
-  (when-let* ((ov dape--stack-position)
+  (when-let* ((ov dape--stack-position-overlay)
               (buffer (overlay-buffer ov))
               (new-head
                (with-current-buffer buffer
