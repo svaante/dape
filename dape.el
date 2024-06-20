@@ -3141,7 +3141,7 @@ See `dape-request' for expected CB signature."
 ;;; Stack pointers
 
 (define-fringe-bitmap 'dape-right-triangle
-  "\xf0\xf8\xfc\xfe\xfe\xfc\xf8\xf0")
+  "\xe0\xf0\xf8\xfc\xfc\xf8\xf0\xe0")
 
 (defvar dape--overlay-arrow-position (make-marker)
   "Dape stack position marker.")
@@ -3218,8 +3218,18 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
                 (set-fringe-bitmap-face
                  'dape-right-triangle
                  (cond
-                  ((cl-find-if (lambda (ov) (overlay-get ov :breakpoint))
-                               (dape--breakpoints-at-point))
+                  ;; Fringes has some platform inconsistencies
+                  ;; - GNU/Linux will render the overlay-arrow over
+                  ;; breakpoint bitmap (breakpoint bm will be visible
+                  ;; behind arrow).
+                  ;; - MacOS will remove bitmap in fringe before
+                  ;; drawing overlay-arrow, which is why we color the
+                  ;; arrow to indicate breakpoint presence at current
+                  ;; line.
+                  ((and (eq system-type 'darwin)
+                        (cl-find-if (lambda (ov)
+                                      (overlay-get ov :breakpoint))
+                                    (dape--breakpoints-at-point)))
                    'dape-breakpoint-face)
                   (deepest-p 'default)
                   ('shadow))))
