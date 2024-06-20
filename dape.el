@@ -3143,7 +3143,7 @@ See `dape-request' for expected CB signature."
 ;;; Stack pointers
 
 (define-fringe-bitmap 'dape-right-triangle
-  "\xe0\xf0\xf8\xfc\xfc\xf8\xf0\xe0")
+  "\xf0\xf8\xfc\xfe\xfe\xfc\xf8\xf0")
 
 (defvar dape--overlay-arrow-position (make-marker)
   "Dape stack position marker.")
