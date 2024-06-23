@@ -615,11 +615,9 @@ See `dape-breakpoint-load' and `dape-breakpoint-save'."
 
 (defcustom dape-cwd-fn #'dape--default-cwd
   "Function to get current working directory.
-The function should take one optional argument and return a string
-representing the absolute file path of the current working directory.
-If the optional argument is non nil return path with tramp prefix
-otherwise the path should be without prefix.
-See `dape--default-cwd'."
+The function should return a string representing the absolute
+file path of the current working directory, usually the current
+project's root. See `dape--default-cwd'."
   :type 'function)
 
 (defcustom dape-compile-compile-hooks nil
