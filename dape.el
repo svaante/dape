@@ -4290,8 +4290,10 @@ or \\[dape-info-watch-abort-changes] to abort changes")))
   "Update watched variables and return to `dape-info-watch-mode'."
   (interactive)
   (setq dape--watched
-        (mapcar (lambda (name) (list :name name))
-                (split-string (buffer-string))))
+        (cl-loop for line in (split-string (buffer-string) "[\r\n]+")
+                 for trimed-line = (string-trim line)
+                 unless (string-empty-p trimed-line) collect
+                 (list :name trimed-line)))
   (dape-info-watch-abort-changes))
 
 
