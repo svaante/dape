@@ -3542,7 +3542,7 @@ displayed."
       (gdb-table-add-row table
                          (list "A" "Type" "Where/On" (when with-hits-p "Hit")))
       (cl-loop
-       for breakpoint in (reverse dape--breakpoints)
+       for breakpoint in dape--breakpoints
        for buffer = (overlay-buffer breakpoint)
        for verified-plist = (overlay-get breakpoint 'dape-verified-plist)
        for verified-p = (or
