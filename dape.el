@@ -2401,9 +2401,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
       (dolist (breakpoint breakpoints)
         (dape--breakpoint-remove breakpoint t))
       (dolist (conn (dape--live-connections))
-        (dape--set-breakpoints-in-buffer conn buffer))))
-  (when-let ((conn (dape--live-connection 'stopped t)))
-    (dape--update-stack-pointers conn t t)))
+        (dape--set-breakpoints-in-buffer conn buffer)))))
 
 (defun dape-select-thread (conn thread-id)
   "Select currrent thread for adapter CONN by THREAD-ID."
@@ -2962,20 +2960,12 @@ Updates all breakpoints in all known connections."
                        map)))))
      (t
       (overlay-put breakpoint :breakpoint t)
-      (dape--overlay-icon breakpoint
-                          dape-breakpoint-margin-string
-                          'large-circle
-                          'dape-breakpoint-face
-                          'in-margin)))
+      (dape--overlay-icon breakpoint dape-breakpoint-margin-string
+                          'breakpoint 'dape-breakpoint-face 'in-margin)))
     (overlay-put breakpoint 'modification-hooks '(dape--breakpoint-freeze))
     (push breakpoint dape--breakpoints)
     (dolist (conn (dape--live-connections))
       (dape--set-breakpoints-in-buffer conn (current-buffer)))
-    ;; If we have an stopped connection we also have an stack pointer
-    ;; which should be colored with `dape-breakpoint-face' if we are
-    ;; placing the breakpoint on the line of the stack pointer.
-    (when-let ((conn (dape--live-connection 'stopped t)))
-      (dape--update-stack-pointers conn t t))
     (add-hook 'kill-buffer-hook 'dape--breakpoint-buffer-kill-hook nil t)
     (run-hooks 'dape-update-ui-hooks)
     breakpoint))
@@ -2990,11 +2980,6 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
       (dolist (conn (dape--live-connections))
         (dape--set-breakpoints-in-buffer conn buffer)))
     (dape--margin-cleanup buffer))
-  ;; If we have an stopped connection we also have an stack pointer
-  ;; which should not have `dape-breakpoint-face' if we are
-  ;; removing the breakpoint on the line of the stack pointer.
-  (when-let ((conn (dape--live-connection 'stopped t)))
-    (dape--update-stack-pointers conn t t))
   (run-hooks 'dape-update-ui-hooks))
 
 (defun dape--breakpoint-update (conn overlay breakpoint)
@@ -3035,10 +3020,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                                                 'next-error)))
           (dape--repl-message
            (format "* Breakpoint in %s moved from line %s to %s *"
-                   old-buffer
-                   old-line
-                   new-line))
-          (dape--update-stack-pointers conn t t)
+                   old-buffer old-line new-line))
           (run-hooks 'dape-update-ui-hooks))))))
 
 (defconst dape--breakpoint-args '(:log :expression :hits)
@@ -3140,9 +3122,6 @@ See `dape-request' for expected CB signature."
 
 ;;; Stack pointers
 
-(define-fringe-bitmap 'dape-right-triangle
-  "\xe0\xf0\xf8\xfc\xfc\xf8\xf0\xe0")
-
 (defvar dape--overlay-arrow-position (make-marker)
   "Dape stack position marker.")
 
@@ -3155,8 +3134,7 @@ See `dape-request' for expected CB signature."
   "Remove stack pointer marker."
   (when-let ((buffer (marker-buffer dape--overlay-arrow-position)))
     (with-current-buffer buffer
-      (setq fringe-indicator-alist
-            (delete '(overlay-arrow . dape-right-triangle) fringe-indicator-alist))
+      ;; FIXME Should restore `fringe-indicator-alist'
       (dape--remove-eldoc-hook)))
   (when (overlayp dape--stack-position-overlay)
     (delete-overlay dape--stack-position-overlay))
@@ -3209,30 +3187,10 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
                                                     'dape-exception-description-face)
                                         "\n"))))
                       ov))
-              (add-to-list 'fringe-indicator-alist
-                           '(overlay-arrow . dape-right-triangle))
-              ;; If Emacs is compiled without without windows
-              ;; `set-fringe-bitmap-face' is not defined
-              (when (window-system)
-                ;; Set face of overlay-arrow before updating marker
-                (set-fringe-bitmap-face
-                 'dape-right-triangle
-                 (cond
-                  ;; Fringes has some platform inconsistencies
-                  ;; - GNU/Linux will render the overlay-arrow over
-                  ;; breakpoint bitmap (breakpoint bm will be visible
-                  ;; behind arrow).
-                  ;; - MacOS will remove bitmap in fringe before
-                  ;; drawing overlay-arrow, which is why we color the
-                  ;; arrow to indicate breakpoint presence at current
-                  ;; line.
-                  ((and (eq system-type 'darwin)
-                        (cl-find-if (lambda (ov)
-                                      (overlay-get ov :breakpoint))
-                                    (dape--breakpoints-at-point)))
-                   'dape-breakpoint-face)
-                  (deepest-p 'default)
-                  ('shadow))))
+              (setq fringe-indicator-alist
+                    (unless deepest-p
+                      '((overlay-arrow . hollow-right-triangle))))
+              ;; Finally lets move arrow to point
               (move-marker dape--overlay-arrow-position
                            (line-beginning-position)))))))))
 
