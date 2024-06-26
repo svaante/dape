@@ -4924,20 +4924,17 @@ non nil and function uses the minibuffer."
 (defun dape--config-eval-1 (config &optional skip-functions check
                                    skip-interactive)
   "Helper for `dape--config-eval'."
-  (cl-loop for (key value) on config by 'cddr
-           append (cond
-                   ((memql key '(modes fn ensure)) (list key value))
-                   ((and check (not (keywordp key)))
-                    (user-error "Unexpected key %S; lists of things needs be \
+  (cl-loop for (key value) on config by 'cddr append
+           (cond
+            ((memql key '(modes fn ensure)) (list key value))
+            ((and check (not (keywordp key)))
+             (user-error "Unexpected key %S; lists of things needs be \
 arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
-                                key key key key))
-                   (t
-                    (list key
-                          (dape--config-eval-value value
-                                                   skip-functions
-                                                   (or check (keywordp key))
-                                                   skip-interactive))))))
-
+                         key key key key))
+            ((list key
+                   (dape--config-eval-value value skip-functions
+                                            (or check (keywordp key))
+                                            skip-interactive))))))
 (defun dape--config-eval (key options)
   "Evaluate config with KEY and OPTIONS."
   (let ((base-config (alist-get key dape-configs)))
