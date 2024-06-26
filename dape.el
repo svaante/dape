@@ -444,6 +444,7 @@ for this variable.
 Example value:
 \(codelldb-cc :program \"/home/user/project/a.out\")"
   :type 'sexp)
+;;;###autoload(put 'dape-command 'safe-local-variable #'listp)
 
 (defcustom dape-mime-mode-alist '(("text/x-lldb.disassembly" . asm-mode)
                                   ("text/javascript" . js-mode))
