@@ -4311,8 +4311,7 @@ Handles newline."
     (setq msg (concat "\n" msg))
     (if (not (get-buffer-window "*dape-repl*"))
         (when (stringp msg)
-          (message "%s" (format "%s" (string-trim msg))
-                   'face face))
+          (message "%s" (propertize (format "%s" (string-trim msg)) 'face face)))
       (cond
        (dape--repl-insert-text-guard
         (run-with-timer 0.1 nil 'dape--repl-message msg))
