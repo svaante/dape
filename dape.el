@@ -789,7 +789,7 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
                             (list :granularity
                                   (symbol-name dape-stepping-granularity)))))
       (if error
-          (error "Failed to %s: %s" command error)
+          (message "Failed to \"%s\": %s" command error)
         ;; From specification [continued] event:
         ;; A debug adapter is not expected to send this event in
         ;; response to a request that implies that execution
