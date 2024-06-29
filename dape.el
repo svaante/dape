@@ -1781,7 +1781,7 @@ selected stack frame."
         (dolist (frame (plist-get thread :stackFrames))
           (plist-put frame :scopes nil)))))
     (dape--with-request (dape--stack-trace conn current-thread 1)
-      (dape--update-stack-pointers conn display)
+      (dape--stack-frame-display conn display)
       (dape--with-request (dape--scopes conn (dape--current-stack-frame conn))
         (run-hooks 'dape-update-ui-hooks)))))
 
@@ -1986,7 +1986,7 @@ Sets `dape--thread-id' from BODY if not set."
       (&key threadId (allThreadsContinued t) &allow-other-keys)
       body
     (dape--update-state conn 'running)
-    (dape--remove-stack-pointers)
+    (dape--stack-frame-cleanup)
     (dape--maybe-select-thread conn threadId nil)
     (dape--threads-set-status conn threadId (eq allThreadsContinued t) 'running
                               (dape--threads-make-update-handle conn))
@@ -2004,7 +2004,7 @@ Sets `dape--thread-id' from BODY if not set."
   "Handle adapter CONNs exited events.
 Prints exit code from BODY."
   (dape--update-state conn 'exited)
-  (dape--remove-stack-pointers)
+  (dape--stack-frame-cleanup)
   (dape--repl-message
    (format "* Exit code: %d *" (plist-get body :exitCode))
    (if (zerop (plist-get body :exitCode))
@@ -2028,7 +2028,7 @@ Killing the adapter and it's CONN."
 (defun dape--start-debugging (conn)
   "Preform some cleanup and start debugging with CONN."
   (unless (dape--parent conn)
-    (dape--remove-stack-pointers)
+    (dape--stack-frame-cleanup)
     (dape--breakpoints-reset)
     (cl-loop for (_ buffer) on dape--source-buffers by 'cddr
              when (buffer-live-p buffer)
@@ -2173,7 +2173,7 @@ symbol `dape-connection'."
              (dape--repl-message (buffer-string) 'dape-repl-error-face))))
        ;; cleanup server process
        (unless (dape--parent conn)
-         (dape--remove-stack-pointers)
+         (dape--stack-frame-cleanup)
          (when-let ((server-process
                      (dape--server-process conn)))
            (delete-process server-process)
@@ -2249,7 +2249,7 @@ CONN is inferred for interactive invocations."
   "Restart debugging session.
 CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'last t)))
-  (dape--remove-stack-pointers)
+  (dape--stack-frame-cleanup)
   (dape--breakpoints-reset)
   (cond
    ((and conn
@@ -3128,7 +3128,7 @@ See `dape-request' for expected CB signature."
             (dape--request-return cb)))))))))
 
 
-;;; Stack pointers
+;;; Stack frame
 
 (defvar dape--overlay-arrow-position (make-marker)
   "Dape stack position marker.")
@@ -3138,8 +3138,8 @@ See `dape-request' for expected CB signature."
 (defvar dape--stack-position-overlay nil
   "Dape stack position overlay for line.")
 
-(defun dape--remove-stack-pointers ()
-  "Remove stack pointer marker."
+(defun dape--stack-frame-cleanup ()
+  "Cleanup after `dape--stack-frame-display'."
   (when-let ((buffer (marker-buffer dape--overlay-arrow-position)))
     (with-current-buffer buffer
       ;; FIXME Should restore `fringe-indicator-alist'
@@ -3148,21 +3148,21 @@ See `dape-request' for expected CB signature."
     (delete-overlay dape--stack-position-overlay))
   (set-marker dape--overlay-arrow-position nil))
 
-(defun dape--update-stack-pointers (conn display)
-  "Update stack pointer marker for adapter CONN.
+(defun dape--stack-frame-display (conn display)
+  "Update stack frame arrow marker for adapter CONN.
 When DISPLAY is non nil display buffer if possible with
 `dape-display-source-buffer-action'."
-  (dape--remove-stack-pointers)
+  (dape--stack-frame-cleanup)
   (when-let (((dape--stopped-threads conn))
              (frame (dape--current-stack-frame conn)))
     (let ((deepest-p
            (eq frame (car (plist-get (dape--current-thread conn) :stackFrames)))))
       (dape--with-request (dape--source-ensure conn frame)
         ;; An update event could have fired between call to
-        ;; `dape--remove-stack-pointers' and callback, we have make
+        ;; `dape--stack-frame-cleanup' and callback, we have make
         ;; sure that overlay is deleted before we are dropping the
         ;; reference.
-        (dape--remove-stack-pointers)
+        (dape--stack-frame-cleanup)
         (when-let ((marker (dape--object-to-marker conn frame)))
           (when display
             (when-let ((window
