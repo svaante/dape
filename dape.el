@@ -3152,12 +3152,17 @@ See `dape-request' for expected CB signature."
   "Update stack pointer marker for adapter CONN.
 When DISPLAY is non nil display buffer if possible with
 `dape-display-source-buffer-action'."
+  (dape--remove-stack-pointers)
   (when-let (((dape--stopped-threads conn))
              (frame (dape--current-stack-frame conn)))
-    (dape--remove-stack-pointers)
     (let ((deepest-p
            (eq frame (car (plist-get (dape--current-thread conn) :stackFrames)))))
       (dape--with-request (dape--source-ensure conn frame)
+        ;; An update event could have fired between call to
+        ;; `dape--remove-stack-pointers' and callback, we have make
+        ;; sure that overlay is deleted before we are dropping the
+        ;; reference.
+        (dape--remove-stack-pointers)
         (when-let ((marker (dape--object-to-marker conn frame)))
           (when display
             (when-let ((window
