@@ -2405,7 +2405,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
         (dape--set-breakpoints-in-buffer conn buffer)))))
 
 (defun dape-select-thread (conn thread-id)
-  "Select currrent thread for adapter CONN by THREAD-ID."
+  "Select current thread for adapter CONN by THREAD-ID."
   (interactive
    (let* ((conn (dape--live-connection 'last))
           (collection
