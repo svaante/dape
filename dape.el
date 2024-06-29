@@ -510,6 +510,10 @@ present in an group."
   "Called when it's sensible to refresh UI."
   :type 'hook)
 
+(defcustom dape-display-source-hook '()
+  "Called in buffer when placing overlay arrow for stack frame."
+  :type 'hook)
+
 (defcustom dape-memory-page-size 1024
   "The bytes read with `dape-read-memory'."
   :type 'natnum)
@@ -523,9 +527,8 @@ present in an group."
   "Align columns in variable tables."
   :type 'boolean)
 
-(defcustom dape-info-variable-table-row-config `((name . 20)
-                                                 (value . 50)
-                                                 (type . 20))
+(defcustom dape-info-variable-table-row-config
+  `((name . 20) (value . 50) (type . 20))
   "Configuration for table rows of variables.
 
 An alist that controls the display of the name, type and value of
@@ -673,9 +676,9 @@ The hook is run with one argument, the compilation buffer."
   '((t :extend t :inherit (error tooltip)))
   "Face used to display exception descriptions inline.")
 
-(defface dape-stack-trace-face
-  '((t :extend t))
-  "Face used to display stack trace overlays.")
+(defface dape-source-line-face
+  '((t))
+  "Face used to display stack frame source line overlays.")
 
 (defface dape-repl-success-face
   '((t :inherit compilation-mode-line-exit :extend t))
@@ -1782,7 +1785,8 @@ selected stack frame."
         (dolist (frame (plist-get thread :stackFrames))
           (plist-put frame :scopes nil)))))
     (dape--with-request (dape--stack-trace conn current-thread 1)
-      (dape--stack-frame-display conn display)
+      (when display
+        (dape--stack-frame-display conn))
       (dape--with-request (dape--scopes conn (dape--current-stack-frame conn))
         (run-hooks 'dape-update-ui-hook)))))
 
@@ -3129,7 +3133,7 @@ See `dape-request' for expected CB signature."
             (dape--request-return cb)))))))))
 
 
-;;; Stack frame
+;;; Stack frame source
 
 (defvar dape--overlay-arrow-position (make-marker)
   "Dape stack position marker.")
@@ -3149,9 +3153,8 @@ See `dape-request' for expected CB signature."
     (delete-overlay dape--stack-position-overlay))
   (set-marker dape--overlay-arrow-position nil))
 
-(defun dape--stack-frame-display (conn display)
+(defun dape--stack-frame-display (conn)
   "Update stack frame arrow marker for adapter CONN.
-When DISPLAY is non nil display buffer if possible with
 `dape-display-source-buffer-action'."
   (dape--stack-frame-cleanup)
   (when-let (((dape--stopped-threads conn))
@@ -3162,10 +3165,31 @@ When DISPLAY is non nil display buffer if possible with
         ;; An update event could have fired between call to
         ;; `dape--stack-frame-cleanup' and callback, we have make
         ;; sure that overlay is deleted before we are dropping the
-        ;; reference.
+        ;; reference
         (dape--stack-frame-cleanup)
         (when-let ((marker (dape--object-to-marker conn frame)))
-          (when display
+          (with-current-buffer (marker-buffer marker)
+            (dape--add-eldoc-hook)
+            (save-excursion
+              (goto-char (marker-position marker))
+              (setq dape--stack-position-overlay
+                    (let ((ov (make-overlay (line-beginning-position)
+                                            (line-beginning-position 2))))
+                      (overlay-put ov 'face 'dape-source-line-face)
+                      (when deepest-p
+                        (when-let ((exception-description
+                                    (dape--exception-description conn)))
+                          (overlay-put ov 'after-string
+                                       (propertize (concat exception-description "\n")
+                                                   'face
+                                                   'dape-exception-description-face))))
+                      ov)
+                    fringe-indicator-alist
+                    (unless deepest-p
+                      '((overlay-arrow . hollow-right-triangle))))
+              ;; Finally lets move arrow to point
+              (move-marker dape--overlay-arrow-position
+                           (line-beginning-position)))
             (when-let ((window
                         (display-buffer (marker-buffer marker)
                                         dape-display-source-buffer-action)))
@@ -3178,31 +3202,8 @@ When DISPLAY is non nil display buffer if possible with
               ;;       context.  But this makes tests to hard write.
               (with-selected-window window
                 (goto-char (marker-position marker))
-                (pulse-momentary-highlight-region (line-beginning-position)
-                                                  (line-beginning-position 2)
-                                                  'next-error))))
-          (with-current-buffer (marker-buffer marker)
-            (dape--add-eldoc-hook)
-            (save-excursion
-              (goto-char (marker-position marker))
-              (setq dape--stack-position-overlay
-                    (let ((ov (make-overlay (line-beginning-position)
-                                            (line-beginning-position 2))))
-                      (overlay-put ov 'face 'dape-stack-trace-face)
-                      (when deepest-p
-                        (when-let ((exception-description
-                                    (dape--exception-description conn)))
-                          (overlay-put ov 'after-string
-                                        (propertize (concat exception-description "\n")
-                                                    'face
-                                                    'dape-exception-description-face))))
-                      ov))
-              (setq fringe-indicator-alist
-                    (unless deepest-p
-                      '((overlay-arrow . hollow-right-triangle))))
-              ;; Finally lets move arrow to point
-              (move-marker dape--overlay-arrow-position
-                           (line-beginning-position)))))))))
+                (run-hooks 'dape-display-source-hook)))))))))
+
 
 ;;; Info Buffers
 

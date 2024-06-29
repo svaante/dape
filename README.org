@@ -60,6 +60,9 @@ Screenshots taken with [[https://elpa.gnu.org/packages/standard-themes.html][sta
     ;; Global bindings for setting breakpoints with mouse
     ;; (dape-breakpoint-global-mode)
 
+    ;; Pulse source line (performance hit)
+    ;; (add-hook 'dape-display-source-hook 'pulse-momentary-highlight-one-line)
+
     ;; To not display info and/or buffers on startup
     ;; (remove-hook 'dape-start-hook 'dape-info)
     ;; (remove-hook 'dape-start-hook 'dape-repl)
