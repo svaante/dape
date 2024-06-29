@@ -61,6 +61,15 @@
 (require 'eglot) ;; jdtls config
 
 
+;;; Obsolete aliases
+(define-obsolete-variable-alias 'dape-buffer-window-arrangment 'dape-buffer-window-arrangement "0.3.0")
+(define-obsolete-variable-alias 'dape-read-memory-default-count 'dape-memory-page-size "0.8.0")
+(define-obsolete-variable-alias 'dape-on-start-hooks 'dape-start-hook "0.13.0")
+(define-obsolete-variable-alias 'dape-on-stopped-hooks 'dape-stopped-hook "0.13.0")
+(define-obsolete-variable-alias 'dape-update-ui-hooks 'dape-update-ui-hook "0.13.0")
+(define-obsolete-variable-alias 'dape-compile-compile-hooks 'dape-compile-hook "0.13.0")
+
+
 ;;; Custom
 (defgroup dape nil
   "Debug Adapter Protocol for Emacs."
@@ -463,10 +472,6 @@ Each element should look like (MIME-TYPE . MODE) where
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
-(define-obsolete-variable-alias
-  'dape-buffer-window-arrangment
-  'dape-buffer-window-arrangement "0.3.0")
-
 (defcustom dape-buffer-window-arrangement 'left
   "Rules for display dape buffers."
   :type '(choice (const :tag "GUD gdb like" gud)
@@ -493,21 +498,17 @@ present in an group."
   "The number of stack frames fetched."
   :type 'natnum)
 
-(defcustom dape-on-start-hooks '(dape-repl dape-info)
-  "Hook to run on session start."
+(defcustom dape-start-hook '(dape-repl dape-info)
+  "Called when session starts."
   :type 'hook)
 
-(defcustom dape-on-stopped-hooks '(dape--emacs-grab-focus dape-memory-revert)
-  "Hook to run on session stopped."
+(defcustom dape-stopped-hook '(dape-memory-revert dape--emacs-grab-focus)
+  "Called when session stopped."
   :type 'hook)
 
-(defcustom dape-update-ui-hooks '(dape-info-update)
-  "Hook to run on ui update."
+(defcustom dape-update-ui-hook '(dape-info-update)
+  "Called when it's sensible to refresh UI."
   :type 'hook)
-
-(define-obsolete-variable-alias
-  'dape-read-memory-default-count
-  'dape-memory-page-size "0.8.0")
 
 (defcustom dape-memory-page-size 1024
   "The bytes read with `dape-read-memory'."
@@ -584,7 +585,7 @@ left-to-right display order of the properties."
   :type 'string)
 
 (defcustom dape-repl-use-shorthand t
-  "Dape `dape-repl-commands' can be invokend with first char of command."
+  "Dape `dape-repl-commands' can be invoked with first char of command."
   :type 'boolean)
 
 (defcustom dape-repl-commands
@@ -621,8 +622,8 @@ file path of the current working directory, usually the current
 project's root. See `dape--default-cwd'."
   :type 'function)
 
-(defcustom dape-compile-compile-hooks nil
-  "Hook run after dape compilation succeeded.
+(defcustom dape-compile-hook nil
+  "Called after dape compilation succeeded.
 The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
@@ -1530,7 +1531,7 @@ See `dape-request' for expected CB signature."
                 (plist-get (dape--capabilities conn)
                            :exceptionBreakpointFilters)))
   (dape--with-request (dape--set-exception-breakpoints conn)
-    (run-hooks 'dape-update-ui-hooks)
+    (run-hooks 'dape-update-ui-hook)
     (dape--request-return cb)))
 
 (defun dape--set-breakpoints (conn cb)
@@ -1730,7 +1731,7 @@ Runs the appropriate hooks on non error response."
         (plist-put variable :variables nil)
         (cl-loop for (key value) on body by 'cddr
                  do (plist-put variable key value))
-        (run-hooks 'dape-update-ui-hooks))))
+        (run-hooks 'dape-update-ui-hook))))
    ;; `variable' from an "evaluate" request
    ((and (dape--capable-p conn :supportsSetExpression)
          (or (plist-get variable :evaluateName)
@@ -1783,7 +1784,7 @@ selected stack frame."
     (dape--with-request (dape--stack-trace conn current-thread 1)
       (dape--stack-frame-display conn display)
       (dape--with-request (dape--scopes conn (dape--current-stack-frame conn))
-        (run-hooks 'dape-update-ui-hooks)))))
+        (run-hooks 'dape-update-ui-hook)))))
 
 
 ;;; Incoming requests
@@ -1937,7 +1938,7 @@ Stores `dape--thread-id' and updates/adds thread in
                                       'exited
                                     'running)
                                   update-handle)
-        (run-hooks 'dape-update-ui-hooks)))))
+        (run-hooks 'dape-update-ui-hook)))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql stopped)) body)
   "Handle adapter CONNs stopped events.
@@ -1977,7 +1978,7 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
         (dape--threads-set-status conn threadId (eq allThreadsStopped t)
                                   'stopped update-handle)
         (dape--update conn 'stack-frames t)))
-    (run-hooks 'dape-on-stopped-hooks)))
+    (run-hooks 'dape-stopped-hook)))
 
 (cl-defmethod dape-handle-event (conn (_event (eql continued)) body)
   "Handle adapter CONN continued events.
@@ -1990,7 +1991,7 @@ Sets `dape--thread-id' from BODY if not set."
     (dape--maybe-select-thread conn threadId nil)
     (dape--threads-set-status conn threadId (eq allThreadsContinued t) 'running
                               (dape--threads-make-update-handle conn))
-    (run-hooks 'dape-update-ui-hooks)))
+    (run-hooks 'dape-update-ui-hook)))
 
 (cl-defmethod dape-handle-event (_conn (_event (eql output)) body)
   "Handle output events by printing BODY with `dape--repl-message'."
@@ -2038,7 +2039,7 @@ Killing the adapter and it's CONN."
     (unless dape-active-mode
       (dape-active-mode +1))
     (dape--update-state conn 'starting)
-    (run-hooks 'dape-update-ui-hooks))
+    (run-hooks 'dape-update-ui-hook))
   (dape--initialize conn))
 
 (defun dape--create-connection (config &optional parent)
@@ -2525,7 +2526,7 @@ Optional argument SKIP-REMOVE limits usage to only adding watched vars."
             dape--watched)
       ;; FIXME don't want to have a depency on info ui in core commands
       (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode))))
-  (run-hooks 'dape-update-ui-hooks))
+  (run-hooks 'dape-update-ui-hook))
 
 (defun dape-evaluate-expression (conn expression)
   "Evaluate EXPRESSION, if region is active evaluate region.
@@ -2576,7 +2577,7 @@ Use SKIP-COMPILE to skip compilation."
     (dape--config-ensure config t)
     ;; Hooks need to be run before any repl messaging but after we
     ;; have ensured that config is executable.
-    (run-hooks 'dape-on-start-hooks)
+    (run-hooks 'dape-start-hook)
     (when-let ((fn (or (plist-get config 'fn) 'identity))
                (fns (or (and (functionp fn) (list fn))
                         (and (listp fn) fn))))
@@ -2603,7 +2604,7 @@ Using BUFFER and STR."
   (cond
    ((equal "finished\n" str)
     (dape dape--compile-config 'skip-compile)
-    (run-hook-with-args 'dape-compile-compile-hooks buffer))
+    (run-hook-with-args 'dape-compile-hook buffer))
    (t
     (dape--repl-message (format "* Compilation failed %s *"
                                 (string-trim-right str))))))
@@ -2901,7 +2902,7 @@ contents."
     (dolist (conn (dape--live-connections))
       (when (dape--initialized-p conn)
         (dape--set-breakpoints-in-buffer conn (current-buffer)))))
-  (run-hooks 'dape-update-ui-hooks))
+  (run-hooks 'dape-update-ui-hook))
 
 (cl-defun dape--breakpoint-place (&key log expression hits)
   "Place breakpoint at current line.
@@ -2975,7 +2976,7 @@ Updates all breakpoints in all known connections."
     (dolist (conn (dape--live-connections))
       (dape--set-breakpoints-in-buffer conn (current-buffer)))
     (add-hook 'kill-buffer-hook 'dape--breakpoint-buffer-kill-hook nil t)
-    (run-hooks 'dape-update-ui-hooks)
+    (run-hooks 'dape-update-ui-hook)
     breakpoint))
 
 (defun dape--breakpoint-remove (overlay &optional skip-update)
@@ -2988,7 +2989,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
       (dolist (conn (dape--live-connections))
         (dape--set-breakpoints-in-buffer conn buffer)))
     (dape--margin-cleanup buffer))
-  (run-hooks 'dape-update-ui-hooks))
+  (run-hooks 'dape-update-ui-hook))
 
 (defun dape--breakpoint-update (conn overlay breakpoint)
   "Update breakpoint OVERLAY with BREAKPOINT plist from CONN."
@@ -2998,7 +2999,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (overlay-put overlay 'dape-verified-plist
                  (plist-put (overlay-get overlay 'dape-verified-plist)
                             conn verified))
-    (run-hooks 'dape-update-ui-hooks))
+    (run-hooks 'dape-update-ui-hook))
   (when-let* ((old-buffer (overlay-buffer overlay))
               (old-line (with-current-buffer old-buffer
                           (line-number-at-pos (overlay-start overlay))))
@@ -3029,7 +3030,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
           (dape--repl-message
            (format "* Breakpoint in %s moved from line %s to %s *"
                    old-buffer old-line new-line))
-          (run-hooks 'dape-update-ui-hooks))))))
+          (run-hooks 'dape-update-ui-hook))))))
 
 (defconst dape--breakpoint-args '(:log :expression :hits)
   "Plist keys for breakpoint serialization.")
@@ -3515,7 +3516,7 @@ displayed."
               dape--data-breakpoints))
   (when-let ((conn (dape--live-connection 'stopped t)))
     (dape--with-request (dape--set-data-breakpoints conn)))
-  (run-hooks 'dape-update-ui-hooks))
+  (run-hooks 'dape-update-ui-hook))
 
 (dape--buffer-map dape-info-data-breakpoints-line-map nil
   (define-key map "D" 'dape-info-data-breakpoint-delete
@@ -4044,7 +4045,7 @@ current buffer with CONN config."
           ;; Make sure breakpoint buffer is displayed
           (dape--display-buffer
            (dape--info-get-buffer-create 'dape-info-breakpoints-mode))
-          (run-hooks 'dape-update-ui-hooks))))))
+          (run-hooks 'dape-update-ui-hook))))))
 
 (defvar dape-info-scope-mode-map
   (let ((map (make-sparse-keymap)))
@@ -4774,7 +4775,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
         (delete-overlay inlay-hint)))
     (setq dape--inlay-hint-overlays nil)))
 
-(add-hook 'dape-update-ui-hooks #'dape-inlay-hints-update)
+(add-hook 'dape-update-ui-hook #'dape-inlay-hints-update)
 ;; TODO Create hook for UI cleanup (restart, quit and disconnect)
 (add-hook 'dape-active-mode-hook #'dape--inlay-hints-clean-up)
 
