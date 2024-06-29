@@ -1746,7 +1746,7 @@ Runs the appropriate hooks on non error response."
       (if error
           (message "%s" error)
         ;; Update all variables
-        (dape--update conn nil t t))))
+        (dape--update conn 'variables nil))))
    ((user-error "Unable to set variable"))))
 
 (defun dape--scopes (conn stack-frame cb)
@@ -1761,20 +1761,27 @@ See `dape-request' for expected CB signature."
         (dape--request-return cb error))
     (dape--request-return cb)))
 
-(defun dape--update (conn &optional skip-clear-stack-frames
-                          skip-stack-pointer-flash skip-display)
-  "Update adapter CONN data and ui.
-If SKIP-CLEAR-STACK-FRAMES no stack frame data is cleared.  This
-is usefully if only to load data for another thread.
-If SKIP-STACK-POINTER-FLASH skip flashing after placing stack pointer.
-If SKIP-DISPLAY is non nil refrain from displaying selected stack."
+(defun dape--update (conn clear display)
+  "Update adapter CONN data and UI.
+CLEAR can be one of:
+ `stack-frames': clear stack data for each thread.  This effects
+current selected stack frame.
+ `variables': keep stack frame data but clear variables for each
+frame.
+ nil: keep all available data.
+If DISPLAY is non nil display buffer containing source of current
+selected stack frame."
   (let ((current-thread (dape--current-thread conn)))
-    (unless skip-clear-stack-frames
-      (dolist (thread (dape--threads conn))
-        (plist-put thread :totalFrames nil)
-        (plist-put thread :stackFrames nil)))
+    (dolist (thread (dape--threads conn))
+      (pcase clear
+       ('stack-frames
+        (plist-put thread :stackFrames nil)
+        (plist-put thread :totalFrames nil))
+       ('variables
+        (dolist (frame (plist-get thread :stackFrames))
+          (plist-put frame :scopes nil)))))
     (dape--with-request (dape--stack-trace conn current-thread 1)
-      (dape--update-stack-pointers conn skip-stack-pointer-flash skip-display)
+      (dape--update-stack-pointers conn display)
       (dape--with-request (dape--scopes conn (dape--current-stack-frame conn))
         (run-hooks 'dape-update-ui-hooks)))))
 
@@ -1969,7 +1976,7 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
       (dape--with-request (dape--update-threads conn)
         (dape--threads-set-status conn threadId (eq allThreadsStopped t)
                                   'stopped update-handle)
-        (dape--update conn)))
+        (dape--update conn 'stack-frames t)))
     (run-hooks 'dape-on-stopped-hooks)))
 
 (cl-defmethod dape-handle-event (conn (_event (eql continued)) body)
@@ -2435,7 +2442,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
      (alist-get thread-name collection nil nil 'equal)))
   (setf (dape--thread-id conn) thread-id)
   (setq dape--connection-selected conn)
-  (dape--update conn t)
+  (dape--update conn nil t)
   (dape--mode-line-format))
 
 (defun dape-select-stack (conn stack-id)
@@ -2465,7 +2472,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                             nil t)))
      (list conn (alist-get stack-name collection nil nil 'equal))))
   (setf (dape--stack-id conn) stack-id)
-  (dape--update conn t))
+  (dape--update conn nil t))
 
 (defun dape-stack-select-up (conn n)
   "Select N stacks above current selected stack for adapter CONN."
@@ -2692,7 +2699,7 @@ Using BUFFER and STR."
           (with-current-buffer buffer
             (set-buffer-modified-p nil))
           (message "Memory written successfully at %s" address)
-          (dape--update conn nil t t)))))
+          (dape--update conn 'variables nil)))))
   ;; Return `t' to signal buffer written
   t)
 
@@ -3141,11 +3148,10 @@ See `dape-request' for expected CB signature."
     (delete-overlay dape--stack-position-overlay))
   (set-marker dape--overlay-arrow-position nil))
 
-(defun dape--update-stack-pointers (conn &optional
-                                         skip-stack-pointer-flash skip-display)
+(defun dape--update-stack-pointers (conn display)
   "Update stack pointer marker for adapter CONN.
-If SKIP-STACK-POINTER-FLASH is non nil refrain from flashing line.
-If SKIP-DISPLAY is non nil refrain from going to selected stack."
+When DISPLAY is non nil display buffer if possible with
+`dape-display-source-buffer-action'."
   (when-let (((dape--stopped-threads conn))
              (frame (dape--current-stack-frame conn)))
     (dape--remove-stack-pointers)
@@ -3153,7 +3159,7 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
            (eq frame (car (plist-get (dape--current-thread conn) :stackFrames)))))
       (dape--with-request (dape--source-ensure conn frame)
         (when-let ((marker (dape--object-to-marker conn frame)))
-          (unless skip-display
+          (when display
             (when-let ((window
                         (display-buffer (marker-buffer marker)
                                         dape-display-source-buffer-action)))
@@ -3161,15 +3167,14 @@ If SKIP-DISPLAY is non nil refrain from going to selected stack."
               (unless (with-current-buffer (window-buffer)
                         (memq major-mode '(dape-repl-mode)))
                 (select-window window))
-              (unless skip-stack-pointer-flash
-                ;; FIXME Should be called with idle-timer as to
-                ;;       guarantee that we are not in `save-excursion'
-                ;;       context.  But this makes tests to hard write.
-                (with-selected-window window
-                  (goto-char (marker-position marker))
-                  (pulse-momentary-highlight-region (line-beginning-position)
-                                                    (line-beginning-position 2)
-                                                    'next-error)))))
+              ;; FIXME Should be called with idle-timer as to
+              ;;       guarantee that we are not in `save-excursion'
+              ;;       context.  But this makes tests to hard write.
+              (with-selected-window window
+                (goto-char (marker-position marker))
+                (pulse-momentary-highlight-region (line-beginning-position)
+                                                  (line-beginning-position 2)
+                                                  'next-error))))
           (with-current-buffer (marker-buffer marker)
             (dape--add-eldoc-hook)
             (save-excursion
@@ -4462,7 +4467,7 @@ Send INPUT to DUMMY-PROCESS."
                                               (plist-put body :name input)
                                               #'dape--repl-message))
            (t
-            (dape--update conn nil t)
+            (dape--update conn 'variables nil)
             (dape--repl-message result)))))))))
 
 (defun dape--repl-completion-at-point ()
