@@ -669,7 +669,7 @@ The hook is run with one argument, the compilation buffer."
   "Face used to display hits breakpoints.")
 
 (defface dape-exception-description-face
-  '((t :inherit (error tooltip)))
+  '((t :extend t :inherit (error tooltip)))
   "Face used to display exception descriptions inline.")
 
 (defface dape-stack-trace-face
@@ -3187,11 +3187,9 @@ When DISPLAY is non nil display buffer if possible with
                         (when-let ((exception-description
                                     (dape--exception-description conn)))
                           (overlay-put ov 'after-string
-                                       (concat
-                                        (propertize exception-description
+                                        (propertize (concat exception-description "\n")
                                                     'face
-                                                    'dape-exception-description-face)
-                                        "\n"))))
+                                                    'dape-exception-description-face))))
                       ov))
               (setq fringe-indicator-alist
                     (unless deepest-p
