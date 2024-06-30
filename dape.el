@@ -1830,7 +1830,7 @@ Starts a new adapter CONNs from ARGUMENTS."
 Starts a new adapter connection as per request of the debug adapter."
   (let ((config (plist-get arguments :configuration))
         (request (plist-get arguments :request)))
-    (cl-loop with socket-conn-p = (plist-get config 'port)
+    (cl-loop with socket-conn-p = (plist-get (dape--config conn) 'port)
              for (key value) on (dape--config conn) by 'cddr
              unless (or (keywordp key)
                         (and socket-conn-p (eq key 'command)))
