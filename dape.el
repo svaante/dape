@@ -882,10 +882,11 @@ See `dape-configs' symbols prefix-local prefix-remote."
             (mapping (pcase format
                        ('local (cons prefix-remote prefix-local))
                        ('remote (cons prefix-local prefix-remote))
-                       (_ (error "Unknown format")))))
-      (concat
-       (cdr mapping)
-       (string-remove-prefix (car mapping) path))
+                       (_ (error "Unknown format"))))
+            ;; Substitute prefix if there is an match or nil
+            ((string-prefix-p (car mapping) path)))
+      (concat (cdr mapping)
+              (string-remove-prefix (car mapping) path))
     path))
 
 (defun dape--capable-p (conn of)
