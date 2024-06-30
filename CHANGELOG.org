@@ -2,6 +2,25 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.13.0
+- Add support for new version of =lldb-vscode= which is now called =lldb-dap=
+- Rework source line with new hook =dape-display-source-hook= (performance)
+- Support watch expressions with space in =dape-info-watch-edit-mode=
+- Keep current stack frame selection through REPL usage
+- Mark =dape-command= as safe-local-variable
+- Align =defcustom= hook names with Emacs standard
+- Clarify boundary of exception message overlay with extended face
+- Replace custom fringe arrow handling with =overlay-arrow-variable-list=
+- Improve error message when failing to establish TCP connection
+- Generate new hexlish buffers on =dape-memory-read=
+- Extend =repeat-map= to improve =edebug= like workflow
+- Fix skip server-process creation for children of socket connections
+- Fix prefix-* path substation for non matching prefix
+- Fix ensure removal of dangling stack pointer overlays
+- Fix handle error when breakpoint on line where =thing-at-point= is nil
+- Fix stale modeline status on switching adapter connection
+- Fix =dape-select-stack= when delayed stack trace loading is in effect
+
 * Version 0.12.0
 - Rework breakpoint info type display
 - Add stack select up/down repl commands
