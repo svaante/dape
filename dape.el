@@ -138,6 +138,14 @@
                                 "debugAdapters"
                                 "bin"
                                 "OpenDebugAD7")
+     fn (lambda (config)
+          ;; For MI=GDB the :program path need to be absolute
+          (let ((program (plist-get config :program)))
+            (if (file-name-absolute-p program)
+                config
+              (thread-last (tramp-file-local-name (dape--guess-root config))
+                           (expand-file-name program)
+                           (plist-put config :program)))))
      :type "cppdbg"
      :request "launch"
      :cwd "."
