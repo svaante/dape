@@ -5247,6 +5247,9 @@ See `eldoc-documentation-functions', for more information."
     "--"
     ["REPL" dape-repl]
     ["Info buffers" dape-info]
+    ["Memory" dape-read-memory
+     :enable (dape--capable-p (dape--live-connection 'last)
+                              :supportsReadMemoryRequest)]
     "--"
     ["Customize Dape" (lambda () (interactive) (customize-group "dape"))]))
 
