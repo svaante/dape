@@ -5235,6 +5235,21 @@ See `eldoc-documentation-functions', for more information."
 
 ;;; Mode line
 
+(easy-menu-define dape-menu nil
+  "Menu for `dape-active-mode'."
+  `("Dape"
+    ["Continue" dape-continue :enable (dape--live-connection 'stopped)]
+    ["Next" dape-next :enable (dape--live-connection 'stopped)]
+    ["Step in" dape-step-in :enable (dape--live-connection 'stopped)]
+    ["Step out" dape-step-out :enable (dape--live-connection 'stopped)]
+    ["Pause" dape-pause :enable (not (dape--live-connection 'stopped))]
+    ["Quit" dape-quit]
+    "--"
+    ["REPL" dape-repl]
+    ["Info buffers" dape-info]
+    "--"
+    ["Customize Dape" (lambda () (interactive) (customize-group "dape"))]))
+
 (defun dape--update-state (conn state &optional reason)
   "Update Dape mode line with STATE symbol for adapter CONN."
   (setf (dape--state conn) state)
@@ -5253,7 +5268,13 @@ See `eldoc-documentation-functions', for more information."
                   dape--connection)))
     (setq dape--mode-line-format
           `((:propertize "dape"
-                         face font-lock-constant-face)
+                         face font-lock-constant-face
+                         mouse-face mode-line-highlight
+                         help-echo "Dape: Debug Adapter Protocol for Emacs\n\
+mouse-1: Display minor mode menu"
+                         keymap ,(let ((map (make-sparse-keymap)))
+                                  (define-key map [mode-line down-mouse-1] dape-menu)
+                                  map))
             ":"
             (:propertize ,(format "%s" (or (and conn (dape--state conn))
                                            'unknown))
