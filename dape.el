@@ -476,7 +476,15 @@ Each element should look like (MIME-TYPE . MODE) where
   :type 'key-sequence)
 
 (defcustom dape-display-source-buffer-action
-  '(display-buffer-same-window)
+  `((display-buffer-use-some-window display-buffer-pop-up-window)
+    (some-window
+     . (lambda (&rest _)
+         (cl-loop for w in (window-list) unless
+                  (buffer-match-p '(or (derived-mode . dape-repl-mode)
+                                       (derived-mode . dape-shell-mode)
+                                       (derived-mode . dape-info-parent-mode))
+                                  (window-buffer w))
+                  return w))))
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
@@ -1096,36 +1104,35 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
 
 (defun dape--display-buffer (buffer)
   "Display BUFFER according to `dape-buffer-window-arrangement'."
-  (display-buffer
-   buffer
-   (let* ((mode (with-current-buffer buffer major-mode))
-          (group (cl-position-if (lambda (group) (memq mode group))
-                                 dape-info-buffer-window-groups)))
-     (pcase dape-buffer-window-arrangement
-       ((or 'left 'right)
-        (cons '(display-buffer-in-side-window)
-              (pcase (cons mode group)
-                (`(dape-repl-mode . ,_) '((side . bottom) (slot . -1)))
-                (`(shell-mode . ,_) '((side . bottom) (slot . 0)))
-                (`(,_ . 0) `((side . ,dape-buffer-window-arrangement) (slot . -1)))
-                (`(,_ . 1) `((side . ,dape-buffer-window-arrangement) (slot . 0)))
-                (`(,_ . 2) `((side . ,dape-buffer-window-arrangement) (slot . 1)))
-                (_ (error "Unable to display buffer of mode `%s'" mode)))))
-       ('gud
-        (pcase (cons mode group)
-          (`(dape-repl-mode . ,_)
-           '((display-buffer-in-side-window) (side . top) (slot . -1)))
-          (`(shell-mode . ,_)
-           '((display-buffer-reuse-window) (display-buffer-pop-up-window)
-             (direction . right) (dedicated . t)))
-          (`(,_ . 0)
-           '((display-buffer-in-side-window) (side . top) (slot . 0)))
-          (`(,_ . 1)
-           '((display-buffer-in-side-window) (side . bottom) (slot . -1)))
-          (`(,_ . 2)
-           '((display-buffer-in-side-window) (side . bottom) (slot . 1)))
-          (_ (error "Unable to display buffer of mode `%s'" mode))))
-       (_ (user-error "Invalid value of `dape-buffer-window-arrangement'"))))))
+  (pcase-let* ((mode (with-current-buffer buffer major-mode))
+               (group (cl-position-if (lambda (group) (memq mode group))
+                                      dape-info-buffer-window-groups))
+               (`(,fns . ,alist)
+                (pcase dape-buffer-window-arrangement
+                  ((or 'left 'right)
+                   (cons '(display-buffer-in-side-window)
+                         (pcase (cons mode group)
+                           (`(dape-repl-mode . ,_) '((side . bottom) (slot . -1)))
+                           (`(shell-mode . ,_) '((side . bottom) (slot . 0)))
+                           (`(,_ . 0) `((side . ,dape-buffer-window-arrangement) (slot . -1)))
+                           (`(,_ . 1) `((side . ,dape-buffer-window-arrangement) (slot . 0)))
+                           (`(,_ . 2) `((side . ,dape-buffer-window-arrangement) (slot . 1)))
+                           (_ (error "Unable to display buffer of mode `%s'" mode)))))
+                  ('gud
+                   (pcase (cons mode group)
+                     (`(dape-repl-mode . ,_)
+                      '((display-buffer-in-side-window) (side . top) (slot . -1)))
+                     (`(shell-mode . ,_)
+                      '((display-buffer-pop-up-window)
+                        (direction . right) (dedicated . t)))
+                     (`(,_ . 0)
+                      '((display-buffer-in-side-window) (side . top) (slot . 0)))
+                     (`(,_ . 1)
+                      '((display-buffer-in-side-window) (side . bottom) (slot . -1)))
+                     (`(,_ . 2)
+                      '((display-buffer-in-side-window) (side . bottom) (slot . 1)))
+                     (_ (error "Unable to display buffer of mode `%s'" mode)))))))
+    (display-buffer buffer `((display-buffer-reuse-window . ,fns) . ,alist))))
 
 (defmacro dape--mouse-command (name doc command)
   "Create mouse command with NAME, DOC which call COMMAND."
