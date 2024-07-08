@@ -480,8 +480,9 @@ Each element should look like (MIME-TYPE . MODE) where
     (some-window
      . (lambda (&rest _)
          (cl-loop for w in (window-list) unless
-                  (buffer-match-p '(or (derived-mode . dape-repl-mode)
-                                       (derived-mode . dape-shell-mode)
+                  (buffer-match-p '(or "\*dape-shell\*"
+                                       (derived-mode . dape-repl-mode)
+                                       (derived-mode . dape-memory-mode)
                                        (derived-mode . dape-info-parent-mode))
                                   (window-buffer w))
                   return w))))
