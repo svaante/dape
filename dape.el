@@ -386,7 +386,24 @@
      :request "launch"
      :vmArgs " -XX:+ShowCodeDetailsInExceptionMessages"
      :console "integratedConsole"
-     :internalConsoleOptions "neverOpen"))
+     :internalConsoleOptions "neverOpen")
+    (xdebug
+     modes (php-mode php-ts-mode)
+     ensure (lambda (config)
+              (dape-ensure-command config)
+              (let ((dap-debug-server-path
+                     (car (plist-get config 'command-args))))
+                (unless (file-exists-p dap-debug-server-path)
+                  (user-error "File %S does not exist" dap-debug-server-path))))
+     command "node"
+     command-args (,(expand-file-name
+                     (file-name-concat dape-adapter-dir
+                                       "php-debug"
+                                       "extension"
+                                       "out"
+                                       "phpDebug.js")))
+     :type "php"
+     :port 9003))
    "This variable holds the dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)

@@ -168,6 +168,12 @@ Extend ~eglot-server-programs~ as follows to have JDTLS load the plugin:
                   (:bundles ["/PATH/TO/java-debug/com.microsoft.java.debug.plugin/target/com.microsoft.java.debug.plugin-VERSION.jar"]))))
 #+end_src
 
+** PHP - Xdebug
+1. Install and setup =Xdebug= see [[https://github.com/xdebug/vscode-php-debug][instructions]]
+2. Install =node=
+3. Download latest =vsix= [[https://github.com/xdebug/vscode-php-debug/releases][release]] of DAP adapter for =Xdebug= =php-debug-<version>.vsix=
+4. Unpack ~mkdir -p ~/.emacs.d/debug-adapters && unzip php-debug-<version>.vsix -d ~/.emacs.d/debug-adapters/php-debug~
+
 ** Other untested adapters
 If you find a working configuration for any other debug adapter please submit a PR.
 
