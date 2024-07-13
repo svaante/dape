@@ -1625,8 +1625,6 @@ See `dape-request' for expected CB signature."
 (defun dape--update-threads (conn cb)
   "Update threads for CONN in-place if possible.
 See `dape-request' for expected CB signature."
-  ;; TODO Should de-bounce these request as they really flood the pipe
-  ;;      when triggered from "thread" event.
   (dape--with-request-bind
       ((&key threads &allow-other-keys) error)
       (dape-request conn "threads" nil)
@@ -2562,7 +2560,7 @@ Optional argument SKIP-REMOVE limits usage to only adding watched vars."
     (unless skip-add
       (push (list :name expression)
             dape--watched)
-      ;; FIXME don't want to have a depency on info ui in core commands
+      ;; FIXME Remove dependency on ui in core commands
       (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode))))
   (run-hooks 'dape-update-ui-hook))
 
@@ -2750,12 +2748,7 @@ Using BUFFER and STR."
 (define-derived-mode dape-memory-mode hexl-mode "Memory"
   "Mode for reading and writing memory."
   :interactive nil
-  ;; TODO Replace or improve hexl.
-  ;;      hexl is not really fitted for our use case as it does
-  ;;      support offset in any way.  The buffer is created with the
-  ;;      hexl binary as is.  Filling the buffer with junk before
-  ;;      `hexlify-buffer' is not an option as it might be extremely
-  ;;      large.
+  ;; TODO Look for alternatives to hexl, which handles address offsets
   (add-hook 'eldoc-documentation-functions
             #'dape--memory-print-current-point-info nil t)
   ;; FIXME Is `revert-buffer-in-progress-p' is not respected
@@ -2838,8 +2831,8 @@ of memory read."
   (let ((map (make-sparse-keymap)))
     (define-key map [left-fringe mouse-1] 'dape-mouse-breakpoint-toggle)
     (define-key map [left-margin mouse-1] 'dape-mouse-breakpoint-toggle)
-    ;; TODO mouse-2 should be replaced by an menu for setting all
-    ;;      breakpoint types.
+    ;; TODO Would be nice if mouse-2 would open an menu for any
+    ;;      breakpoint type (expression, log and hit).
     (define-key map [left-fringe mouse-2] 'dape-mouse-breakpoint-expression)
     (define-key map [left-margin mouse-2] 'dape-mouse-breakpoint-expression)
     (define-key map [left-fringe mouse-3] 'dape-mouse-breakpoint-log)
@@ -3193,6 +3186,9 @@ See `dape-request' for expected CB signature."
 `dape-display-source-buffer-action'."
   (dape--stack-frame-cleanup)
   (when-let (((dape--stopped-threads conn))
+             ;; TODO Should check if frame source is available, if not
+             ;;      it should display the first frame that source is
+             ;;      available.
              (frame (dape--current-stack-frame conn)))
     (let ((deepest-p
            (eq frame (car (plist-get (dape--current-thread conn) :stackFrames)))))
@@ -3241,9 +3237,6 @@ See `dape-request' for expected CB signature."
 
 
 ;;; Info Buffers
-
-;; TODO Because buttons where removed from info buffer
-;;      there should be a way to control execution by mouse
 
 (defvar-local dape--info-buffer-related nil
   "List of related buffers.")
@@ -3370,12 +3363,6 @@ FN is expected to update insert buffer contents, update
 `dape--info-buffer-related' and `header-line-format'."
   ;; Save buffer as `select-window' sets buffer
   (save-current-buffer
-    ;; FIXME: This guarantees that only info buffers are erased if
-    ;;        something unexpected happens with the current-buffer.
-    ;;        If buffer is killed while waiting for an response in
-    ;;        an caller of this function current-buffer *will* change
-    ;;        and another dape info buffer will be reused for this
-    ;;        update and that is not correct.
     (when (derived-mode-p 'dape-info-parent-mode)
       ;; Would be nice with replace-buffer-contents
       ;; But it seams to messes up string properties
@@ -4055,7 +4042,7 @@ current buffer with CONN config."
     (unless (dape--capable-p conn :supportsDataBreakpoints)
       (user-error "Adapter does not support data breakpoints"))
     (dape--with-request-bind
-        ;; TODO Test if canPersist works, hanve not found an adapter
+        ;; TODO Test if canPersist works, have not found an adapter
         ;;      supporting it.
         ((&key dataId description accessTypes &allow-other-keys) error)
         (dape-request conn "dataBreakpointInfo"
@@ -4071,10 +4058,7 @@ current buffer with CONN config."
                     :dataId dataId
                     :accessType (completing-read
                                  (format "Breakpoint type for `%s': " name)
-                                 (append accessTypes nil) nil t)
-                    ;; TODO Support :condition
-                    ;; TODO Support :hitCondition
-                    )
+                                 (append accessTypes nil) nil t))
               dape--data-breakpoints)
         (dape--with-request
             (dape--set-data-breakpoints conn)
@@ -4091,8 +4075,6 @@ current buffer with CONN config."
     (define-key map "b" 'dape-info-scope-data-breakpoint)
     map)
   "Local keymap for dape scope buffers.")
-
-;; TODO Add bindings for adding data breakpoint
 
 (defun dape--info-locals-table-columns-list (alist)
   "Format and arrange the columns in locals display based on ALIST."
@@ -4853,7 +4835,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
             (pcase-let ((`(,key config ,error-message)
                          dape--minibuffer-cache))
               ;; FIXME ensure is expensive so we are a bit cheap
-              ;; here, correct would be to use `use-cache'
+              ;;       here, correct would be to use `use-cache'
               (and (equal hint-key key)
                    (not error-message)))
             error-message
