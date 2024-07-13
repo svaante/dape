@@ -4814,84 +4814,71 @@ Update `dape--inlay-hint-overlays' from SCOPES."
 
 (defun dape--minibuffer-hint (&rest _)
   "Display current configuration in minibuffer in overlay."
-  (save-excursion
-    (let ((str
-           (string-trim (buffer-substring (minibuffer-prompt-end)
-                                          (point-max))))
-          use-cache use-ensure-cache error-message hint-key hint-config hint-rows)
-
-      (ignore-errors
-        (pcase-setq `(,hint-key ,hint-config) (dape--config-from-string str t)))
-      (setq default-directory
-            (or (with-current-buffer dape--minibuffer-last-buffer
-                  (ignore-errors (dape--guess-root hint-config)))
-                default-directory)
-            use-cache
-            (pcase-let ((`(,key ,config)
-                         dape--minibuffer-cache))
-              (and (equal hint-key key)
-                   (equal hint-config config)))
-            use-ensure-cache
-            (pcase-let ((`(,key config ,error-message)
-                         dape--minibuffer-cache))
-              ;; FIXME ensure is expensive so we are a bit cheap
-              ;;       here, correct would be to use `use-cache'
-              (and (equal hint-key key)
-                   (not error-message)))
+  (pcase-let*
+      ((`(,key ,config ,error-message ,hint-rows) dape--minibuffer-cache)
+       (str (string-trim (buffer-substring (minibuffer-prompt-end) (point-max))))
+       (`(,hint-key ,hint-config) (ignore-errors (dape--config-from-string str t)))
+       (default-directory
+        (or (with-current-buffer dape--minibuffer-last-buffer
+              (ignore-errors (dape--guess-root hint-config)))
+            default-directory))
+       (use-cache (and (equal hint-key key)
+                       (equal hint-config config)))
+       (use-ensure-cache
+        ;; Ensure is expensive so we are cheating and don't re run
+        ;; ensure if an ensure has evaled without signaling once
+        (and (equal hint-key key)
+             (not error-message)))
+       (error-message
+        (if use-ensure-cache
             error-message
-            (if use-ensure-cache
-                (pcase-let ((`(key config ,error-message)
-                             dape--minibuffer-cache))
-                  error-message)
-              (condition-case err
-                  (progn
-                    (with-current-buffer dape--minibuffer-last-buffer
-                      (dape--config-ensure hint-config t))
-                    nil)
-                (error (setq error-message (error-message-string err)))))
+          (condition-case err
+              (progn (with-current-buffer dape--minibuffer-last-buffer
+                       (dape--config-ensure hint-config t))
+                     nil)
+            (error (error-message-string err)))))
+       (hint-rows
+        (if use-cache
             hint-rows
-            (if use-cache
-                (pcase-let ((`(key config error-message ,hint-rows)
-                             dape--minibuffer-cache))
-                  hint-rows)
-              (cl-loop with base-config = (alist-get hint-key dape-configs)
-                       for (key value) on hint-config by 'cddr
-                       unless (or (memq key dape-minibuffer-hint-ignore-properties)
-                                  (and (eq key 'port) (eq value :autoport))
-                                  (eq key 'ensure))
-                       collect (concat
-                                (propertize (format "%s" key)
-                                            'face 'font-lock-keyword-face)
-                                " "
-                                (with-current-buffer dape--minibuffer-last-buffer
-                                  (condition-case err
-                                      (propertize
-                                       (format "%S"
-                                               (dape--config-eval-value value nil nil t))
-                                       'face
-                                       (when (equal value (plist-get base-config key))
-                                         'shadow))
-                                    (error
-                                     (propertize (error-message-string err)
-                                                 'face 'error)))))))
-            dape--minibuffer-cache
-            (list hint-key hint-config error-message hint-rows))
+          (cl-loop
+           with base-config = (alist-get hint-key dape-configs)
+           for (key value) on hint-config by 'cddr
+           unless (or (memq key dape-minibuffer-hint-ignore-properties)
+                      (and (eq key 'port) (eq value :autoport))
+                      (eq key 'ensure))
+           collect
+           (concat
+            (propertize (format "%s" key)
+                        'face 'font-lock-keyword-face)
+            " "
+            (with-current-buffer dape--minibuffer-last-buffer
+              (condition-case err
+                  (propertize
+                   (format "%S" (dape--config-eval-value value nil nil t))
+                   'face
+                   (when (equal value (plist-get base-config key))
+                     'shadow))
+                (error
+                 (propertize (error-message-string err)
+                             'face 'error)))))))))
+    (setq dape--minibuffer-cache
+          (list hint-key hint-config error-message hint-rows))
+    (overlay-put dape--minibuffer-hint-overlay
+                 'before-string
+                 (concat
+                  (propertize " " 'cursor 0)
+                  (when error-message
+                    (format "%s" (propertize error-message 'face 'error)))))
+    (when dape-minibuffer-hint
       (overlay-put dape--minibuffer-hint-overlay
-                   'before-string
+                   'after-string
                    (concat
-                    (propertize " " 'cursor 0)
-                    (when error-message
-                      (format "%s" (propertize error-message 'face 'error)))))
-      (when dape-minibuffer-hint
-        (overlay-put dape--minibuffer-hint-overlay
-                     'after-string
-                     (concat
-                      (when hint-rows
-                        (concat
-                         "\n\n"
-                         (mapconcat 'identity hint-rows "\n")))))))
-    (move-overlay dape--minibuffer-hint-overlay
-                  (point-max) (point-max) (current-buffer))))
+                    (when hint-rows
+                      (concat
+                       "\n\n"
+                       (mapconcat 'identity hint-rows "\n")))))
+      (move-overlay dape--minibuffer-hint-overlay
+                    (point-max) (point-max) (current-buffer)))))
 
 
 ;;; Config
