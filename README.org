@@ -26,11 +26,11 @@ For complete functionality, make sure to enable ~eldoc-mode~ in your source buff
 + No external dependencies outside of core Emacs
 
 With ~(setq dape-buffer-window-arrangement 'right)~:
-[[https://raw.githubusercontent.com/svaante/dape/resources/c-right-12.0.0.png]]
+[[https://raw.githubusercontent.com/svaante/dape/resources/c-right-14.0.0.png]]
 And with ~(setq dape-buffer-window-arrangement 'gud)~ + =corfu= as ~completion-in-region-function~:
-[[https://raw.githubusercontent.com/svaante/dape/resources/js-gud-12.0.0.png]]
+[[https://raw.githubusercontent.com/svaante/dape/resources/js-gud-14.0.0.png]]
 With =minibuffer= adapter configuration hints:
-[[https://raw.githubusercontent.com/svaante/dape/resources/minibuffer-hints-12.0.0.png]]
+[[https://raw.githubusercontent.com/svaante/dape/resources/minibuffer-hints-14.0.0.png]]
 Screenshots taken with [[https://elpa.gnu.org/packages/standard-themes.html][standard-light]].
 
 * Configuration
