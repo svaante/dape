@@ -2,6 +2,14 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.14.0
+- Add separator line for minibuffer hints
+- Add baseline for PHP =xdebug= config and install instructions
+- Add modeline menu for =dape-active-mode=
+- Rework display buffer actions
+- Fix relative path =command-cwd= for =cppdebug=
+- Fix unnecessary mime message
+
 * Version 0.13.0
 - Add support for new version of =lldb-vscode= which is now called =lldb-dap=
 - Rework source line with new hook =dape-display-source-hook= (performance)
