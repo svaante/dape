@@ -687,39 +687,34 @@ The hook is run with one argument, the compilation buffer."
 
 
 ;;; Face
-(defface dape-breakpoint-face
-  '((t :inherit (font-lock-keyword-face)))
+(defface dape-breakpoint-face '((t :inherit font-lock-keyword-face))
   "Face used to display breakpoint overlays.")
 
-(defface dape-log-face
-  '((t :inherit (font-lock-string-face)
-       :height 0.85 :box (:line-width -1)))
+(defface dape-log-face '((t :inherit font-lock-string-face
+                            :height 0.85 :box (:line-width -1)))
   "Face used to display log breakpoints.")
 
-(defface dape-expression-face
-  '((t :inherit (dape-breakpoint-face)
-       :height 0.85 :box (:line-width -1)))
+(defface dape-expression-face '((t :inherit dape-breakpoint-face
+                                   :height 0.85 :box (:line-width -1)))
   "Face used to display conditional breakpoints.")
 
-(defface dape-hits-face
-  '((t :inherit (font-lock-number-face)
-       :height 0.85 :box (:line-width -1)))
+(defface dape-hits-face '((t :inherit font-lock-number-face
+                             :height 0.85 :box (:line-width -1)))
   "Face used to display hits breakpoints.")
 
-(defface dape-exception-description-face
-  '((t :extend t :inherit (error tooltip)))
+(defface dape-exception-description-face '((t :inherit (error tooltip)
+                                              :extend t))
   "Face used to display exception descriptions inline.")
 
-(defface dape-source-line-face
-  '((t))
+(defface dape-source-line-face '((t))
   "Face used to display stack frame source line overlays.")
 
-(defface dape-repl-success-face
-  '((t :inherit compilation-mode-line-exit :extend t))
+(defface dape-repl-success-face '((t :inherit compilation-mode-line-exit
+                                     :extend t))
   "Face used in repl for exit code 0.")
 
-(defface dape-repl-error-face
-  '((t :inherit compilation-mode-line-fail :extend t))
+(defface dape-repl-error-face '((t :inherit compilation-mode-line-fail
+                                   :extend t))
   "Face used in repl for non 0 exit codes.")
 
 
