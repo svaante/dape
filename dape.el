@@ -4795,6 +4795,10 @@ Update `dape--inlay-hint-overlays' from SCOPES."
 
 ;;; Minibuffer config hints
 
+(defface dape-minibuffer-hint-separator-face '((t :inherit shadow
+                                                  :strike-through t))
+  "Face used to separate hint overlay.")
+
 (defvar dape--minibuffer-suggestions nil
   "Suggested configurations in minibuffer.")
 
@@ -4870,7 +4874,11 @@ Update `dape--inlay-hint-overlays' from SCOPES."
                    (concat
                     (when hint-rows
                       (concat
-                       "\n\n"
+                       "\n"
+                       (propertize
+                        " " 'face 'dape-minibuffer-hint-separator-face
+                        'display '(space :align-to right))
+                       "\n"
                        (mapconcat 'identity hint-rows "\n")))))
       (move-overlay dape--minibuffer-hint-overlay
                     (point-max) (point-max) (current-buffer)))))
