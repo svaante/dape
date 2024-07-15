@@ -3097,49 +3097,52 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
 
 ;;; Source buffers
 
+(defun dape--source (conn plist)
+  "Return source from PLIST for adapter CONN.
+Source is a number, string, buffer or nil if not available."
+  (let* ((source (plist-get plist :source))
+         (path (plist-get source :path))
+         (ref (plist-get source :sourceReference))
+         (buffer (plist-get dape--source-buffers ref)))
+    (or (and path (file-exists-p (dape--path conn path 'local)) path)
+        (and buffer (buffer-live-p buffer) buffer)
+        (and (numberp ref) (< 0 ref) ref))))
+
 (defun dape--source-ensure (conn plist cb)
   "Ensure that source object in PLIST exist for adapter CONN.
 See `dape-request' for expected CB signature."
-  (let* ((source (plist-get plist :source))
-         (path (plist-get source :path))
-         (source-reference (plist-get source :sourceReference))
-         (buffer (plist-get dape--source-buffers source-reference)))
-    (cond
-     ((or (not conn)
-          (not (jsonrpc-running-p conn))
-          (and path (file-exists-p (dape--path conn path 'local)))
-          (and buffer (buffer-live-p buffer)))
-      (dape--request-return cb))
-     ((and (numberp source-reference) (> source-reference 0))
-      (dape--with-request-bind
-          ((&key content mimeType &allow-other-keys) error)
-          (dape-request conn "source" (list :source source
-                                            :sourceReference source-reference))
-        (cond
-         (error
-          (dape--repl-message (format "%s" error) 'dape-repl-error-face))
-         (content
-          (let ((buffer
-                 (generate-new-buffer (format "*dape-source %s*"
-                                              (plist-get source :name)))))
-            (setq dape--source-buffers
-                  (plist-put dape--source-buffers
-                             (plist-get source :sourceReference) buffer))
-            (with-current-buffer buffer
-              (when mimeType
-                (if-let ((mode
-                          (alist-get mimeType dape-mime-mode-alist nil nil 'equal)))
-                    (unless (eq major-mode mode)
-                      (funcall mode))
-                  (message "Unknown mime type %s, see `dape-mime-mode-alist'"
-                           mimeType)))
-              (setq-local buffer-read-only t
-                          dape--source source)
-              (let ((inhibit-read-only t))
-                (erase-buffer)
-                (insert content))
-              (goto-char (point-min)))
-            (dape--request-return cb)))))))))
+  (pcase (dape--source conn plist)
+    ((or (pred stringp) (pred bufferp)) (dape--request-return cb))
+    ((and (pred numberp) source-reference)
+     (let ((source (plist-get plist :source)))
+       (dape--with-request-bind
+           ((&key content mimeType &allow-other-keys) error)
+           (dape-request conn "source"
+                         (list :source source :sourceReference source-reference))
+         (cond
+          (error (dape--repl-message (format "%s" error) 'dape-repl-error-face))
+          (content
+           (let ((buffer
+                  (generate-new-buffer (format "*dape-source %s*"
+                                               (plist-get source :name)))))
+             (setq dape--source-buffers
+                   (plist-put dape--source-buffers
+                              (plist-get source :sourceReference) buffer))
+             (with-current-buffer buffer
+               (when mimeType
+                 (if-let ((mode
+                           (alist-get mimeType dape-mime-mode-alist nil nil 'equal)))
+                     (unless (eq major-mode mode)
+                       (funcall mode))
+                   (message "Unknown mime type %s, see `dape-mime-mode-alist'"
+                            mimeType)))
+               (setq-local buffer-read-only t
+                           dape--source source)
+               (let ((inhibit-read-only t))
+                 (erase-buffer)
+                 (insert content))
+               (goto-char (point-min)))
+             (dape--request-return cb)))))))))
 
 
 ;;; Stack frame source
@@ -3166,13 +3169,15 @@ See `dape-request' for expected CB signature."
   "Update stack frame arrow marker for adapter CONN.
 `dape-display-source-buffer-action'."
   (dape--stack-frame-cleanup)
-  (when-let (((dape--stopped-threads conn))
-             ;; TODO Should check if frame source is available, if not
-             ;;      it should display the first frame that source is
-             ;;      available.
-             (frame (dape--current-stack-frame conn)))
-    (let ((deepest-p
-           (eq frame (car (plist-get (dape--current-thread conn) :stackFrames)))))
+  (when-let* (((dape--stopped-threads conn))
+              (frames (plist-get (dape--current-thread conn) :stackFrames))
+              (selected (dape--current-stack-frame conn))
+              (frame (cl-loop for cell on frames for (frame) = cell
+                              when (eq frame selected) return
+                              (cl-loop for frame in cell when
+                                       (dape--source conn frame)
+                                       return frame))))
+    (let ((deepest-p (eq selected (car frames))))
       (dape--with-request (dape--source-ensure conn frame)
         ;; An update event could have fired between call to
         ;; `dape--stack-frame-cleanup' and callback, we have make
