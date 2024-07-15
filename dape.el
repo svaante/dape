@@ -918,9 +918,9 @@ See `dape-configs' symbols prefix-local prefix-remote."
               (string-remove-prefix (car mapping) path))
     path))
 
-(defun dape--capable-p (conn of)
-  "If CONN capable OF."
-  (eq (plist-get (dape--capabilities conn) of) t))
+(defun dape--capable-p (conn thing)
+  "Return non nil if CONN capable of THING."
+  (eq (plist-get (dape--capabilities conn) thing) t))
 
 (defun dape--current-stack-frame (conn)
   "Current stack frame plist for CONN."
@@ -949,17 +949,15 @@ Note requires `dape--source-ensure' if source is by reference."
   (when-let ((source (plist-get plist :source))
              (line (or (plist-get plist :line) 1))
              (buffer
-              (or (when-let* ((source-reference
-                               (plist-get source :sourceReference))
-                              (buffer (plist-get dape--source-buffers
-                                                 source-reference))
-                              ((buffer-live-p buffer)))
-                    buffer)
-                  (when-let* ((path (plist-get source :path))
-                              (path (dape--path conn path 'local))
-                              ((file-exists-p path))
-                              (buffer (find-file-noselect path t)))
-                    buffer))))
+              (cond
+               ((and-let* ((ref (plist-get source :sourceReference))
+                           (buffer (plist-get dape--source-buffers ref))
+                           ((buffer-live-p buffer)))
+                  buffer))
+               ((and-let* ((path (plist-get source :path))
+                           (path (dape--path conn path 'local))
+                           ((file-exists-p path)))
+                  (find-file-noselect path t))))))
     (with-current-buffer buffer
       (save-excursion
         (goto-char (point-min))
