@@ -924,22 +924,10 @@ See `dape-configs' symbols prefix-local prefix-remote."
 
 (defun dape--current-stack-frame (conn)
   "Current stack frame plist for CONN."
-  (let* ((stack-frames (thread-first
-                         (dape--current-thread conn)
-                         (plist-get :stackFrames)))
-         (stack-frames-with-source
-          (seq-filter (lambda (stack-frame)
-                        (let* ((source (plist-get stack-frame :source))
-                               (path (plist-get source :path))
-                               (source-reference
-                                (or (plist-get source :sourceReference) 0)))
-                          (or path (not (zerop source-reference)))))
-                      stack-frames)))
-    (or (seq-find (lambda (stack-frame)
-                    (eq (plist-get stack-frame :id)
-                        (dape--stack-id conn)))
-                  stack-frames-with-source)
-        (car stack-frames-with-source)
+  (let ((stack-frames (plist-get (dape--current-thread conn) :stackFrames)))
+    (or (when conn
+          (cl-find (dape--stack-id conn) stack-frames
+                   :key (lambda (frame) (plist-get frame :id))))
         (car stack-frames))))
 
 (defun dape--object-to-marker (conn plist)
