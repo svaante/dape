@@ -2630,8 +2630,6 @@ Using BUFFER and STR."
   "Start compilation for CONFIG."
   (let ((default-directory (dape--guess-root config))
         (command (plist-get config 'compile)))
-    ;; TODO Is it really necessary to have `dape-compile-fn' as an
-    ;;      option as `default-directory' is set.
     (funcall dape-compile-fn command)
     (with-current-buffer (compilation-find-buffer)
       (setq dape--compile-config config)
