@@ -496,7 +496,7 @@ Each element should look like (MIME-TYPE . MODE) where
   `((display-buffer-use-some-window display-buffer-pop-up-window)
     (some-window
      . (lambda (&rest _)
-         (cl-loop for w in (window-list) unless
+         (cl-loop for w in (window-list nil 'skip-minibuffer) unless
                   (buffer-match-p '(or (derived-mode . dape-shell-mode)
                                        (derived-mode . dape-repl-mode)
                                        (derived-mode . dape-memory-mode)
