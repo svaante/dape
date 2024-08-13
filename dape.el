@@ -497,7 +497,7 @@ Each element should look like (MIME-TYPE . MODE) where
     (some-window
      . (lambda (&rest _)
          (cl-loop for w in (window-list) unless
-                  (buffer-match-p '(or "\*dape-shell\*"
+                  (buffer-match-p '(or (derived-mode . dape-shell-mode)
                                        (derived-mode . dape-repl-mode)
                                        (derived-mode . dape-memory-mode)
                                        (derived-mode . dape-info-parent-mode))
@@ -1112,7 +1112,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                    (cons '(display-buffer-in-side-window)
                          (pcase (cons mode group)
                            (`(dape-repl-mode . ,_) '((side . bottom) (slot . -1)))
-                           (`(shell-mode . ,_) '((side . bottom) (slot . 0)))
+                           (`(dape-shell-mode . ,_) '((side . bottom) (slot . 0)))
                            (`(,_ . 0) `((side . ,dape-buffer-window-arrangement) (slot . -1)))
                            (`(,_ . 1) `((side . ,dape-buffer-window-arrangement) (slot . 0)))
                            (`(,_ . 2) `((side . ,dape-buffer-window-arrangement) (slot . 1)))
@@ -1121,7 +1121,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                    (pcase (cons mode group)
                      (`(dape-repl-mode . ,_)
                       '((display-buffer-in-side-window) (side . top) (slot . -1)))
-                     (`(shell-mode . ,_)
+                     (`(dape-shell-mode . ,_)
                       '((display-buffer-pop-up-window)
                         (direction . right) (dedicated . t)))
                      (`(,_ . 0)
@@ -1809,6 +1809,9 @@ selected stack frame."
 (cl-defgeneric dape-handle-request (_conn _command _arguments)
   "Sink for all unsupported requests." nil)
 
+(define-derived-mode dape-shell-mode shell-mode "Shell"
+  "Major mode for interacting with an debugged program.")
+
 (cl-defmethod dape-handle-request (conn (_command (eql runInTerminal)) arguments)
   "Handle runInTerminal requests.
 Starts a new adapter CONNs from ARGUMENTS."
@@ -1825,7 +1828,7 @@ Starts a new adapter CONNs from ARGUMENTS."
              process-environment))
         (buffer (get-buffer-create "*dape-shell*")))
     (with-current-buffer buffer
-      (shell-mode)
+      (dape-shell-mode)
       (shell-command-save-pos-or-erase))
     (let ((process
            (make-process :name "dape shell"
