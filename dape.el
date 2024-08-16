@@ -4461,7 +4461,7 @@ Send INPUT to DUMMY-PROCESS."
       ;;       `comint-input-sender'.  Kill buffer with timer instead
       ;;       to avoid error signal.
       (if (eq 'dape-quit cmd)
-	  (run-with-timer 0 nil 'dape-quit)
+          (run-with-timer 0 nil 'call-interactively #'dape-quit)
 	(call-interactively cmd)))
      ;; Evaluate expression
      (t
