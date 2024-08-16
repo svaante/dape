@@ -2201,10 +2201,9 @@ symbol `dape-connection'."
            (while (process-live-p server-process)
              (accept-process-output nil nil 0.1))))
        ;; ui
-       (run-with-timer 1 nil (lambda ()
-                               (when (eq dape--connection conn)
-                                 (dape-active-mode -1)
-                                 (force-mode-line-update t)))))
+       (when (eq dape--connection conn)
+         (dape-active-mode -1)
+         (force-mode-line-update t)))
      :request-dispatcher 'dape-handle-request
      :notification-dispatcher 'dape-handle-event
      :process process)))
@@ -4123,15 +4122,19 @@ or `prefix' part of variable string."
              ((zerop (or (plist-get object :variablesReference) 0))
               (concat prefix "  "))
              ((and expanded (plist-get object :variables))
-              (propertize (concat prefix "- ")
-                          'mouse-face 'highlight
-                          'help-echo "mouse-2: contract"
-                          'keymap map))
+              (concat
+               (propertize (concat prefix "-")
+                           'mouse-face 'highlight
+                           'help-echo "mouse-2: contract"
+                           'keymap map)
+               " "))
              (t
-              (propertize (concat prefix "+ ")
-                          'mouse-face 'highlight
-                          'help-echo "mouse-2: expand"
-                          'keymap map)))))
+              (concat
+               (propertize (concat prefix "+")
+                           'mouse-face 'highlight
+                           'help-echo "mouse-2: expand"
+                           'keymap map)
+               " ")))))
     (setq row (dape--info-locals-table-columns-list
                `((name  . ,name)
                  (type  . ,type)
@@ -4148,7 +4151,8 @@ or `prefix' part of variable string."
       ;; TODO Should be paged
       (dolist (variable (plist-get object :variables))
         (dape--info-scope-add-variable
-         table variable (plist-get object :variablesReference) path expanded-p maps)))))
+         table variable (plist-get object :variablesReference)
+         path expanded-p maps)))))
 
 ;; FIXME Empty header line when adapter is killed
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
