@@ -306,6 +306,22 @@
                     ".dll"
                     (dape-cwd))))
      :stopAtEntry nil)
+    (ocamlearlybird
+     ensure dape-ensure-command
+     modes (tuareg-mode caml-mode)
+     command "ocamlearlybird"
+     command-args ("debug")
+     :type "ocaml"
+     :program (lambda ()
+                (file-name-concat
+                 (dape-cwd)
+                 "_build" "default" "bin"
+                 (concat
+                  (file-name-base (dape-buffer-default))
+                  ".bc")))
+     :console "internalConsole"
+     :stopOnEntry nil
+     :arguments [])
     (rdbg
      modes (ruby-mode ruby-ts-mode)
      ensure dape-ensure-command
