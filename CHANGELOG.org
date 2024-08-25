@@ -2,6 +2,16 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.15.0
+- Add =defer-launch-attach= to support gdb=>15.1
+- Add OCaml support with =ocamlearlybird=
+- Set stack frame arrow at the deepest possible level
+- Remove delay of disabling =dape-active-mode=
+- Add =dape-shell-mode= to process launched with runInTerminal
+- Fix pause button in mode line menu
+- Fix source buffer being displayed in minibuffer
+- Fix "Wrong type argument: markerp, nil" on "quit" in REPL
+
 * Version 0.14.0
 - Add separator line for minibuffer hints
 - Add baseline for PHP =xdebug= config and install instructions
