@@ -220,6 +220,7 @@
      command-cwd dape-command-cwd
      command "gdb"
      command-args ("--interpreter=dap")
+     defer-launch-attach t
      :request "launch"
      :program "a.out"
      :args []
@@ -441,6 +442,12 @@ Symbol keys (Used by dape):
 - modes: List of modes where the configuration is active in `dape'
   completions.
 - compile: Executes a shell command with `dape-compile-fn'.
+- defer-launch-attach: If launch/attach request should be sent
+  after initialize or configurationDone.  If nil launch/attach are
+  sent after initialize request else it's sent after
+  configurationDone.  This key exist to accommodate the two different
+  interpretations of the DAP specification.
+  See: GDB bug 32090.
 
 Connection to Debug Adapter:
 - If command is specified and not port, dape communicates with the
@@ -473,6 +480,7 @@ Functions and symbols:
                          ((const :tag "Host of debug adapter" host) string)
                          ((const :tag "Port of debug adapter" port) natnum)
                          ((const :tag "Compile cmd" compile) string)
+                         ((const :tag "Use configurationDone as trigger for launch/attach" defer-launch-attach) :type 'boolean)
                          ((const :tag "Adapter type" :type) string)
                          ((const :tag "Request type launch/attach" :request) string)))))
 
@@ -681,7 +689,7 @@ The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
 (defcustom dape-minibuffer-hint-ignore-properties
-  '(ensure fn modes command command-args :type :request)
+  '(ensure fn modes command command-args defer-launch-attach :type :request)
   "Properties to be hidden in `dape--minibuffer-hint'."
   :type '(repeat symbol))
 
@@ -1402,7 +1410,7 @@ timeout period is configurable with `dape-request-timeout' *"
                          :timeout dape-request-timeout))
 
 (defun dape--initialize (conn)
-  "Initialize and launch/attach adapter CONN."
+  "Initialize CONN."
   (dape--with-request-bind
       (body error)
       (dape-request conn
@@ -1432,41 +1440,47 @@ timeout period is configurable with `dape-request-timeout' *"
                               'dape-repl-error-face)
           (dape-kill conn))
       (setf (dape--capabilities conn) body)
-      (dape--with-request-bind
-          (_body error)
-          (dape-request
-           conn
-           (or (plist-get (dape--config conn) :request) "launch")
-           ;; Transform config to jsonrpc serializable format
-           ;; Remove all non `keywordp' keys and transform null to
-           ;; :json-false
-           (cl-labels
-               ((transform-value (value)
-                  (pcase value
-                    ('nil :json-false)
-                    ;; FIXME Need a way to create json null values
-                    ;;       see #72, :null could be an candidate.
-                    ;;       Using :null is quite harmless as it has
-                    ;;       no friction with `dape-configs'
-                    ;;       evaluation.  So it should be fine to keep
-                    ;;       supporting it even if it's not the way
-                    ;;       forwards.
-                    (:null
-                     nil)
-                    ((pred vectorp)
-                     (cl-map 'vector #'transform-value value))
-                    ((pred listp)
-                     (create-body value))
-                    (_ value)))
-                (create-body (config)
-                  (cl-loop for (key value) on config by 'cddr
-                           when (keywordp key)
-                           append (list key (transform-value value)))))
-             (create-body (dape--config conn))))
-        (if error
-            (progn (dape--repl-message error 'dape-repl-error-face)
-                   (dape-kill conn))
-          (setf (dape--initialized-p conn) t))))))
+      ;; See GDB bug 32090
+      (unless (plist-get (dape--config conn) 'defer-launch-attach)
+        (dape--launch-or-attach conn)))))
+
+(defun dape--launch-or-attach (conn)
+  "Launch or attach CONN."
+  (dape--with-request-bind
+      (_body error)
+      (dape-request
+       conn
+       (or (plist-get (dape--config conn) :request) "launch")
+       ;; Transform config to jsonrpc serializable format
+       ;; Remove all non `keywordp' keys and transform null to
+       ;; :json-false
+       (cl-labels
+           ((transform-value (value)
+              (pcase value
+                ('nil :json-false)
+                ;; FIXME Need a way to create json null values
+                ;;       see #72, :null could be an candidate.
+                ;;       Using :null is quite harmless as it has
+                ;;       no friction with `dape-configs'
+                ;;       evaluation.  So it should be fine to keep
+                ;;       supporting it even if it's not the way
+                ;;       forwards.
+                (:null
+                 nil)
+                ((pred vectorp)
+                 (cl-map 'vector #'transform-value value))
+                ((pred listp)
+                 (create-body value))
+                (_ value)))
+            (create-body (config)
+              (cl-loop for (key value) on config by 'cddr
+                       when (keywordp key)
+                       append (list key (transform-value value)))))
+         (create-body (dape--config conn))))
+    (if error
+        (progn (dape--repl-message error 'dape-repl-error-face)
+               (dape-kill conn))
+      (setf (dape--initialized-p conn) t))))
 
 (defun dape--set-breakpoints-in-buffer (conn buffer &optional cb)
   "Set breakpoints in BUFFER for adapter CONN.
@@ -1887,7 +1901,10 @@ Starts a new adapter connection as per request of the debug adapter."
   (dape--with-request (dape--configure-exceptions conn)
     (dape--with-request (dape--set-breakpoints conn)
       (dape--with-request (dape--set-data-breakpoints conn)
-        (dape-request conn "configurationDone" nil)))))
+        (dape--with-request (dape-request conn "configurationDone" nil)
+          ;; See GDB bug 32090
+          (when (plist-get (dape--config conn) 'defer-launch-attach)
+            (dape--launch-or-attach conn)))))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql capabilities)) body)
   "Handle adapter CONNs capabilities events.
