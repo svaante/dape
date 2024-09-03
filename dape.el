@@ -210,7 +210,8 @@
               (let* ((default-directory
                       (or (dape-config-get config 'command-cwd)
                           default-directory))
-                     (output (shell-command-to-string "gdb --version"))
+                     (command (dape-config-get config 'command))
+                     (output (shell-command-to-string (format "%s --version" command)))
                      (version (save-match-data
                                 (when (string-match "GNU gdb \\(?:(.*) \\)?\\([0-9.]+\\)" output)
                                   (string-to-number (match-string 1 output))))))
