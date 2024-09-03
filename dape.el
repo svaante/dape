@@ -70,6 +70,13 @@
 (define-obsolete-variable-alias 'dape-compile-compile-hooks 'dape-compile-hook "0.13.0")
 
 
+;;; Forward declarations
+(defvar hl-line-mode)
+(defvar hl-line-sticky-flag)
+(declare-function global-hl-line-highlight  "hl-line" ())
+(declare-function hl-line-highlight         "hl-line" ())
+
+
 ;;; Custom
 (defgroup dape nil
   "Debug Adapter Protocol for Emacs."
@@ -3244,7 +3251,7 @@ See `dape-request' for expected CB signature."
             (when-let ((window
                         (display-buffer (marker-buffer marker)
                                         dape-display-source-buffer-action)))
-              ;; Change selected window if not dape-repl buffer is selected
+              ;; Change selected window if not `dape-repl' buffer is selected
               (unless (with-current-buffer (window-buffer)
                         (memq major-mode '(dape-repl-mode)))
                 (select-window window))
@@ -3253,6 +3260,17 @@ See `dape-request' for expected CB signature."
               ;;       context.  But this makes tests to hard write.
               (with-selected-window window
                 (goto-char (marker-position marker))
+                ;; This code is running within the timer context
+                ;; rather than the command context.  Since the
+                ;; `post-command-hook' is executed before the point
+                ;; (cursor position) is actually updated, we must
+                ;; manually intervene to account for this.  The
+                ;; following logic borrows from gud.el to interact
+                ;; with `hl-line'.
+                (when (featurep 'hl-line)
+	          (cond
+                   (global-hl-line-mode (global-hl-line-highlight))
+	           ((and hl-line-mode hl-line-sticky-flag) (hl-line-highlight))))
                 (run-hooks 'dape-display-source-hook)))))))))
 
 
