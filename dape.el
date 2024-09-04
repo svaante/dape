@@ -926,7 +926,7 @@ by `dape--threads-make-update-handle'."
   "Return translate absolute PATH in FORMAT from CONN config.
 Accepted FORMAT values are local and remote.
 See `dape-configs' symbols prefix-local prefix-remote."
-  (if-let* ((config (dape--config
+  (let ((mapped-path (if-let* ((config (dape--config
                      ;; Fallback to last connection
                      (or conn dape--connection)))
             (path
@@ -946,9 +946,17 @@ See `dape-configs' symbols prefix-local prefix-remote."
                        (_ (error "Unknown format"))))
             ;; Substitute prefix if there is an match or nil
             ((string-prefix-p (car mapping) path)))
-      (concat (cdr mapping)
-              (string-remove-prefix (car mapping) path))
-    path))
+        (concat (cdr mapping)
+                (string-remove-prefix (car mapping) path))
+        path)))
+    (file-truename
+     (if (not (tramp-tramp-file-p mapped-path))
+         (concat (dape-tramp-prefix) mapped-path)
+       mapped-path
+       )
+    )
+    )
+  )
 
 (defun dape--capable-p (conn thing)
   "Return non nil if CONN capable of THING."
@@ -996,6 +1004,13 @@ Note requires `dape--source-ensure' if source is by reference."
 (defun dape-cwd ()
   "Use `dape-cwd-fn' to guess current working as local path."
   (tramp-file-local-name (funcall dape-cwd-fn)))
+
+(defun dape-tramp-prefix ()
+  "Find the tramp prefix of the current working directory, ie the part of the path minus the local name."
+  (let ((full-cwd (funcall dape-cwd-fn)))
+    (replace-regexp-in-string (regexp-quote (tramp-file-local-name full-cwd)) "" full-cwd)
+    )
+  )
 
 (defun dape-command-cwd ()
   "Use `dape-cwd-fn' to guess current working directory."
