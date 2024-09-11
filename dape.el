@@ -5245,27 +5245,28 @@ See `dape--config-mode-p' how \"valid\" is defined."
   "Hook function to produce doc strings for `eldoc'.
 On success calls CB with the doc string.
 See `eldoc-documentation-functions', for more information."
-       (and-let* ((conn (dape--live-connection 'last t))
-                  ((dape--capable-p conn :supportsEvaluateForHovers))
-                  (symbol (thing-at-point 'symbol)))
-         (dape--with-request-bind
-             (body error)
-             (dape--evaluate-expression conn
-                                        (plist-get (dape--current-stack-frame conn) :id)
-                                        (substring-no-properties symbol)
-                                        "hover")
-           (unless error
-             (funcall cb
-                      (format "%s %s"
-                              (or (plist-get body :value)
-                                  (plist-get body :result)
-                                  "")
-                              (propertize
-                               (or (plist-get body :type) "")
-                               'face 'font-lock-type-face))
-                      :thing symbol
-                      :face 'font-lock-variable-name-face))))
-       t)
+  (and-let* ((conn (dape--live-connection 'last t))
+             ((dape--capable-p conn :supportsEvaluateForHovers))
+             (symbol (thing-at-point 'symbol)))
+    (dape--with-request-bind
+        (body error)
+        (dape--evaluate-expression
+         conn
+         (plist-get (dape--current-stack-frame conn) :id)
+         (substring-no-properties symbol)
+         "hover")
+      (unless error
+        (funcall cb
+                 (format "%s %s"
+                         (or (plist-get body :value)
+                             (plist-get body :result)
+                             "")
+                         (propertize
+                          (or (plist-get body :type) "")
+                          'face 'font-lock-type-face))
+                 :thing symbol
+                 :face 'font-lock-variable-name-face))))
+  t)
 
 (defun dape--add-eldoc-hook ()
   "Add `dape-hover-function' from eldoc hook."
@@ -5319,8 +5320,8 @@ See `eldoc-documentation-functions', for more information."
                          help-echo "Dape: Debug Adapter Protocol for Emacs\n\
 mouse-1: Display minor mode menu"
                          keymap ,(let ((map (make-sparse-keymap)))
-                                  (define-key map [mode-line down-mouse-1] dape-menu)
-                                  map))
+                                   (define-key map [mode-line down-mouse-1] dape-menu)
+                                   map))
             ":"
             (:propertize ,(format "%s" (or (and conn (dape--state conn))
                                            'unknown))
