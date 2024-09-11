@@ -4084,7 +4084,6 @@ current buffer with CONN config."
         ;;      supporting it.
         ((&key dataId description accessTypes &allow-other-keys) error)
         (dape-request conn "dataBreakpointInfo"
-                      ;; TODO Find and test
                       (if (eq dape--info-ref 'watch)
                           (list :name name
                                 :frameId (plist-get (dape--current-stack-frame conn) :id))
