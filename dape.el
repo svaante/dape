@@ -103,6 +103,33 @@
               (unless (plist-get config 'command)
                 (user-error "Missing `command' property")))
      :request "launch")
+    ,(let* ((extension-directory
+             (expand-file-name
+              (file-name-concat dape-adapter-dir "bash-debug" "extension")))
+            (bashdb-dir (file-name-concat extension-directory "bashdb_dir")))
+        `(bash-debug
+          modes (sh-mode bash-ts-mode)
+          ensure (lambda (config)
+                   (dape-ensure-command config)
+                   (let ((dap-debug-server-path
+                          (car (plist-get config 'command-args))))
+                     (unless (file-exists-p dap-debug-server-path)
+                       (user-error "File %S does not exist" dap-debug-server-path))))
+          command "node"
+          command-args (,(file-name-concat extension-directory "out" "bashDebug.js"))
+          fn (lambda (config)
+               (thread-first config
+                             (plist-put :pathBashdbLib ,bashdb-dir)
+                             (plist-put :pathBashdb (file-name-concat ,bashdb-dir "bashdb"))
+                             (plist-put :env `(:BASHDB_HOME ,,bashdb-dir . ,(plist-get config :env)))))
+          :type "bashdb"
+          :cwd dape-cwd
+          :program dape-buffer-default
+          :args []
+          :pathBash "bash"
+          :pathCat "cat"
+          :pathMkfifo "mkfifo"
+          :pathPkill "pkill"))
     ,@(let ((codelldb
              `(ensure dape-ensure-command
                command-cwd dape-command-cwd

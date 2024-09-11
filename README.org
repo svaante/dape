@@ -180,6 +180,14 @@ Install with ~opam install earlybird~.
 2. Place breakpoints inside of =_build/default/*=
 
 See [[https://github.com/hackwaly/ocamlearlybird][ocamlearlybird]] for more information.
+
+** Bash - bash-debug
+1. Install =node=
+2. Download latest =vsix= [[https://github.com/rogalmic/vscode-bash-debug/releases][release]] of DAP adapter =bash-debug-<version>.vsix=
+3. Unpack ~mkdir -p ~/.emacs.d/debug-adapters && unzip bash-debug-<version>.vsix -d ~/.emacs.d/debug-adapters/bash-debug~
+
+See [[https://github.com/rogalmic/vscode-bash-debug][bash-debug]] for more information.
+
 ** Other untested adapters
 If you find a working configuration for any other debug adapter please submit a PR.
 
