@@ -3898,8 +3898,7 @@ See `dape-request' for expected CB signature."
 Create table from CURRENT-STACK-FRAME and STACK-FRAMES and insert into
 current buffer with CONN config."
   (cl-loop with table = (make-gdb-table)
-           for frame in stack-frames
-           do
+           for frame in stack-frames do
            (gdb-table-add-row
             table
             (list
@@ -4049,14 +4048,13 @@ current buffer with CONN config."
                          dape--connection)))
       (cl-loop with sources = (dape--sources conn)
                with table = (make-gdb-table)
-               for source in (reverse sources)
-               do (gdb-table-add-row table
-                                     (list (concat (plist-get source :name) " "))
-                                     (list
-                                      'dape--info-source source
-                                      'mouse-face 'highlight
-                                      'keymap dape-info-sources-line-map
-                                      'help-echo "mouse-2, RET: goto source"))
+               for source in (reverse sources) do
+               (gdb-table-add-row
+                table (list (concat (plist-get source :name) " "))
+                (list 'dape--info-source source
+                      'mouse-face 'highlight
+                      'keymap dape-info-sources-line-map
+                      'help-echo "mouse-2, RET: goto source"))
                finally (insert (gdb-table-string table " "))))))
 
 
