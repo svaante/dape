@@ -5151,15 +5151,12 @@ nil."
   (let (key args args-bounds last-p)
     (save-excursion
       (goto-char (minibuffer-prompt-end))
-      (setq key
-            (ignore-errors (read (current-buffer))))
+      (setq key (ignore-errors (read (current-buffer))))
       (ignore-errors
         (while t
           (setq last-p (point))
-          (push (read (current-buffer))
-                args)
-          (push (cons last-p (point))
-                args-bounds))))
+          (push (read (current-buffer)) args)
+          (push (cons last-p (point)) args-bounds))))
     (setq args (nreverse args)
           args-bounds (nreverse args-bounds))
     (cond
@@ -5191,9 +5188,7 @@ nil."
                        for (key _) on plist by 'cddr
                        collect (format "%s " key)))))
      (t
-      (list (point) (point)
-            nil
-            :exclusive 'no)))))
+      (list (point) (point) nil :exclusive 'no)))))
 
 (defun dape--read-config ()
   "Read config from minibuffer.
