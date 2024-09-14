@@ -5078,8 +5078,28 @@ If LOOSE-PARSING is non nil ignore arg parsing failures."
                             (string-trim)
                             (string-empty-p)
                             (not))
-            (push (read (current-buffer))
-                  read-config))
+            (let ((thing (read (current-buffer))))
+              (cond
+               ((eq thing '-)
+                (cl-loop
+                 with command = (split-string-shell-command
+                                 (buffer-substring (point) (point-max)))
+                 with setvar = "\\`\\([A-Za-z_][A-Za-z0-9_]*\\)=\\(.*\\)\\'"
+                 for cell on command for (program . args) = cell
+                 if (string-match setvar program)
+                 append `(,(intern (concat ":" (match-string 1 program)))
+                          ,(match-string 2 program))
+                 into env and for program = nil
+                 when (or (and (not program) (not args)) program) do
+                 (setq read-config
+                       (append (nreverse
+                                (append (when program `(:program ,program))
+                                        (when args `(:args ,(apply 'vector args)))
+                                        (when env `(:env ,env))))
+                               read-config))
+                 (throw 'done nil)))
+               (t
+                (push thing read-config)))))
         (error
          (unless loose-parsing
            (user-error "Unable to parse options %s"
@@ -5171,7 +5191,8 @@ nil."
               (mapcar (lambda (suggestion) (format "%s " suggestion))
                       dape--minibuffer-suggestions))))
      ;; Complete config args
-     ((and (alist-get key dape-configs)
+     ((and (not (plist-member args '-))
+           (alist-get key dape-configs)
            (or (and (plistp args)
                     (thing-at-point 'whitespace))
                (cl-loop with p = (point)
