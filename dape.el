@@ -2540,11 +2540,11 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
           (current-thread (dape--current-thread conn))
           (collection
            (let (done)
-             ;; Need to fetch all frames as might only have 1 frame
-             ;; fetches see `dape--stack-trace' and
-             ;; `:supportsDelayedStackTraceLoading'.
              (dape--with-request
                  (dape--stack-trace conn current-thread dape-stack-trace-levels)
+             ;; Only one stack frame is guaranteed to be available,
+             ;; so we need to reach out to make sure we got the full set.
+             ;; See `dape--stack-trace'.
                (setf done t))
              (with-timeout (5 nil)
                (while (not done) (accept-process-output nil 0.1)))
