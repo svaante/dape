@@ -5216,7 +5216,9 @@ See `dape--config-mode-p' how \"valid\" is defined."
                      dape-history)
            ;; Take first suggested config if only one exist
            (and (length= suggested-configs 1)
-                (car suggested-configs)))))
+                (car suggested-configs))))
+         (default-value (when initial-contents
+                          (concat (car (string-split initial-contents)) " "))))
     (setq dape--minibuffer-last-buffer (current-buffer)
           dape--minibuffer-cache nil)
     (minibuffer-with-setup-hook
@@ -5248,6 +5250,8 @@ See `dape--config-mode-p' how \"valid\" is defined."
                  (set-keymap-parent map minibuffer-local-map)
                  (define-key map (kbd "C-M-i") #'completion-at-point)
                  (define-key map "\t" #'completion-at-point)
+                 ;; This mapping is shadowed by `next-history-element'
+                 ;; future history (default-value)
                  (define-key map (kbd "C-c C-k")
                              (lambda ()
                                (interactive)
@@ -5259,7 +5263,7 @@ See `dape--config-mode-p' how \"valid\" is defined."
                                                 (point-max))
                                  (insert (format "%s" key) " "))))
                  map)
-               nil 'dape-history initial-contents)))
+               nil 'dape-history default-value)))
            (`(,key ,config)
             (dape--config-from-string (substring-no-properties str) t))
            (evaled-config (dape--config-eval key config)))
