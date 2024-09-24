@@ -37,8 +37,8 @@
 ;; minibuffer prompt, enter a debug adapter configuration name from
 ;; `dape-configs'.
 
-; For complete functionality, make sure to enable `eldoc-mode' in your
-; source buffers and `repeat-mode' for more pleasant key mappings.
+;; For complete functionality, make sure to enable `eldoc-mode' in your
+;; source buffers and `repeat-mode' for more pleasant key mappings.
 
 ;; Package looks is heavily inspired by gdb-mi.el
 
@@ -107,41 +107,41 @@
              (expand-file-name
               (file-name-concat dape-adapter-dir "bash-debug" "extension")))
             (bashdb-dir (file-name-concat extension-directory "bashdb_dir")))
-        `(bash-debug
-          modes (sh-mode bash-ts-mode)
-          ensure (lambda (config)
-                   (dape-ensure-command config)
-                   (let ((dap-debug-server-path
-                          (car (plist-get config 'command-args))))
-                     (unless (file-exists-p dap-debug-server-path)
-                       (user-error "File %S does not exist" dap-debug-server-path))))
-          command "node"
-          command-args (,(file-name-concat extension-directory "out" "bashDebug.js"))
-          fn (lambda (config)
-               (thread-first config
-                             (plist-put :pathBashdbLib ,bashdb-dir)
-                             (plist-put :pathBashdb (file-name-concat ,bashdb-dir "bashdb"))
-                             (plist-put :env `(:BASHDB_HOME ,,bashdb-dir . ,(plist-get config :env)))))
-          :type "bashdb"
-          :cwd dape-cwd
-          :program dape-buffer-default
-          :args []
-          :pathBash "bash"
-          :pathCat "cat"
-          :pathMkfifo "mkfifo"
-          :pathPkill "pkill"))
+       `(bash-debug
+         modes (sh-mode bash-ts-mode)
+         ensure (lambda (config)
+                  (dape-ensure-command config)
+                  (let ((dap-debug-server-path
+                         (car (plist-get config 'command-args))))
+                    (unless (file-exists-p dap-debug-server-path)
+                      (user-error "File %S does not exist" dap-debug-server-path))))
+         command "node"
+         command-args (,(file-name-concat extension-directory "out" "bashDebug.js"))
+         fn (lambda (config)
+              (thread-first config
+                            (plist-put :pathBashdbLib ,bashdb-dir)
+                            (plist-put :pathBashdb (file-name-concat ,bashdb-dir "bashdb"))
+                            (plist-put :env `(:BASHDB_HOME ,,bashdb-dir . ,(plist-get config :env)))))
+         :type "bashdb"
+         :cwd dape-cwd
+         :program dape-buffer-default
+         :args []
+         :pathBash "bash"
+         :pathCat "cat"
+         :pathMkfifo "mkfifo"
+         :pathPkill "pkill"))
     ,@(let ((codelldb
-             `(ensure dape-ensure-command
-               command-cwd dape-command-cwd
-               command ,(file-name-concat dape-adapter-dir
-                                          "codelldb"
-                                          "extension"
-                                          "adapter"
-                                          "codelldb")
-               port :autoport
-               :type "lldb"
-               :request "launch"
-               :cwd "."))
+             `( ensure dape-ensure-command
+                command-cwd dape-command-cwd
+                command ,(file-name-concat dape-adapter-dir
+                                           "codelldb"
+                                           "extension"
+                                           "adapter"
+                                           "codelldb")
+                port :autoport
+                :type "lldb"
+                :request "launch"
+                :cwd "."))
             (common `(:args [] :stopOnEntry nil)))
         `((codelldb-cc
            modes (c-mode c-ts-mode c++-mode c++-ts-mode)
@@ -186,26 +186,26 @@
      :program "a.out"
      :MIMode ,(seq-find 'executable-find '("lldb" "gdb")))
     ,@(let ((debugpy
-             `(modes (python-mode python-ts-mode)
-               ensure (lambda (config)
-                        (dape-ensure-command config)
-                        (let ((python (dape-config-get config 'command)))
-                          (unless (zerop
-                                   (call-process-shell-command
-                                    (format "%s -c \"import debugpy.adapter\"" python)))
-                            (user-error "%s module debugpy is not installed" python))))
-               command "python"
-               command-args ("-m" "debugpy.adapter" "--host" "0.0.0.0" "--port" :autoport)
-               port :autoport
-               :request "launch"
-               :type "python"
-               :cwd dape-cwd))
+             `( modes (python-mode python-ts-mode)
+                ensure (lambda (config)
+                         (dape-ensure-command config)
+                         (let ((python (dape-config-get config 'command)))
+                           (unless (zerop
+                                    (call-process-shell-command
+                                     (format "%s -c \"import debugpy.adapter\"" python)))
+                             (user-error "%s module debugpy is not installed" python))))
+                command "python"
+                command-args ("-m" "debugpy.adapter" "--host" "0.0.0.0" "--port" :autoport)
+                port :autoport
+                :request "launch"
+                :type "python"
+                :cwd dape-cwd))
             (common
-             `(:args []
-               :justMyCode nil
-               :console "integratedTerminal"
-               :showReturnValue t
-               :stopOnEntry nil)))
+             `( :args []
+                :justMyCode nil
+                :console "integratedTerminal"
+                :showReturnValue t
+                :stopOnEntry nil)))
         `((debugpy ,@debugpy
                    :program dape-buffer-default
                    ,@common)
@@ -267,23 +267,23 @@
      :type "server"
      :cwd dape-cwd)
     ,@(let ((js-debug
-             `(ensure ,(lambda (config)
-                         (dape-ensure-command config)
-                         (when-let ((runtime-executable
-                                     (dape-config-get config :runtimeExecutable)))
-                           (dape--ensure-executable runtime-executable))
-                         (let ((dap-debug-server-path
-                                (car (plist-get config 'command-args))))
-                           (unless (file-exists-p dap-debug-server-path)
-                             (user-error "File %S does not exist" dap-debug-server-path))))
-               command "node"
-               command-args (,(expand-file-name
-                               (file-name-concat dape-adapter-dir
-                                                 "js-debug"
-                                                 "src"
-                                                 "dapDebugServer.js"))
-                             :autoport)
-               port :autoport)))
+             `( ensure ,(lambda (config)
+                          (dape-ensure-command config)
+                          (when-let ((runtime-executable
+                                      (dape-config-get config :runtimeExecutable)))
+                            (dape--ensure-executable runtime-executable))
+                          (let ((dap-debug-server-path
+                                 (car (plist-get config 'command-args))))
+                            (unless (file-exists-p dap-debug-server-path)
+                              (user-error "File %S does not exist" dap-debug-server-path))))
+                command "node"
+                command-args (,(expand-file-name
+                                (file-name-concat dape-adapter-dir
+                                                  "js-debug"
+                                                  "src"
+                                                  "dapDebugServer.js"))
+                              :autoport)
+                port :autoport)))
         `((js-debug-node
            modes (js-mode js-ts-mode)
            ,@js-debug
@@ -312,11 +312,11 @@
            :url "http://localhost:3000"
            :webRoot dape-cwd)))
     ,@(let ((lldb-common
-             `(modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode rustic-mode)
-               ensure dape-ensure-command
-               command-cwd dape-command-cwd
-               :cwd "."
-               :program "a.out")))
+             `( modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode rustic-mode)
+                ensure dape-ensure-command
+                command-cwd dape-command-cwd
+                :cwd "."
+                :program "a.out")))
         `((lldb-vscode
            command "lldb-vscode"
            :type "lldb-vscode"
@@ -456,7 +456,7 @@
                                        "phpDebug.js")))
      :type "php"
      :port 9003))
-   "This variable holds the dape configurations as an alist.
+  "This variable holds the dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
@@ -501,23 +501,23 @@ Functions and symbols:
   - If a value is a function, its return value replaces the key's
     value before execution.  The function is called with no arguments.
   - If a value is a symbol, it resolves recursively before execution."
-   :type '(alist :key-type (symbol :tag "Name")
-                 :value-type
-                 (plist :options
-                        (((const :tag "List of modes where config is active in `dape' completions" modes) (repeat function))
-                         ((const :tag "Ensures adapter availability" ensure) function)
-                         ((const :tag "Transforms configuration at runtime" fn) (choice function (repeat function)))
-                         ((const :tag "Shell command to initiate the debug adapter" command) (choice string symbol))
-                         ((const :tag "List of string arguments for command" command-args) (repeat string))
-                         ((const :tag "Working directory for command" command-cwd) (choice string symbol))
-                         ((const :tag "Path prefix for Emacs file access" prefix-local) string)
-                         ((const :tag "Path prefix for debugger file access" prefix-remote) string)
-                         ((const :tag "Host of debug adapter" host) string)
-                         ((const :tag "Port of debug adapter" port) natnum)
-                         ((const :tag "Compile cmd" compile) string)
-                         ((const :tag "Use configurationDone as trigger for launch/attach" defer-launch-attach) :type 'boolean)
-                         ((const :tag "Adapter type" :type) string)
-                         ((const :tag "Request type launch/attach" :request) string)))))
+  :type '(alist :key-type (symbol :tag "Name")
+                :value-type
+                (plist :options
+                       (((const :tag "List of modes where config is active in `dape' completions" modes) (repeat function))
+                        ((const :tag "Ensures adapter availability" ensure) function)
+                        ((const :tag "Transforms configuration at runtime" fn) (choice function (repeat function)))
+                        ((const :tag "Shell command to initiate the debug adapter" command) (choice string symbol))
+                        ((const :tag "List of string arguments for command" command-args) (repeat string))
+                        ((const :tag "Working directory for command" command-cwd) (choice string symbol))
+                        ((const :tag "Path prefix for Emacs file access" prefix-local) string)
+                        ((const :tag "Path prefix for debugger file access" prefix-remote) string)
+                        ((const :tag "Host of debug adapter" host) string)
+                        ((const :tag "Port of debug adapter" port) natnum)
+                        ((const :tag "Compile cmd" compile) string)
+                        ((const :tag "Use configurationDone as trigger for launch/attach" defer-launch-attach) :type 'boolean)
+                        ((const :tag "Adapter type" :type) string)
+                        ((const :tag "Request type launch/attach" :request) string)))))
 
 (defcustom dape-default-config-functions
   '(dape-config-autoport dape-config-tramp)
@@ -1265,7 +1265,7 @@ See `dape--connection-selected'."
          (selected (cl-find dape--connection-selected connections))
          (ordered
           `(,@(when selected
-               (list selected))
+                (list selected))
             ,@(unless (and require-selected selected)
                 (reverse connections))))
          (conn
@@ -1683,7 +1683,7 @@ See `dape-request' for expected CB signature."
                                           (plist-get old-thread :id)))
                                    (dape--threads conn))))
                  (plist-put old-thread :name (plist-get new-thread :name))
-             new-thread))
+               new-thread))
            (append threads nil)))
     (dape--request-return cb error)))
 
@@ -1856,12 +1856,12 @@ selected stack frame."
   (let ((current-thread (dape--current-thread conn)))
     (dolist (thread (dape--threads conn))
       (pcase clear
-       ('stack-frames
-        (plist-put thread :stackFrames nil)
-        (plist-put thread :totalFrames nil))
-       ('variables
-        (dolist (frame (plist-get thread :stackFrames))
-          (plist-put frame :scopes nil)))))
+        ('stack-frames
+         (plist-put thread :stackFrames nil)
+         (plist-put thread :totalFrames nil))
+        ('variables
+         (dolist (frame (plist-get thread :stackFrames))
+           (plist-put frame :scopes nil)))))
     (dape--with-request (dape--stack-trace conn current-thread 1)
       (when display
         (dape--stack-frame-display conn))
@@ -2542,9 +2542,9 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
            (let (done)
              (dape--with-request
                  (dape--stack-trace conn current-thread dape-stack-trace-levels)
-             ;; Only one stack frame is guaranteed to be available,
-             ;; so we need to reach out to make sure we got the full set.
-             ;; See `dape--stack-trace'.
+               ;; Only one stack frame is guaranteed to be available,
+               ;; so we need to reach out to make sure we got the full set.
+               ;; See `dape--stack-trace'.
                (setf done t))
              (with-timeout (5 nil)
                (while (not done) (accept-process-output nil 0.1)))
@@ -3617,8 +3617,8 @@ displayed."
   (run-hooks 'dape-update-ui-hook))
 
 (dape--buffer-map dape-info-data-breakpoints-line-map nil
-  (define-key map "D" 'dape-info-data-breakpoint-delete
-  (define-key map "d" 'dape-info-data-breakpoint-delete)))
+  (define-key map "D" 'dape-info-data-breakpoint-delete)
+  (define-key map "d" 'dape-info-data-breakpoint-delete))
 
 (dape--command-at-line dape-info-exceptions-toggle (dape--info-exception)
   "Toggle exception at line in dape info buffer."
@@ -3686,13 +3686,13 @@ displayed."
                         (hits (overlay-get breakpoint 'dape-hits)))
               (format "%s" hits)))
            (append
-              (list
-               'dape--info-breakpoint breakpoint
-               'keymap dape-info-breakpoints-line-map
-               'mouse-face 'highlight
-               'help-echo "mouse-2, RET: visit breakpoint")
-              (unless verified-p
-                '(face shadow)))))
+            (list
+             'dape--info-breakpoint breakpoint
+             'keymap dape-info-breakpoints-line-map
+             'mouse-face 'highlight
+             'help-echo "mouse-2, RET: visit breakpoint")
+            (unless verified-p
+              '(face shadow)))))
       (cl-loop
        for plist in dape--data-breakpoints do
        (gdb-table-add-row
@@ -4985,7 +4985,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
              ((zerop (% len 2))))))
 
 (defun dape--config-eval-value (value &optional skip-functions check
-                                skip-interactive)
+                                      skip-interactive)
   "Return recursively evaluated VALUE.
 If SKIP-FUNCTIONS is non nil return VALUE as is if `functionp' is non
 nil.
