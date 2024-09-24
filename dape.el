@@ -5087,10 +5087,10 @@ If LOOSE-PARSING is non nil ignore arg parsing failures."
                                  (buffer-substring (point) (point-max)))
                  with setvar = "\\`\\([A-Za-z_][A-Za-z0-9_]*\\)=\\(.*\\)\\'"
                  for cell on command for (program . args) = cell
-                 if (string-match setvar program)
+                 when (string-match setvar program)
                  append `(,(intern (concat ":" (match-string 1 program)))
                           ,(match-string 2 program))
-                 into env and for program = nil
+                 into env and do (setq program nil)
                  when (or (and (not program) (not args)) program) do
                  (setq read-config
                        (append (nreverse
