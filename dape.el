@@ -3531,12 +3531,14 @@ displayed."
 
 (defun dape--info-buffer-name (mode &optional identifier)
   "Create buffer name from MODE and IDENTIFIER."
-  (format "*dape-info %s*"
-          (if (eq 'dape-info-scope-mode mode)
-              (format "Scope <%s>" identifier)
-            (if-let ((name (alist-get mode dape--info-buffer-name-alist)))
-                name
-              (error "Unable to create mode from %s with %s" mode identifier)))))
+  (cond
+   ((eq 'dape-info-scope-mode mode)
+    (concat "*dape-info Scope*"
+            (unless (zerop identifier)
+              (format "<%s>" identifier))))
+   ((format "*dape-info %s*"
+            (or (alist-get mode dape--info-buffer-name-alist)
+                (error "Unable to create mode from %s with %s" mode identifier))))))
 
 (defun dape--info-set-related-buffers ()
   "Store related buffers in `dape--info-buffer-related'."
