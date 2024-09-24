@@ -2241,7 +2241,6 @@ symbol `dape-connection'."
          (dape--repl-message
           (format "Configuration:\n%s"
                   (cl-loop for (key value) on (dape--config conn) by 'cddr
-                           unless (eq key '(ensure modes))
                            concat (format "  %s %S\n" key value)))
           'dape-repl-error-face)
          ;; barf connection stdout
