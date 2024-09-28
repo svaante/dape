@@ -3615,8 +3615,8 @@ displayed."
   (run-hooks 'dape-update-ui-hook))
 
 (dape--buffer-map dape-info-data-breakpoints-line-map nil
-  (define-key map "D" 'dape-info-data-breakpoint-delete
-  (define-key map "d" 'dape-info-data-breakpoint-delete)))
+  (define-key map "D" 'dape-info-data-breakpoint-delete)
+  (define-key map "d" 'dape-info-data-breakpoint-delete))
 
 (dape--command-at-line dape-info-exceptions-toggle (dape--info-exception)
   "Toggle exception at line in dape info buffer."
