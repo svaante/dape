@@ -515,7 +515,7 @@ Functions and symbols:
                         ((const :tag "Host of debug adapter" host) string)
                         ((const :tag "Port of debug adapter" port) natnum)
                         ((const :tag "Compile cmd" compile) string)
-                        ((const :tag "Use configurationDone as trigger for launch/attach" defer-launch-attach) :type 'boolean)
+                        ((const :tag "Use configurationDone as trigger for launch/attach" defer-launch-attach) boolean)
                         ((const :tag "Adapter type" :type) string)
                         ((const :tag "Request type launch/attach" :request) string)))))
 
