@@ -468,6 +468,9 @@ Symbol keys (Used by dape):
 - ensure: Function to ensure that adapter is available.
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
+- command-env: Property list (plist) of environment variables to
+  set when running the command.  Keys can be strings, symbols or
+  keywords.
 - command-cwd: Working directory for the command, if not supplied
   `default-directory' will be used.
 - prefix-local: Path prefix for Emacs file access.
@@ -509,6 +512,8 @@ Functions and symbols:
                         ((const :tag "Transforms configuration at runtime" fn) (choice function (repeat function)))
                         ((const :tag "Shell command to initiate the debug adapter" command) (choice string symbol))
                         ((const :tag "List of string arguments for command" command-args) (repeat string))
+                        ((const :tag "List of environment variables to set when running the command" command-env)
+                         (plist :key-type (restricted-sexp :match-alternatives (stringp symbolp keywordp) :tag "Variable") :value-type (string :tag "Value")))
                         ((const :tag "Working directory for command" command-cwd) (choice string symbol))
                         ((const :tag "Path prefix for Emacs file access" prefix-local) string)
                         ((const :tag "Path prefix for debugger file access" prefix-remote) string)
@@ -724,7 +729,7 @@ The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
 (defcustom dape-minibuffer-hint-ignore-properties
-  '(ensure fn modes command command-args defer-launch-attach :type :request)
+  '(ensure fn modes command command-args command-env defer-launch-attach :type :request)
   "Properties to be hidden in `dape--minibuffer-hint'."
   :type '(repeat symbol))
 
@@ -2137,8 +2142,15 @@ symbol `dape-connection'."
   (unless (plist-get config 'command-cwd)
     (plist-put config 'command-cwd default-directory))
   (let ((default-directory (plist-get config 'command-cwd))
+        (process-environment (cl-copy-list process-environment))
         (retries 30)
         process server-process)
+    (cl-loop for (key value) on (plist-get config 'command-env) by 'cddr
+             do (setenv (pcase key
+                          ((pred keywordp) (substring (format "%s" key) 1))
+                          ((or (pred symbolp) (pred stringp)) (format "%s" key))
+                          (_ (user-error "Bad type for `command-env' key %S" key)))
+                        (format "%s" value)))
     (cond
      ;; socket conn
      ((plist-get config 'port)
