@@ -1046,8 +1046,11 @@ Note requires `dape--source-ensure' if source is by reference."
     (dape-command-cwd)))
 
 (defun dape-config-autoport (config)
-  "Replace :autoport in CONFIG keys `command-args' and `port'.
-If `port' is not `:autoport' return config as is."
+  "Handle :autoport in CONFIG keys `port', `command-args', and `command-env'.
+If `port' is the symbol `:autoport', replace it with a random free port
+number.  In addition, replace all occurences of `:autoport' (symbol or
+string) in `command-args' and all property values of `command-env' with
+the value of config key `port'."
   (when (eq (plist-get config 'port) :autoport)
     ;; Stolen from `Eglot'
     (let ((port-probe
@@ -1060,18 +1063,20 @@ If `port' is not `:autoport' return config as is."
                  (unwind-protect
                      (process-contact port-probe :service)
                    (delete-process port-probe)))))
-  (when-let* ((command-args (plist-get config 'command-args))
-              (port (plist-get config 'port))
-              (port-string (number-to-string port)))
-    (plist-put
-     config
-     'command-args
-     (seq-map (lambda (arg)
-                (cond
-                 ((eq arg :autoport) port-string)
-                 ((stringp arg) (string-replace ":autoport" port-string arg))
-                 (t arg)))
-              command-args)))
+  (when-let* ((port (plist-get config 'port))
+              (port-string (number-to-string port))
+              (replace-fn (lambda (arg)
+                            (cond
+                             ((eq arg :autoport) port-string)
+                             ((stringp arg) (string-replace ":autoport" port-string arg))
+                             (t arg)))))
+    (when-let ((command-args (plist-get config 'command-args)))
+      (plist-put config 'command-args (seq-map replace-fn command-args)))
+    (when-let ((command-env (plist-get config 'command-env)))
+      (plist-put config 'command-env
+                 (cl-loop for (key value) on command-env by #'cddr
+                          collect key
+                          collect (apply replace-fn (list value))))))
   config)
 
 (defun dape-config-tramp (config)
