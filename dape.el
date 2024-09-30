@@ -2205,6 +2205,7 @@ symbol `dape-connection'."
                             :connection-type 'pipe
                             :coding 'utf-8-emacs-unix
                             :noquery t
+                            :stderr (get-buffer-create "*dape-connection stderr*")
                             :file-handler t))
         (when dape-debug
           (dape--message "Adapter started with %S"
