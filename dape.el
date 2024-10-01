@@ -4521,7 +4521,7 @@ Send INPUT to DUMMY-PROCESS."
       (dape-evaluate-expression
        (or (dape--live-connection 'stopped t)
            (dape--live-connection 'last))
-           (string-trim (substring-no-properties input)))))))
+       (string-trim (substring-no-properties input)))))))
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
