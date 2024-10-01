@@ -720,7 +720,7 @@ See `dape-breakpoint-load' and `dape-breakpoint-save'."
   "Function to get current working directory.
 The function should return a string representing the absolute
 file path of the current working directory, usually the current
-project's root. See `dape--default-cwd'."
+project's root.  See `dape--default-cwd'."
   :type 'function)
 
 (defcustom dape-compile-hook nil
@@ -5001,7 +5001,7 @@ configurations: %s"
                                      (copy-tree base-config)))))
 
 (defun dape--config-from-string (str &optional loose-parsing)
-  "Return list of ALIST-KEY CONFIG from STR.
+  "Return list of (KEY CONFIG) from STR.
 Expects STR format of \”ALIST-KEY PLIST-KEY PLIST-VALUE\” etc.
 Where ALIST-KEY exists in `dape-configs'.
 If LOOSE-PARSING is non nil ignore arg parsing failures."
