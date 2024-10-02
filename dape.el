@@ -4856,7 +4856,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
   (pcase-let*
       ((`(,key ,config ,error-message ,hint-rows) dape--minibuffer-cache)
        (str (string-trim (buffer-substring (minibuffer-prompt-end) (point-max))))
-       (`(,hint-key ,hint-config) (ignore-errors (dape--config-from-string str t)))
+       (`(,hint-key ,hint-config) (ignore-errors (dape--config-from-string str)))
        (default-directory
         (or (with-current-buffer dape--minibuffer-last-buffer
               (ignore-errors (dape--guess-root hint-config)))
@@ -5005,11 +5005,11 @@ configurations: %s"
                                      (seq-partition options 2)
                                      (copy-tree base-config)))))
 
-(defun dape--config-from-string (str &optional loose-parsing)
+(defun dape--config-from-string (str)
   "Return list of (KEY CONFIG) from STR.
-Expects STR format of \”ALIST-KEY PLIST-KEY PLIST-VALUE\” etc.
-Where ALIST-KEY exists in `dape-configs'.
-If LOOSE-PARSING is non nil ignore arg parsing failures."
+Expects STR format:
+\”ALIST-KEY KEY VALUE ... - ENV= PROGRAM ARG ...\”
+Where ALIST-KEY exists in `dape-configs'."
   (let ((buffer (current-buffer))
         name read-config base-config)
     (with-temp-buffer
@@ -5025,49 +5025,46 @@ If LOOSE-PARSING is non nil ignore arg parsing failures."
       (unless (alist-get name dape-configs)
         (user-error "No configuration named `%s'" name))
       (setq base-config (copy-tree (alist-get name dape-configs)))
-      (condition-case _
-          (while
-              ;; Do we have non whitespace chars after `point'?
-              (thread-first (buffer-substring (point) (point-max))
-                            (string-trim)
-                            (string-empty-p)
-                            (not))
-            (let ((thing (read (current-buffer))))
-              (cond
-               ((eq thing '-)
-                (cl-loop
-                 with command = (split-string-shell-command
-                                 (buffer-substring (point) (point-max)))
-                 with setvar = "\\`\\([A-Za-z_][A-Za-z0-9_]*\\)=\\(.*\\)\\'"
-                 for cell on command for (program . args) = cell
-                 when (string-match setvar program)
-                 append `(,(intern (concat ":" (match-string 1 program)))
-                          ,(match-string 2 program))
-                 into env and do (setq program nil)
-                 when (or (and (not program) (not args)) program) do
-                 (setq read-config
-                       (append (nreverse
-                                (append (when program `(:program ,program))
-                                        (when args `(:args ,(apply 'vector args)))
-                                        (when env `(:env ,env))))
-                               read-config))
-                 ;; Stop and eat rest of buffer
-                 and return (goto-char (point-max))))
-               (t
-                (push thing read-config)))))
-        (error
-         (unless loose-parsing
-           (user-error "Unable to parse options %s"
-                       (buffer-substring (point) (point-max)))))))
-    (when (and loose-parsing
-               (not (dape--plistp read-config)))
-      (pop read-config))
-    (setq read-config (nreverse read-config))
-    (unless (dape--plistp read-config)
-      (user-error "Bad options format, see `dape-configs'"))
-    (cl-loop for (key value) on read-config by 'cddr
-             do (setq base-config (plist-put base-config key value)))
-    (list name base-config)))
+      (ignore-errors
+        (while
+            ;; Do we have non whitespace chars after `point'?
+            (thread-first (buffer-substring (point) (point-max))
+                          (string-trim)
+                          (string-empty-p)
+                          (not))
+          (let ((thing (read (current-buffer))))
+            (cond
+             ((eq thing '-)
+              (cl-loop
+               with command = (split-string-shell-command
+                               (buffer-substring (point) (point-max)))
+               with setvar = "\\`\\([A-Za-z_][A-Za-z0-9_]*\\)=\\(.*\\)\\'"
+               for cell on command for (program . args) = cell
+               when (string-match setvar program)
+               append `(,(intern (concat ":" (match-string 1 program)))
+                        ,(match-string 2 program))
+               into env and do (setq program nil)
+               when (or (and (not program) (not args)) program) do
+               (setq read-config
+                     (append (nreverse
+                              (append (when program `(:program ,program))
+                                      (when args `(:args ,(apply 'vector args)))
+                                      (when env `(:env ,env))))
+                             read-config))
+               ;; Stop and eat rest of buffer
+               and return (goto-char (point-max))))
+             (t
+              (push thing read-config))))))
+      ;; Try to save half baked plist (value missing)
+      (when (not (dape--plistp read-config))
+        (pop read-config))
+      (unless (dape--plistp read-config)
+        (user-error "Bad options format, see `dape-configs'"))
+      (setq read-config (nreverse read-config))
+      ;; Apply properties from parsed PLIST to `dape-configs' item
+      (cl-loop for (key value) on read-config by 'cddr do
+               (setq base-config (plist-put base-config key value)))
+      (list name base-config))))
 
 (defun dape--config-diff (key post-eval)
   "Create a diff of config KEY and POST-EVAL config."
@@ -5238,14 +5235,14 @@ See `dape--config-mode-p' how \"valid\" is defined."
                                (pcase-let*
                                    ((str (buffer-substring (minibuffer-prompt-end)
                                                            (point-max)))
-                                    (`(,key) (dape--config-from-string str t)))
+                                    (`(,key) (dape--config-from-string str)))
                                  (delete-region (minibuffer-prompt-end)
                                                 (point-max))
                                  (insert (format "%s" key) " "))))
                  map)
                nil 'dape-history default-value)))
            (`(,key ,config)
-            (dape--config-from-string (substring-no-properties str) t))
+            (dape--config-from-string (substring-no-properties str)))
            (evaled-config (dape--config-eval key config)))
         (when dape-history-evaluated
           (setq dape-history (cons (dape--config-to-string key evaled-config)
