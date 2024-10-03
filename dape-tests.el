@@ -642,7 +642,7 @@ Expects line with string \"breakpoint\" in source."
     (with-current-buffer breakpoints-buffer
       (dape-test--revert-buffer)
       (dape-test--should
-       (dape-test--line-at-regex "index.js:2 .*5 *$")))))
+       (dape-test--line-at-regex "5.*index.js:2")))))
 
 (ert-deftest dape-test-breakpoint-hits ()
   "Test breakpoint hits."
