@@ -3024,7 +3024,7 @@ Updates all breakpoints in all known connections."
                    (concat
                     " "
                     (propertize
-                     (format "Hit %s" hits)
+                     (format "Hits: %s" hits)
                      'face 'dape-hits-face
                      'mouse-face 'highlight
                      'help-echo "mouse-1: edit break hits"
