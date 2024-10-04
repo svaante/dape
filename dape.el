@@ -3610,8 +3610,8 @@ displayed."
 
 (define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode
   "Breakpoints"
-  :interactive nil
-  "Major mode for Dape info breakpoints.")
+  "Major mode for Dape info breakpoints."
+  :interactive nil)
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-breakpoints-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
