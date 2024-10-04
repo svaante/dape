@@ -3618,7 +3618,7 @@ displayed."
   "Revert buffer function for MAJOR-MODE `dape-info-breakpoints-mode'."
   (dape--info-update-with
     (let ((table (make-gdb-table)))
-      (gdb-table-add-row table (list "A" "Typ" "Where/On"))
+      (gdb-table-add-row table (list "A" "Type " "Where/On"))
       (cl-loop
        for breakpoint in dape--breakpoints
        for buffer = (overlay-buffer breakpoint)
@@ -3640,9 +3640,9 @@ displayed."
                     (propertize "y" 'font-lock-face 'font-lock-warning-face)
                   (propertize "n" 'font-lock-face 'font-lock-doc-face)))
               (cond ((overlay-get breakpoint :log) "Log")
-                    ((overlay-get breakpoint :hits) "Hit")
-                    ((overlay-get breakpoint :expression) "Con")
-                    (t "Brk"))
+                    ((overlay-get breakpoint :hits) "Hits")
+                    ((overlay-get breakpoint :expression) "Cond")
+                    (t "Break"))
               (concat
                (if-let (file (buffer-file-name buffer))
                    (dape--format-file-line file line)
@@ -3663,7 +3663,7 @@ displayed."
        (gdb-table-add-row
         table
         (list (propertize "y" 'font-lock-face 'font-lock-warning-face)
-              "Dat"
+              "Data"
               (format "%s %s %s"
                       (propertize
                        (plist-get plist :name)
@@ -3681,7 +3681,7 @@ displayed."
         (list (if (plist-get exception :enabled)
                   (propertize "y" 'font-lock-face 'font-lock-warning-face)
                 (propertize "n" 'font-lock-face 'font-lock-doc-face))
-              "Exc"
+              "Excep"
               (format "%s" (plist-get exception :label)))
         (list 'dape--info-exception exception
               'mouse-face 'highlight
