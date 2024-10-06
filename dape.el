@@ -944,18 +944,18 @@ by `dape--threads-make-update-handle'."
 
 (defun dape--stopped-threads (conn)
   "List of stopped threads for CONN."
-  (and conn
-       (mapcan (lambda (thread)
-                 (when (equal (plist-get thread :status) 'stopped)
-                   (list thread)))
-               (dape--threads conn))))
+  (when conn
+    (mapcan (lambda (thread)
+              (when (equal (plist-get thread :status) 'stopped)
+                (list thread)))
+            (dape--threads conn))))
 
 (defun dape--current-thread (conn)
   "Current thread plist for CONN."
-  (and conn
-       (seq-find (lambda (thread)
-                   (eq (plist-get thread :id) (dape--thread-id conn)))
-                 (dape--threads conn))))
+  (when conn
+    (cl-find-if (lambda (thread)
+                  (eq (plist-get thread :id) (dape--thread-id conn)))
+                (dape--threads conn))))
 
 (defun dape--path (conn path format)
   "Return translate absolute PATH in FORMAT from CONN config.
