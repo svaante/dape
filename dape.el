@@ -2140,9 +2140,9 @@ symbol `dape-connection'."
                           (_ (user-error "Bad type for `command-env' key %S" key)))
                         (format "%s" value)))
     (cond
-     ;; socket conn
+     ;; Socket type connection
      ((plist-get config 'port)
-      ;; start server
+      ;; Start server
       (when (plist-get config 'command)
         (let ((stderr-buffer
                (get-buffer-create "*dape-server stderr*"))
@@ -2165,7 +2165,7 @@ symbol `dape-connection'."
         ;; FIXME Why do I need this?
         (when (file-remote-p default-directory)
           (sleep-for 0.300)))
-      ;; connect to server
+      ;; Connect to server
       (let ((host (or (plist-get config 'host) "localhost")))
         (while (and (not process) (> retries 0))
           (ignore-errors
@@ -2184,7 +2184,7 @@ symbol `dape-connection'."
               (dape--warn "Unable to connect to dap server at %s:%d"
                           host (plist-get config 'port))
               (dape--message "Connection is configurable by `host' and `port' keys")
-              ;; barf server std-err
+              ;; Barf server std-err
               (when-let* (server-process
                           (buffer (process-get server-process 'stderr-buffer)))
                 (with-current-buffer buffer
@@ -2195,7 +2195,7 @@ symbol `dape-connection'."
             (dape--message "%s to adapter established at %s:%s"
                            (if parent "Child connection" "Connection")
                            host (plist-get config 'port))))))
-     ;; stdio conn
+     ;; Pipe type connection
      (t
       (let ((command
              (cons (plist-get config 'command)
@@ -2221,7 +2221,7 @@ symbol `dape-connection'."
      :events-buffer-config `(:size ,(if dape-debug nil 0) :format full)
      :on-shutdown
      (lambda (conn)
-       ;; error prints
+       ;; Error prints
        (unless (dape--initialized-p conn)
          (dape--warn "Adapter %sconnection shutdown without successfully initializing"
                      (if (dape--parent conn) "child " ""))
@@ -2241,16 +2241,16 @@ symbol `dape-connection'."
           (when-let* (((buffer-live-p buffer))
                       (content (with-current-buffer buffer (buffer-string)))
                       ((not (string-empty-p content))))
-            (dape--warn "Contents of <%s>" (buffer-name buffer))
+            (dape--warn "Buffer %s content" (buffer-name buffer))
             (dape--repl-insert content))))
-       ;; cleanup server process
+       ;; Cleanup server process
        (unless (dape--parent conn)
          (dape--stack-frame-cleanup)
          (when-let ((server-process (dape--server-process conn)))
            (delete-process server-process)
            (while (process-live-p server-process)
              (accept-process-output nil nil 0.1))))
-       ;; ui
+       ;; Update UI
        (when (eq dape--connection conn)
          (dape-active-mode -1)
          (force-mode-line-update t)))
@@ -2322,8 +2322,7 @@ CONN is inferred for interactive invocations."
   (dape--stack-frame-cleanup)
   (dape--breakpoints-reset)
   (cond
-   ((and conn
-         (dape--capable-p conn :supportsRestartRequest))
+   ((and conn (dape--capable-p conn :supportsRestartRequest))
     (setq dape--connection-selected nil)
     (setf (dape--threads conn) nil)
     (setf (dape--thread-id conn) nil)
@@ -2358,10 +2357,9 @@ terminate.  CONN is inferred for interactive invocations."
    ((and conn (jsonrpc-running-p conn))
     (dape--with-request
         (dape-request conn "disconnect"
-                      `(:restart
-                        :json-false
-                        ,@(when (dape--capable-p conn :supportTerminateDebuggee)
-                            (list :terminateDebuggee t))))
+                      `( :restart :json-false
+                         ,@(when (dape--capable-p conn :supportTerminateDebuggee)
+                             '(:terminateDebuggee t))))
       (jsonrpc-shutdown conn)
       (dape--request-return cb)))
    (t
@@ -2486,29 +2484,25 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (interactive
    (let* ((conn (dape--live-connection 'last))
           (collection
-           (cl-loop
-            with conns = (dape--live-connections)
-            with conn-prefix-p = (length>
-                                  (cl-remove-if-not 'dape--threads conns) 1)
-            for conn in conns
-            for index upfrom 1
-            append (cl-loop
-                    for thread in (dape--threads conn)
-                    for name = (concat
-                                (when conn-prefix-p
-                                  (format "%s: " index))
-                                (format "%s %s"
-                                        (plist-get thread :id)
-                                        (plist-get thread :name)))
-                    collect (list name conn (plist-get thread :id)))))
+           (cl-loop with conns = (dape--live-connections)
+                    with conn-prefix-p =
+                    (length> (cl-remove-if-not 'dape--threads conns) 1)
+                    for conn in conns for index upfrom 1 append
+                    (cl-loop for thread in (dape--threads conn) collect
+                             `(,(concat (when conn-prefix-p
+                                          (format "%s: " index))
+                                        (format "%s %s"
+                                                (plist-get thread :id)
+                                                (plist-get thread :name)))
+                               ,conn
+                               ,(plist-get thread :id)))))
           (thread-name
            (completing-read
             (format "Select thread (current %s): "
                     ;; TODO Show current thread with connection prefix
                     (thread-first conn (dape--current-thread)
                                   (plist-get :name)))
-            collection
-            nil t)))
+            collection nil t)))
      (alist-get thread-name collection nil nil 'equal)))
   (setf (dape--thread-id conn) thread-id)
   (setq dape--connection-selected conn)
@@ -2538,8 +2532,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                                     (thread-first conn
                                                   (dape--current-stack-frame)
                                                   (plist-get :name)))
-                            collection
-                            nil t)))
+                            collection nil t)))
      (list conn (alist-get stack-name collection nil nil 'equal))))
   (setf (dape--stack-id conn) stack-id)
   (dape--update conn nil t))
@@ -2550,10 +2543,8 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (if (dape--stopped-threads conn)
       (let* ((current-stack (dape--current-stack-frame conn))
              (stacks (plist-get (dape--current-thread conn) :stackFrames))
-             (i (cl-loop for i upfrom 0
-                         for stack in stacks
-                         when (equal stack current-stack)
-                         return (+ i n))))
+             (i (cl-loop for i upfrom 0 for stack in stacks
+                         when (equal stack current-stack) return (+ i n))))
         (if (not (and (<= 0 i) (< i (length stacks))))
             (message "Index %s out of range" i)
           (dape-select-stack conn (plist-get (nth i stacks) :id))))
@@ -2576,8 +2567,7 @@ Optional argument SKIP-REMOVE limits usage to only adding watched vars."
           (completing-read "Watch or unwatch symbol: "
                            (mapcar (lambda (plist) (plist-get plist :name))
                                    dape--watched)
-                           nil
-                           nil
+                           nil nil
                            (or (and (region-active-p)
                                     (buffer-substring (region-beginning)
                                                       (region-end)))
@@ -2645,8 +2635,8 @@ Use SKIP-COMPILE to skip compilation."
   (interactive (list (dape--read-config)))
   (dape--with-request (dape-kill (dape--live-connection 'parent t))
     (dape--config-ensure config t)
-    ;; Hooks need to be run before any repl messaging but after we
-    ;; have ensured that config is executable.
+    ;; Hooks need to be run before any REPL messaging but after we
+    ;; have tried ensured that config is executable.
     (run-hooks 'dape-start-hook)
     (when-let ((fn (or (plist-get config 'fn) 'identity))
                (fns (or (and (functionp fn) (list fn))
@@ -2657,8 +2647,7 @@ Use SKIP-COMPILE to skip compilation."
                         (copy-tree config))))
     (if (and (not skip-compile) (plist-get config 'compile))
         (dape--compile config)
-      (setq dape--connection
-            (dape--create-connection config))
+      (setq dape--connection (dape--create-connection config))
       (dape--start-debugging dape--connection))))
 
 
@@ -2727,8 +2716,7 @@ Using BUFFER and STR."
             (insert (base64-decode-string data))
             (let (buffer-undo-list)
               (hexlify-buffer))
-            ;; Now we need to translate the address fields after the
-            ;; fact ugghh
+            ;; Now we need to apply offset to the addresses, ughh
             (goto-char (point-min))
             (while (re-search-forward "^[0-9a-f]+" nil t)
               (let ((address
@@ -2928,7 +2916,7 @@ contents."
       (overlay-put overlay 'before-string before-string))))
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
-  "Make sure that dape OVERLAY region covers line."
+  "Make sure that OVERLAY region covers line."
   (apply 'move-overlay overlay (dape--overlay-region)))
 
 (defun dape--breakpoints-reset ()
@@ -3281,8 +3269,8 @@ Buffer is displayed with `dape-display-source-buffer-action'."
                            when (eq frame selected) return
                            (cl-loop for frame in cell when (dape--source conn frame)
                                     return frame))))
-        (if-let (;; Check if frame is available, otherwise fetch all
-                 (frame (displayable-frame)))
+        ;; Check if frame is available, otherwise fetch all
+        (if-let ((frame (displayable-frame)))
             (dape--stack-frame-display-1 conn frame deepest-p)
           (dape--with-request (dape--stack-trace conn thread dape-stack-trace-levels)
             (when-let ((frame (displayable-frame)))
@@ -3875,8 +3863,7 @@ current buffer with CONN config."
                                               (plist-get :path)))
                           (path (dape--path conn path 'local)))
                 (concat " of "
-                        (dape--format-file-line path
-                                                (plist-get frame :line))))
+                        (dape--format-file-line path (plist-get frame :line))))
               (when-let ((dape-info-stack-buffer-addresses)
                          (ref
                           (plist-get frame :instructionPointerReference)))
