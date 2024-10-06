@@ -3656,10 +3656,10 @@ displayed."
                (propertize "y" 'font-lock-face 'font-lock-warning-face)
              (propertize "n" 'font-lock-face 'font-lock-doc-face)))
          (pcase (dape--breakpoint-type breakpoint)
-           ('log "Log  ") ;; Manual type column alignment
-           ('hits "Hits ")
+           ('log        "Log  ")
+           ('hits       "Hits ")
            ('expression "Cond ")
-           (_ "Break"))
+           (_           "Break"))
          (pcase buffer-or-path
            ((and buffer (pred bufferp))
             (concat
@@ -3680,7 +3680,7 @@ displayed."
        (gdb-table-add-row
         table
         (list (propertize "y" 'font-lock-face 'font-lock-warning-face)
-              "Data"
+              "Data "
               (format "%s %s %s"
                       (propertize
                        (plist-get plist :name)
