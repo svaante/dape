@@ -2330,8 +2330,8 @@ CONN is inferred for interactive invocations."
 CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'last t)))
   (dape--stack-frame-cleanup)
-  (dape--breakpoints-reset)
   (cond ((and conn (dape--capable-p conn :supportsRestartRequest))
+         (dape--breakpoints-reset 'from-restart)
          (setq dape--connection-selected nil)
          (setf (dape--threads conn) nil
                (dape--thread-id conn) nil
@@ -2962,11 +2962,14 @@ contents."
   "Make sure that OVERLAY region covers line."
   (apply 'move-overlay overlay (dape--overlay-region)))
 
-(defun dape--breakpoints-reset ()
-  "Reset breakpoints hits."
+(defun dape--breakpoints-reset (&optional from-restart)
+  "Reset breakpoints hits.
+If FROM-RESTART is non nil keep id and verified."
   (cl-loop for breakpoint in dape--breakpoints do
-           (with-slots (verified hits id) breakpoint
-             (setf verified nil hits nil))))
+           (with-slots (verified id hits) breakpoint
+             (unless from-restart
+               (setf verified nil id nil))
+             (setf hits nil))))
 
 (defun dape--breakpoints-at-point ()
   "Breakpoints at point."
