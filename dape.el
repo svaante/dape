@@ -3653,7 +3653,7 @@ displayed."
          (pcase (dape--breakpoint-type breakpoint)
            ('log "Log  ") ;; Manual type column alignment
            ('hits "Hits ")
-           ('expression "Cond")
+           ('expression "Cond ")
            (_ "Break"))
          (pcase buffer-or-path
            ((and buffer (pred bufferp))
