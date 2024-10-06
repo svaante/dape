@@ -2329,19 +2329,18 @@ CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'last t)))
   (dape--stack-frame-cleanup)
   (dape--breakpoints-reset)
-  (cond
-   ((and conn (dape--capable-p conn :supportsRestartRequest))
-    (setq dape--connection-selected nil)
-    (setf (dape--threads conn) nil)
-    (setf (dape--thread-id conn) nil)
-    (setf (dape--modules conn) nil)
-    (setf (dape--sources conn) nil)
-    (setf (dape--restart-in-progress-p conn) t)
-    (dape--with-request (dape-request conn "restart" nil)
-      (setf (dape--restart-in-progress-p conn) nil)))
-   (dape-history
-    (dape (apply 'dape--config-eval (dape--config-from-string (car dape-history)))))
-   ((user-error "Unable to derive session to restart, run `dape'"))))
+  (cond ((and conn (dape--capable-p conn :supportsRestartRequest))
+         (setq dape--connection-selected nil)
+         (setf (dape--threads conn) nil
+               (dape--thread-id conn) nil
+               (dape--modules conn) nil
+               (dape--sources conn) nil
+               (dape--restart-in-progress-p conn) t)
+         (dape--with-request (dape-request conn "restart" nil)
+           (setf (dape--restart-in-progress-p conn) nil)))
+        (dape-history
+         (dape (apply 'dape--config-eval (dape--config-from-string (car dape-history)))))
+        ((user-error "Unable to derive session to restart, run `dape'"))))
 
 (defun dape-kill (conn &optional cb with-disconnect)
   "Kill debug session.
@@ -2964,8 +2963,8 @@ contents."
 (defun dape--breakpoints-reset ()
   "Reset breakpoints hits."
   (cl-loop for breakpoint in dape--breakpoints do
-           (with-slots (verified id hits) breakpoint
-             (setf verified nil id nil hits nil))))
+           (with-slots (verified hits id) breakpoint
+             (setf verified nil hits nil))))
 
 (defun dape--breakpoints-at-point ()
   "Breakpoints at point."
