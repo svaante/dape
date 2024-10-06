@@ -783,6 +783,8 @@ evaluated before being pushed to `dape-history'."
 (defvar dape-history nil
   "History variable for `dape'.")
 
+;; FIXME `dape--source-buffers' should be moved into connection as
+;; source references are not globally scoped.
 (defvar dape--source-buffers nil
   "Plist of sources reference to buffer.")
 (defvar dape--breakpoints nil
