@@ -2849,6 +2849,7 @@ of memory read."
                         (propertize
                          (format "%s: %s" label value)
                          'face face
+                         'mouse-face 'highlight
                          'help-echo (format "mouse-1: %s" mouse-1-help)
                          'keymap (let ((map (make-sparse-keymap)))
                                    (define-key map [mouse-1] mouse-1-def)
