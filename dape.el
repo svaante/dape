@@ -5319,14 +5319,14 @@ See `eldoc-documentation-functions', for more information."
   (let ((conn (or (dape--live-connection 'last t)
                   dape--connection)))
     (setq dape--mode-line-format
-          `((:propertize "dape"
-                         face font-lock-constant-face
-                         mouse-face mode-line-highlight
-                         help-echo "Dape: Debug Adapter Protocol for Emacs\n\
+          `(( :propertize "dape"
+              face font-lock-constant-face
+              mouse-face mode-line-highlight
+              help-echo "Dape: Debug Adapter Protocol for Emacs\n\
 mouse-1: Display minor mode menu"
-                         keymap ,(let ((map (make-sparse-keymap)))
-                                   (define-key map [mode-line down-mouse-1] dape-menu)
-                                   map))
+              keymap ,(let ((map (make-sparse-keymap)))
+                        (define-key map [mode-line down-mouse-1] dape-menu)
+                        map))
             ":"
             (:propertize ,(format "%s" (or (and conn (dape--state conn))
                                            'unknown))
@@ -5337,9 +5337,9 @@ mouse-1: Display minor mode menu"
                           (nof-conns
                            (length (cl-remove-if-not 'dape--threads conns)))
                           ((> nof-conns 1)))
-                `((:propertize ,(format "(%s)" nof-conns)
-                               face shadow
-                               help-echo "Active child connections")))))))
+                `(( :propertize ,(format "(%s)" nof-conns)
+                    face shadow
+                    help-echo "Active child connections")))))))
 
 (add-to-list 'mode-line-misc-info
              `(dape-active-mode ("[" dape--mode-line-format "]")))
