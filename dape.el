@@ -1951,13 +1951,15 @@ BODY is an plist of adapter capabilities."
 (cl-defmethod dape-handle-event (conn (_event (eql breakpoint)) body)
   "Handle adapter CONNs breakpoint events.
 Update `dape--breakpoints' according to BODY."
-  (when-let* ((update (plist-get body :breakpoint))
-              (id (plist-get update :id))
-              (breakpoint
-               (cl-find id dape--breakpoints
-                        :key (lambda (breakpoint)
-                               (plist-get (dape--breakpoint-id breakpoint) conn)))))
-    (dape--breakpoint-update conn breakpoint update)))
+  (when-let ((update (plist-get body :breakpoint))
+             (id (plist-get update :id)))
+    (if-let ((breakpoint
+              (cl-find id dape--breakpoints
+                       :key (lambda (breakpoint)
+                              (plist-get (dape--breakpoint-id breakpoint) conn)))))
+        (dape--breakpoint-update conn breakpoint update)
+      ;; TODO Breakpoint event should be able to create breakpoints
+      )))
 
 (cl-defmethod dape-handle-event (conn (_event (eql module)) body)
   "Handle adapter CONNs module events.
