@@ -962,7 +962,7 @@ by `dape--threads-make-update-handle'."
                   (eq (plist-get thread :id) (dape--thread-id conn)))
                 (dape--threads conn))))
 
-(defun dape--path (conn path format)
+(defun dape--path-1 (conn path format)
   "Return translate absolute PATH in FORMAT from CONN config.
 Accepted FORMAT values are local and remote.
 See `dape-configs' symbols prefix-local prefix-remote."
@@ -991,6 +991,16 @@ See `dape-configs' symbols prefix-local prefix-remote."
               (string-remove-prefix (car mapping) absolute-path))
     path))
 
+(defun dape--path-local (conn path)
+  "Return translate PATH to local format by CONN.
+See `dape--path-1'."
+  (dape--path-1 conn path 'local))
+
+(defun dape--path-remote (conn path)
+  "Return translate PATH to remote format by CONN.
+See `dape--path-1'."
+  (dape--path-1 conn path 'remote))
+
 (defun dape--capable-p (conn thing)
   "Return non nil if CONN capable of THING."
   (eq (plist-get (dape--capabilities conn) thing) t))
@@ -1017,7 +1027,7 @@ Note requires `dape--source-ensure' if source is by reference."
                         buffer)
                       ;; Take buffer by path
                       (when-let* ((remote-path (plist-get source :path))
-                                  (path (dape--path conn remote-path 'local))
+                                  (path (dape--path-local conn remote-path))
                                   ((file-exists-p path)))
                         (find-file-noselect path t)))))
     (dape--with-line buffer line
@@ -1875,7 +1885,7 @@ selected stack frame."
 Starts a new adapter CONNs from ARGUMENTS."
   (let ((default-directory
          (or (when-let ((cwd (plist-get arguments :cwd)))
-               (dape--path conn cwd 'local))
+               (dape--path-local conn cwd))
              default-directory))
         (process-environment
          (or (cl-loop for (key value) on (plist-get arguments :env) by 'cddr
@@ -3042,9 +3052,9 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
      (or (cl-loop for (reference source-buffer) on dape--source-buffers by #'cddr
                   when (eq buffer source-buffer) return
                   `(:sourceReference ,reference))
-         `(:path ,(dape--path conn (buffer-file-name buffer) 'remote))))
+         `(:path ,(dape--path-remote conn (buffer-file-name buffer)))))
     ((and path (pred stringp))
-     `(:path ,(dape--path conn path 'remote)))))
+     `(:path ,(dape--path-remote conn path)))))
 
 (defun dape--breakpoint-update (conn breakpoint update)
   "Update BREAKPOINT with UPDATE plist from CONN."
@@ -3152,7 +3162,7 @@ See `dape-request' for expected CB signature."
          (refrence (plist-get source :sourceReference))
          (buffer (plist-get dape--source-buffers refrence)))
     (cond
-     ((or (and (stringp path) (file-exists-p (dape--path conn path 'local)) path)
+     ((or (and (stringp path) (file-exists-p (dape--path-local conn path)) path)
           (and (buffer-live-p buffer) buffer))
       (dape--request-return cb))
      ((and (numberp refrence) (< 0 refrence) refrence)
@@ -3275,7 +3285,7 @@ Buffer is displayed with `dape-display-source-buffer-action'."
                                     (or (and-let* ((reference (plist-get source :sourceReference))
                                                    ((< 0 reference))))
                                         (and-let* ((remote-path (plist-get source :path))
-                                                   (path (dape--path conn remote-path 'local))
+                                                   (path (dape--path-local conn remote-path))
                                                    ((file-exists-p path)))))
                                     return frame))))
         ;; Check if frame source should be available, otherwise fetch all
@@ -3811,7 +3821,7 @@ See `dape-request' for expected CB signature."
                                (path (thread-first top-stack
                                                    (plist-get :source)
                                                    (plist-get :path)))
-                               (path (dape--path conn path 'local))
+                               (path (dape--path-local conn path))
                                (line (plist-get top-stack :line)))
                      (concat " of " (dape--format-file-line path line)))
                    (when-let ((dape-info-thread-buffer-addresses)
@@ -3874,7 +3884,7 @@ current buffer with CONN config."
                           (path (thread-first frame
                                               (plist-get :source)
                                               (plist-get :path)))
-                          (path (dape--path conn path 'local)))
+                          (path (dape--path-local conn path)))
                 (concat " of "
                         (dape--format-file-line path (plist-get frame :line))))
               (when-let ((dape-info-stack-buffer-addresses)
