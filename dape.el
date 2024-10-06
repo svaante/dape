@@ -1149,13 +1149,13 @@ as is."
        (format ":%d" line)))))
 
 (defun dape--kill-buffers (&optional skip-process-buffers)
-  "Kill all Dape related buffers.
+  "Kill all dape buffers.
 On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
   (thread-last (buffer-list)
                (seq-filter (lambda (buffer)
                              (unless (and skip-process-buffers
                                           (get-buffer-process buffer))
-                               (string-match-p "\\*dape-.+\\*$"
+                               (string-match-p "\\*dape-.+\\*"
                                                (buffer-name buffer)))))
                (seq-do (lambda (buffer)
                          (condition-case err
