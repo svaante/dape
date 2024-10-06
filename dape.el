@@ -3745,6 +3745,8 @@ See `dape-request' for expected CB signature."
                                      start-time dape-info--threads-tt-bench)
                                     (current-time))
                        (not (member conn dape-info--threads-bench)))
+              ;; TODO Apply to all future connections independent on
+              ;;      type
               (dape--warn
                "Disabling stack trace info in Threads buffer for connection (slow)")
               (push conn dape-info--threads-bench))
