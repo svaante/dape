@@ -2418,8 +2418,8 @@ Expressions within `{}` are interpolated."
                                       :key #'dape--breakpoint-type)))
                    (dape--breakpoint-value breakpoint)))))
   (if (string-empty-p message)
-      (dape-breakpoint-remove-at-point))
-  (dape--breakpoint-place 'log message))
+      (dape-breakpoint-remove-at-point)
+    (dape--breakpoint-place 'log message)))
 
 (defun dape-breakpoint-expression (expression)
   "Add expression breakpoint at current line with EXPRESSION."
@@ -2432,8 +2432,8 @@ Expressions within `{}` are interpolated."
                                       :key #'dape--breakpoint-type)))
                    (dape--breakpoint-value breakpoint)))))
   (if (string-empty-p expression)
-      (dape-breakpoint-remove-at-point))
-  (dape--breakpoint-place 'expression expression))
+      (dape-breakpoint-remove-at-point)
+    (dape--breakpoint-place 'expression expression)))
 
 (defun dape-breakpoint-hits (condition)
   "Add hits breakpoint at line with CONDITION.
@@ -2452,8 +2452,8 @@ An hit HITS is an string matching regex:
                    (read-number)
                    (format "%s %d" operator)))))
   (if (string-empty-p condition)
-      (dape-breakpoint-remove-at-point))
-  (dape--breakpoint-place 'hits condition))
+      (dape-breakpoint-remove-at-point)
+    (dape--breakpoint-place 'hits condition)))
 
 (defun dape-breakpoint-remove-at-point (&optional skip-update)
   "Remove breakpoint, log breakpoint and expression at current line.
