@@ -3303,7 +3303,7 @@ Used there as scope index.")
 (defun dape--info-buffer-list ()
   "Return all live `dape-info-parent-mode'."
   (setq dape--info-buffers
-        (seq-filter 'buffer-live-p dape--info-buffers)))
+        (cl-delete-if-not #'buffer-live-p dape--info-buffers)))
 
 (defun dape--info-buffer-p (mode &optional identifier)
   "Is buffer of MODE with IDENTIFIER.
