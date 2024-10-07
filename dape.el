@@ -3258,10 +3258,10 @@ Helper for `dape--stack-frame-display'."
                     (memq major-mode '(dape-repl-mode)))
             (select-window window))
           (with-selected-window window
-            ;; XXX: This code is running within timer context, which
-            ;;      does not play nice with `post-command-hook'.
-            ;;      Since hooks are runn'ed before the point is
-            ;;      actually moved.
+            ;; XXX This code is running within timer context, which
+            ;;     does not play nice with `post-command-hook'.
+            ;;     Since hooks are runn'ed before the point is
+            ;;     actually moved.
             (goto-char (marker-position marker))
             ;; Here we are manually intervening to account for this.
             ;; The following logic borrows from gud.el to interact
