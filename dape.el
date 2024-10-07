@@ -1290,21 +1290,20 @@ See `dape--connection-selected'."
                 (reverse connections))))
          (conn
           (pcase type
-            ('parent
-             (car connections))
-            ('last
-             (seq-find 'dape--thread-id ordered))
-            ('running
-             (seq-find (lambda (conn)
-                         (and (dape--thread-id conn)
-                              (not (dape--stopped-threads conn))))
-                       ordered))
-            ('stopped
-             (seq-find (lambda (conn)
-                         (and (dape--stopped-threads conn)))
-                       ordered)))))
+            ('parent (car connections))
+            ('last (seq-find #'dape--thread-id ordered))
+            ('running (seq-find (lambda (conn)
+                                  (and (dape--thread-id conn)
+                                       (not (dape--stopped-threads conn))))
+                                ordered))
+            ('stopped (seq-find (lambda (conn)
+                                  (and (dape--stopped-threads conn)))
+                                ordered)))))
     (unless (or nowarn conn)
-      (user-error "No %s debug connection live" type))
+      (user-error "No %sdebug connection live"
+                  ;; `parent' and `last' does not make sense to the user
+                  (if (memq type '(running stopped))
+                      (format "%s " type) "")))
     conn))
 
 (defun dape--live-connections ()
