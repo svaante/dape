@@ -265,8 +265,7 @@
      modes (gdscript-mode)
      port 6006
      :request "launch"
-     :type "server"
-     :cwd dape-cwd)
+     :type "server")
     ,@(let ((js-debug
              `( ensure ,(lambda (config)
                           (dape-ensure-command config)
