@@ -4757,7 +4757,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
    (cl-loop for inlay-hint in dape--inlay-hint-overlays
             when (overlayp inlay-hint)
             append (overlay-get inlay-hint 'dape-symbols))
-   for scope in scopes do
+   for scope in (reverse scopes) do
    (cl-loop for variable in (plist-get scope :variables)
             for new = (plist-get variable :value)
             for var-name = (plist-get variable :name) do
