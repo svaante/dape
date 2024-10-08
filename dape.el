@@ -2234,11 +2234,6 @@ symbol `dape-connection'."
        (unless (dape--initialized-p conn)
          (dape--warn "Adapter %sconnection shutdown without successfully initializing"
                      (if (dape--parent conn) "child " ""))
-         ;; Barf used configuration
-         (dape--warn "With configuration")
-         (dape--repl-insert
-          (cl-loop for (key value) on (dape--config conn) by 'cddr
-                   concat (format "%s %S\n" key value)))
          ;; Barf the various error buffers
          (cl-loop
           with process = (jsonrpc--process conn)
