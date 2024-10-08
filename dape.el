@@ -223,6 +223,7 @@
      command "dlv"
      command-args ("dap" "--listen" "127.0.0.1::autoport")
      command-cwd dape-command-cwd
+     command-insert-stderr t
      port :autoport
      :request "launch"
      :type "debug"
@@ -468,11 +469,13 @@ Symbol keys (Used by dape):
 - ensure: Function to ensure that adapter is available.
 - command: Shell command to initiate the debug adapter.
 - command-args: List of string arguments for the command.
+- command-cwd: Working directory for the command, if not supplied
+  `default-directory' will be used.
 - command-env: Property list (plist) of environment variables to
   set when running the command.  Keys can be strings, symbols or
   keywords.
-- command-cwd: Working directory for the command, if not supplied
-  `default-directory' will be used.
+- command-insert-stderr: If non nil treat stderr from adapter as
+  stderr output from debugged program.
 - prefix-local: Path prefix for Emacs file access.
 - prefix-remote: Path prefix for debugger file access.
 - host: Host of the debug adapter.
@@ -513,7 +516,9 @@ Functions and symbols:
                         ((const :tag "Shell command to initiate the debug adapter" command) (choice string symbol))
                         ((const :tag "List of string arguments for command" command-args) (repeat string))
                         ((const :tag "List of environment variables to set when running the command" command-env)
-                         (plist :key-type (restricted-sexp :match-alternatives (stringp symbolp keywordp) :tag "Variable") :value-type (string :tag "Value")))
+                         (plist :key-type (restricted-sexp :match-alternatives (stringp symbolp keywordp) :tag "Variable")
+                                :value-type (string :tag "Value")))
+                        ((const :tag "Treat stderr from adapter as program output" command-insert-stderr) boolean)
                         ((const :tag "Working directory for command" command-cwd) (choice string symbol))
                         ((const :tag "Path prefix for Emacs file access" prefix-local) string)
                         ((const :tag "Path prefix for debugger file access" prefix-remote) string)
@@ -2153,8 +2158,13 @@ symbol `dape-connection'."
      ((plist-get config 'port)
       ;; Start server
       (when (plist-get config 'command)
-        (let ((stderr-buffer
-               (get-buffer-create "*dape-server stderr*"))
+        (let ((stderr-pipe
+               (apply #'make-pipe-process
+                      :name "dape adapter stderr"
+                      :buffer (get-buffer-create " *dape-server stderr*")
+                      (when (plist-get config 'command-insert-stderr)
+                        `(:filter ,(lambda (_process string)
+                                     (dape--repl-insert-error string))))))
               (command
                (cons (plist-get config 'command)
                      (cl-map 'list 'identity
@@ -2166,8 +2176,8 @@ symbol `dape-connection'."
                                         (dape--repl-insert string))
                               :noquery t
                               :file-handler t
-                              :stderr stderr-buffer))
-          (process-put server-process 'stderr-buffer stderr-buffer)
+                              :stderr stderr-pipe))
+          (process-put server-process 'stderr-pipe stderr-pipe)
           (when dape-debug
             (dape--message "Adapter server started with %S"
                            (mapconcat 'identity command " "))))
@@ -2193,11 +2203,13 @@ symbol `dape-connection'."
               (dape--warn "Unable to connect to dap server at %s:%d"
                           host (plist-get config 'port))
               (dape--message "Connection is configurable by `host' and `port' keys")
-              ;; Barf server std-err
+              ;; Barf server stderr
               (when-let* (server-process
-                          (buffer (process-get server-process 'stderr-buffer)))
-                (with-current-buffer buffer
-                  (dape--repl-insert (buffer-string))))
+                          (buffer (process-buffer (process-get server-process 'stderr-pipe)))
+                          (content (with-current-buffer buffer (buffer-string)))
+                          ((not (string-empty-p content))))
+                (dape--warn "Dumping content of <%s>" (buffer-name buffer))
+                (dape--repl-insert-error content))
               (delete-process server-process)
               (user-error "Unable to connect to server"))
           (when dape-debug
@@ -2230,7 +2242,7 @@ symbol `dape-connection'."
      :events-buffer-config `(:size ,(if dape-debug nil 0) :format full)
      :on-shutdown
      (lambda (conn)
-       ;; Error prints
+       ;; Initialization error prints
        (unless (dape--initialized-p conn)
          (dape--warn "Adapter %sconnection shutdown without successfully initializing"
                      (if (dape--parent conn) "child " ""))
@@ -2238,19 +2250,23 @@ symbol `dape-connection'."
          (cl-loop
           with process = (jsonrpc--process conn)
           with server-process = (dape--server-process conn)
-          with buffers = (list (when process (process-buffer process))
-                               (when process (process-get process 'jsonrpc-stderr))
-                               (when server-process (process-get server-process 'stderr-buffer)))
+          with buffers =
+          (list (when process (process-buffer process))
+                (when process (process-get process 'jsonrpc-stderr))
+                (when server-process
+                  (process-buffer (process-get server-process 'stderr-pipe))))
           for buffer in buffers do
           (when-let* (((buffer-live-p buffer))
                       (content (with-current-buffer buffer (buffer-string)))
                       ((not (string-empty-p content))))
-            (dape--warn "Buffer %s content" (buffer-name buffer))
-            (dape--repl-insert content))))
-       ;; Cleanup server process
+            (dape--warn "Dumping content of <%s>" (buffer-name buffer))
+            (dape--repl-insert-error content))))
        (unless (dape--parent conn)
+         ;; When connection w/o parent cleanup in source buffer UI
          (dape--stack-frame-cleanup)
+         ;; Cleanup server process
          (when-let ((server-process (dape--server-process conn)))
+           (delete-process (process-get server-process 'stderr-pipe))
            (delete-process server-process)
            (while (process-live-p server-process)
              (accept-process-output nil nil 0.1))))
