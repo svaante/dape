@@ -49,37 +49,37 @@ Screenshots taken with [[https://elpa.gnu.org/packages/standard-themes.html][sta
     ;; Load breakpoints on startup
     ;;  (after-init . dape-breakpoint-load))
 
-    :init
-    ;; To use window configuration like gud (gdb-mi)
-    ;; (setq dape-buffer-window-arrangement 'gud)
-
     :config
+    ;; Turn on global bindings for setting breakpoints with mouse
+    ;; (dape-breakpoint-global-mode)
+
     ;; Info buffers to the right
     ;; (setq dape-buffer-window-arrangement 'right)
 
-    ;; Global bindings for setting breakpoints with mouse
-    ;; (dape-breakpoint-global-mode)
+    ;; Info buffers like gud (gdb-mi)
+    ;; (setq dape-buffer-window-arrangement 'gud)
+    ;; (setq dape-info-hide-mode-line nil)
 
     ;; Pulse source line (performance hit)
     ;; (add-hook 'dape-display-source-hook 'pulse-momentary-highlight-one-line)
 
-    ;; To not display info and/or buffers on startup
-    ;; (remove-hook 'dape-start-hook 'dape-info)
-    ;; (remove-hook 'dape-start-hook 'dape-repl)
-
-    ;; To display info and/or repl buffers on stopped
-    ;; (add-hook 'dape-stopped-hook 'dape-info)
-    ;; (add-hook 'dape-stopped-hook 'dape-repl)
-
-    ;; Kill compile buffer on build success
-    ;; (add-hook 'dape-compile-hook 'kill-buffer)
+    ;; Showing inlay hints
+    ;; (setq dape-inlay-hints t)
 
     ;; Save buffers on startup, useful for interpreted languages
     ;; (add-hook 'dape-start-hook (lambda () (save-some-buffers t t)))
 
+    ;; Kill compile buffer on build success
+    ;; (add-hook 'dape-compile-hook 'kill-buffer)
+
     ;; Projectile users
     ;; (setq dape-cwd-fn 'projectile-project-root)
     )
+
+  ;; Enable repeat mode for more ergonomic `dape' use
+  (use-package repeat
+    :config
+    (repeat-mode))
 #+end_src
 
 * Differences with dap-mode
