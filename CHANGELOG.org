@@ -2,6 +2,22 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.16.0
+- Decouple breakpoints from buffers killing buffer no longer kills breakpoints
+- Add =command-insert-stderr= property to =dape-configs= (stderr in =dlv=)
+- Add =command-env= property to =dape-configs=
+- Add support for =hl-line-mode=
+- Add bash-debug
+- Add reverse zapp like parsing with "-"
+- Add future history value for for dape command
+- Change breakpoint buffer format
+- Fix precedence of inlay hint values
+- Fix empty inlay hints "  " for lines with no hints
+- Fix killing of buffers <number> suffix
+- Fix misplaced parens in define-key call
+- Fix info scope buffer naming before scope name is known
+- Fix dropped line arrow due to delayed stack frame fetching
+
 * Version 0.15.0
 - Add =defer-launch-attach= to support gdb=>15.1
 - Add OCaml support with =ocamlearlybird=
