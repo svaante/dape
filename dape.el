@@ -727,7 +727,8 @@ The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
 (defcustom dape-minibuffer-hint-ignore-properties
-  '(ensure fn modes command command-args command-env defer-launch-attach :type :request)
+  '( ensure fn modes command command-args command-env command-insert-stderr
+     defer-launch-attach :type :request)
   "Properties to be hidden in `dape--minibuffer-hint'."
   :type '(repeat symbol))
 
