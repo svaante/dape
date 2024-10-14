@@ -3083,9 +3083,9 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (pcase-let ((`(,buffer-or-path . ,line)
                  (dape--breakpoint-buffer-or-path-line breakpoint)))
       ;; XXX Breakpoint overlay might be dead at this point as
-      ;;     another invocation of `dape--breakpoint-update' might
-      ;;     have deleted it.  If that is the reason for missing
-      ;;     buffer we are fine.
+      ;;     another invocation of `dape--breakpoint-update' could
+      ;;     have deleted it.  If that is the reason for nil buffer we
+      ;;     are fine.
       (when-let* (buffer-or-path
                   ;; TODO Here we go opening buffers anyway, no good.
                   (buffer (if (bufferp buffer-or-path) buffer-or-path
