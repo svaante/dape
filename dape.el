@@ -5066,9 +5066,10 @@ Where ALIST-KEY exists in `dape-configs'."
         (user-error "Bad options format, see `dape-configs'"))
       (setq read-config (nreverse read-config))
       ;; Apply properties from parsed PLIST to `dape-configs' item
-      (cl-loop for (key value) on read-config by 'cddr do
-               (setq base-config (plist-put base-config key value)))
-      (list name base-config))))
+      (cl-loop for (key value) on base-config by 'cddr
+               unless (plist-member read-config key) do
+               (setq read-config (plist-put read-config key value)))
+      (list name read-config))))
 
 (defun dape--config-diff (key post-eval)
   "Create a diff of config KEY and POST-EVAL config."
