@@ -1957,17 +1957,20 @@ BODY is an plist of adapter capabilities."
 Update `dape--breakpoints' according to BODY."
   (when-let ((update (plist-get body :breakpoint))
              (id (plist-get update :id)))
+    ;; Until `:reason' gets properly speced, try to infer update
+    ;; intention, would prefer `pcase' on `:reason'.
     (if-let ((breakpoint
               (cl-find id dape--breakpoints
                        :key (lambda (breakpoint)
                               (plist-get (dape--breakpoint-id breakpoint) conn)))))
         (dape--breakpoint-update conn breakpoint update)
-      (dape--with-request (dape--source-ensure conn update)
-        (when-let ((marker (dape--object-to-marker conn update)))
-          (dape--with-line (marker-buffer marker) (plist-get update :line)
-            (dape--message "Creating breakpoint in %s:%d"
-                           (buffer-name) (plist-get update :line))
-            (dape--breakpoint-place)))))))
+      (unless (equal (plist-get body :reason) "removed")
+        (dape--with-request (dape--source-ensure conn update)
+          (when-let ((marker (dape--object-to-marker conn update)))
+            (dape--with-line (marker-buffer marker) (plist-get update :line)
+              (dape--message "Creating breakpoint in %s:%d"
+                             (buffer-name) (plist-get update :line))
+              (dape--breakpoint-place))))))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql module)) body)
   "Handle adapter CONNs module events.
