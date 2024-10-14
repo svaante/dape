@@ -793,7 +793,7 @@ evaluated before being pushed to `dape-history'."
 (defvar dape--source-buffers nil
   "Plist of sources reference to buffer.")
 (defvar dape--breakpoints nil
-  "List of session breakpoint overlays.")
+  "List of `dape--breakpoint's.")
 (defvar dape--exceptions nil
   "List of available exceptions as plists.")
 (defvar dape--watched nil
