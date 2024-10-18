@@ -102,7 +102,7 @@ Helper for `dape-test--with-files'."
                (not (process-list)) 10))
           (setq dape--connection nil)
           (advice-remove 'yes-or-no-p 'always-yes)
-          (setq dape--info-expanded-p
+          (setq dape--variable-expanded-p
                 (make-hash-table :test 'equal))
           (setq dape--watched nil)
           (dolist (process (process-list))

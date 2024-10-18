@@ -590,6 +590,19 @@ each group is displayed by `dape-info'.  All modes doesn't need to be
 present in an group."
   :type '(repeat (repeat function)))
 
+(defcustom dape-variable-auto-expand-alist '((hover . 1) (repl . 1) (watch . 1))
+  "Default expansion depth for displaying variables.
+Each entry consists of a context (such as `hover', `repl', or
+`watch') paired with a number indicating how many levels deep the
+variable should be expanded by default."
+  :type '(alist :key-type
+                (choice (natnum :tag "Scope number (Locals 0 etc.)")
+                        (const :tag "Eldoc hover" hover)
+                        (const :tag "In repl buffer" repl)
+                        (const :tag "In watch buffer" watch)
+                        (const :tag "All contexts" nil))
+                :value-type (natnum :tag "Levels expanded")))
+
 (defcustom dape-stepping-granularity 'line
   "The granularity of one step in the stepping requests."
   :type '(choice (const :tag "Step statement" statement)
@@ -1764,9 +1777,12 @@ Get variable data from CONN and put result on OBJECT until PRED is nil.
 PRED is called with PATH and OBJECT.
 See `dape-request' for expected CB signature."
   (let ((objects
-         (seq-filter (apply-partially pred path)
-                     (or (plist-get object :scopes)
-                         (plist-get object :variables)))))
+         (cl-loop for variable in (or (plist-get object :scopes)
+                                      (plist-get object :variables))
+                  for name = (plist-get variable :name)
+                  for expensive-p = (eq (plist-get variable :expensive) t)
+                  when (and (not expensive-p) (funcall pred (cons name path)))
+                  collect variable)))
     (if (not objects)
         (dape--request-continue cb)
       (let ((responses 0))
@@ -1774,8 +1790,7 @@ See `dape-request' for expected CB signature."
           (dape--with-request (dape--variables conn object)
             (dape--with-request
                 (dape--variables-recursive conn object
-                                           (cons (plist-get object :name)
-                                                 path)
+                                           (cons (plist-get object :name) path)
                                            pred)
               (when (length= objects
                              (setf responses (1+ responses)))
@@ -4056,20 +4071,23 @@ current buffer with CONN config."
 
 ;;; Info scope buffer
 
-(defvar dape--info-expanded-p (make-hash-table :test 'equal)
+(defvar dape--variable-expanded-p (make-hash-table :test 'equal)
   "Hash table to keep track of expanded info variables.")
 
-(defun dape--info-expanded-p (path object)
-  (and (not (eq (plist-get object :expensive) t))
-       (gethash (cons (plist-get object :name) path)
-                dape--info-expanded-p)))
+(defun dape--variable-expanded-p (path)
+  "If PATH should be expanded."
+  (gethash path dape--variable-expanded-p
+           (and-let* ((auto-expand
+                       (or (alist-get (car (last path)) dape-variable-auto-expand-alist)
+                           (alist-get nil dape-variable-auto-expand-alist))))
+             (length< path (+ auto-expand 2)))))
 
 (dape--command-at-line dape-info-scope-toggle (dape--info-path)
   "Expand or contract variable at line in dape info buffer."
   (unless (dape--live-connection 'stopped)
     (user-error "No stopped threads"))
-  (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
-           dape--info-expanded-p)
+  (puthash dape--info-path (not (dape--variable-expanded-p dape--info-path))
+           dape--variable-expanded-p)
   (revert-buffer))
 
 (dape--buffer-map dape-info-variable-prefix-map dape-info-scope-toggle)
@@ -4174,8 +4192,8 @@ or `prefix' part of variable string."
                     (plist-get object :result)
                     " "))
          (prefix (make-string (* (1- (length path)) 2) ?\s))
-         (expanded (funcall expanded-p path object))
-         (path (cons (plist-get object :name) path))
+         (path (cons name path))
+         (expanded (funcall expanded-p path))
          row)
     (setq name
           (apply 'propertize name
@@ -4255,8 +4273,9 @@ or `prefix' part of variable string."
               ((dape--stopped-threads conn)))
     (dape--with-request (dape--variables conn scope)
       (dape--with-request
-          (dape--variables-recursive conn scope (list (plist-get scope :name))
-                                     #'dape--info-expanded-p)
+          (dape--variables-recursive conn scope
+                                     (list dape--info-buffer-identifier)
+                                     #'dape--variable-expanded-p)
         (when (and scope scopes (dape--stopped-threads conn))
           (dape--info-update-with
             (rename-buffer
@@ -4272,8 +4291,8 @@ or `prefix' part of variable string."
               table
               object
               (plist-get scope :variablesReference)
-              (list (plist-get scope :name))
-              #'dape--info-expanded-p
+              (list dape--info-buffer-identifier)
+              #'dape--variable-expanded-p
               (list 'name dape-info-variable-name-map
                     'value dape-info-variable-value-map
                     'prefix dape-info-variable-prefix-map))
@@ -4320,16 +4339,16 @@ or `prefix' part of variable string."
                   (dape--variables-recursive conn
                                              ;; Fake variables object
                                              (list :variables dape--watched)
-                                             (list "Watch")
-                                             #'dape--info-expanded-p)
+                                             '(watch)
+                                             #'dape--variable-expanded-p)
                 (dape--info-update-with
                   (cl-loop with table = (make-gdb-table)
                            for watch in dape--watched
                            initially (setf (gdb-table-right-align table)
                                            dape-info-variable-table-aligned)
                            do
-                           (dape--info-scope-add-variable table watch 'watch (list "Watch")
-                                                          #'dape--info-expanded-p
+                           (dape--info-scope-add-variable table watch nil '(watch)
+                                                          #'dape--variable-expanded-p
                                                           (list 'name dape-info-variable-name-map
                                                                 'value dape-info-variable-value-map
                                                                 'prefix dape-info-variable-prefix-map))
@@ -4341,8 +4360,8 @@ or `prefix' part of variable string."
                  initially (setf (gdb-table-right-align table)
                                  dape-info-variable-table-aligned)
                  do
-                 (dape--info-scope-add-variable table watch 'watch (list "Watch")
-                                                #'dape--info-expanded-p
+                 (dape--info-scope-add-variable table watch nil 'watch
+                                                #'dape--variable-expanded-p
                                                 (list 'name dape-info-variable-name-map
                                                       'value dape-info-variable-value-map
                                                       'prefix dape-info-variable-prefix-map))
@@ -4466,8 +4485,8 @@ VARIABLE is expected to be the string representation of a varable."
   "Expand or contract variable at line in dape repl buffer."
   (unless (dape--live-connection 'stopped)
     (user-error "No stopped threads"))
-  (puthash dape--info-path (not (gethash dape--info-path dape--info-expanded-p))
-           dape--info-expanded-p)
+  (puthash dape--info-path (not (gethash dape--info-path dape--variable-expanded-p))
+           dape--variable-expanded-p)
   (dape--repl-create-variable-table (or (dape--live-connection 'stopped t)
                                         (dape--live-connection 'last))
                                     dape--repl-variable
@@ -4482,15 +4501,13 @@ Call CB with the variable as string for insertion into *dape-repl*."
   (dape--with-request (dape--variables conn variable)
     (dape--with-request
         (dape--variables-recursive conn variable
-                                   (list (plist-get variable :name) "REPL")
-                                   #'dape--info-expanded-p)
+                                   (list (plist-get variable :name) 'repl)
+                                   #'dape--variable-expanded-p)
       (let ((table (make-gdb-table)))
         (setf (gdb-table-right-align table)
               dape-info-variable-table-aligned)
-        (dape--info-scope-add-variable table variable
-                                       'watch
-                                       '("REPL")
-                                       #'dape--info-expanded-p
+        (dape--info-scope-add-variable table variable nil
+                                       '(repl) #'dape--variable-expanded-p
                                        (list 'name dape-info-variable-name-map
                                              'value dape-info-variable-value-map
                                              'prefix dape-repl-variable-prefix-map))
@@ -5270,25 +5287,22 @@ On success calls CB with the doc string.
 See `eldoc-documentation-functions', for more information."
   (and-let* ((conn (dape--live-connection 'last t))
              ((dape--capable-p conn :supportsEvaluateForHovers))
-             (symbol (thing-at-point 'symbol)))
+             (symbol (thing-at-point 'symbol))
+             (name (substring-no-properties symbol))
+             (id (plist-get (dape--current-stack-frame conn) :id)))
     (dape--with-request-bind
         (body error)
-        (dape--evaluate-expression
-         conn
-         (plist-get (dape--current-stack-frame conn) :id)
-         (substring-no-properties symbol)
-         "hover")
+        (dape--evaluate-expression conn id name "hover")
       (unless error
-        (funcall cb
-                 (format "%s %s"
-                         (or (plist-get body :value)
-                             (plist-get body :result)
-                             "")
-                         (propertize
-                          (or (plist-get body :type) "")
-                          'face 'font-lock-type-face))
-                 :thing symbol
-                 :face 'font-lock-variable-name-face))))
+        (dape--with-request
+            (dape--variables-recursive conn `(:variables (,body)) '(hover)
+                                       #'dape--variable-expanded-p)
+          (let ((table (make-gdb-table)))
+            (dape--info-scope-add-variable table (plist-put body :name name)
+                                           nil '(hover)
+                                           #'dape--variable-expanded-p
+                                           nil)
+            (funcall cb (gdb-table-string table " ")))))))
   t)
 
 (defun dape--add-eldoc-hook ()
