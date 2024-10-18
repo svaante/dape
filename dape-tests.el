@@ -344,6 +344,7 @@ Expects line with string \"breakpoint\" in source."
 
 (ert-deftest dape-test-watch-buffer()
   "Watch buffer content and commands."
+  (setq dape-variable-auto-expand-alist nil)
   (dape-test--with-files
       ((main-buffer
         "main.py"
