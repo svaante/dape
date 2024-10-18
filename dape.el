@@ -1226,7 +1226,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                      (`(,_ . 1)
                       '((display-buffer-in-side-window) (side . bottom) (slot . -1)))
                      (`(,_ . 2)
-                      '((display-buffer-in-side-window) (side . bottom) (slot . 1)))
+                      '((display-buffer-in-side-window) (side . bottom) (slot . 0)))
                      (_ (error "Unable to display buffer of mode `%s'" mode)))))))
     (display-buffer buffer `((display-buffer-reuse-window . ,fns) . ,alist))))
 
