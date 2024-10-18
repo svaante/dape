@@ -3925,8 +3925,7 @@ current buffer with CONN config."
                 (concat " of "
                         (dape--format-file-line path (plist-get frame :line))))
               (when-let ((dape-info-stack-buffer-addresses)
-                         (ref
-                          (plist-get frame :instructionPointerReference)))
+                         (ref (plist-get frame :instructionPointerReference)))
                 (concat " at " ref))
               " "))
             (list
@@ -4131,11 +4130,11 @@ current buffer with CONN config."
         ;;      supporting it.
         ((&key dataId description accessTypes &allow-other-keys) error)
         (dape-request conn "dataBreakpointInfo"
-                      (if (eq dape--info-ref 'watch)
-                          (list :name name
-                                :frameId (plist-get (dape--current-stack-frame conn) :id))
-                        (list :variablesReference dape--info-ref
-                              :name name)))
+                      (if (numberp dape--info-ref)
+                          (list :variablesReference dape--info-ref
+                                :name name)
+                        (list :name name
+                              :frameId (plist-get (dape--current-stack-frame conn) :id))))
       (if (or error (not (stringp dataId)))
           (message "Unable to set data breakpoint: %s" (or error description))
         (push (list :name name
@@ -4244,7 +4243,8 @@ or `prefix' part of variable string."
                          (list (mapconcat 'identity row " ")))
                        (list 'dape--info-variable object
                              'dape--info-path path
-                             'dape--info-ref ref))
+                             ;; `dape--command-at-line' expects non nil
+                             'dape--info-ref (or ref 'refless)))
     (when expanded
       ;; TODO Should be paged
       (dolist (variable (plist-get object :variables))
@@ -4360,7 +4360,7 @@ or `prefix' part of variable string."
                  initially (setf (gdb-table-right-align table)
                                  dape-info-variable-table-aligned)
                  do
-                 (dape--info-scope-add-variable table watch nil 'watch
+                 (dape--info-scope-add-variable table watch nil '(watch)
                                                 #'dape--variable-expanded-p
                                                 (list 'name dape-info-variable-name-map
                                                       'value dape-info-variable-value-map
