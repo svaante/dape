@@ -1274,7 +1274,7 @@ them then executes BODY."
        (if (and ,@properties)
            (progn
              ,@body)
-         (error "Not recognized as %s line" 'name)))))
+         (error "Not recognized as %s line" ',name)))))
 
 (defun dape--emacs-grab-focus ()
   "If `display-graphic-p' focus Emacs."
