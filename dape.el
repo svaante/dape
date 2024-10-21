@@ -1501,10 +1501,9 @@ timeout period is configurable with `dape-request-timeout'"
                           ;;:supportsMemoryReferences t
                           ;;:supportsInvalidatedEvent t
                           ;;:supportsMemoryEvent t
-                          ;;:supportsArgsCanBeInterpretedByShell t
+                          :supportsArgsCanBeInterpretedByShell t
                           :supportsProgressReporting t
                           :supportsStartDebuggingRequest t
-                          ;;:supportsVariableType t
                           ))
     (if error
         (progn
@@ -1917,7 +1916,12 @@ Starts a new adapter CONNs from ARGUMENTS."
     (let ((process
            (make-process :name "dape shell"
                          :buffer buffer
-                         :command (append (plist-get arguments :args) nil)
+                         :command
+                         (let ((args (append (plist-get arguments :args) nil)))
+                           (if (plist-get arguments :argsCanBeInterpretedByShell)
+                               (list shell-file-name shell-command-switch
+                                     (mapconcat #'identity args " "))
+                             args))
                          :filter 'comint-output-filter
                          :sentinel 'shell-command-sentinel
                          :file-handler t)))
