@@ -3949,7 +3949,6 @@ current buffer with CONN config."
   (let* ((conn (or (dape--live-connection 'stopped t t)
                    (dape--live-connection 'last t t)))
          (current-thread (dape--current-thread conn))
-         (stack-frames (plist-get current-thread :stackFrames))
          (current-stack-frame (dape--current-stack-frame conn)))
     (cond
      ((or (not current-stack-frame)
@@ -3961,23 +3960,17 @@ current buffer with CONN config."
           (insert (format "Thread \"%s\" is not stopped."
                           (plist-get current-thread :name))))
          (t
-          (insert "No stack information.")))))
+          (insert "No stack information available.")))))
      (t
-      ;; Why are we updating it twice? Calls to `dape--stack-trace'
-      ;; with an large nof can be expensive, therefore 1 nof is fetchd
-      ;; at an 'update event, then we fetch the rest here.
-
-      ;; Start off with shoving available stack info into buffer
-      (dape--info-update-with
-        (dape--info-stack-buffer-insert conn current-stack-frame stack-frames))
+      ;; Only one frame are guaranteed to be available due to
+      ;; `supportsDelayedStackTraceLoading' optimizations.
       (dape--with-request
           (dape--stack-trace conn current-thread dape-stack-trace-levels)
         ;; If stack trace lookup with `dape-stack-trace-levels' frames changed
         ;; the stack frame list, we need to update the buffer again
-        (unless (eq stack-frames (plist-get current-thread :stackFrames))
-          (dape--info-update-with
-            (dape--info-stack-buffer-insert conn current-stack-frame
-                                            (plist-get current-thread :stackFrames)))))))))
+        (dape--info-update-with
+          (dape--info-stack-buffer-insert conn current-stack-frame
+                                          (plist-get current-thread :stackFrames))))))))
 
 
 ;;; Info modules buffer
