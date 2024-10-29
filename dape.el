@@ -4918,7 +4918,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
             (with-current-buffer dape--minibuffer-last-buffer
               (condition-case err
                   (propertize
-                   (format "%S" (dape--config-eval-value value nil nil t))
+                   (format "%S" (dape--config-eval-value value nil nil 'skip-interactive))
                    'face
                    (when (equal value (plist-get base-config key))
                      'shadow))
@@ -4957,32 +4957,28 @@ Update `dape--inlay-hint-overlays' from SCOPES."
 
 (defun dape--plistp (object)
   "Non-nil if and only if OBJECT is a valid plist."
-  (and-let* (((listp object))
-             (len (length object))
-             ((zerop (% len 2))))))
+  (and (listp object) (zerop (% (length object) 2))))
 
 (defun dape--config-eval-value (value &optional skip-functions check
                                       skip-interactive)
   "Return recursively evaluated VALUE.
 If SKIP-FUNCTIONS is non nil return VALUE as is if `functionp' is non
-nil.
-If CHECK is non nil assert VALUE types, signal `user-error' on
-mismatch.
-If SKIP-INTERACTIVE is non nil return VALUE as is if `functionp' is
-non nil and function uses the minibuffer."
+nil.  If CHECK is non nil assert VALUE types, signal `user-error' on
+mismatch.  If SKIP-INTERACTIVE is non nil return VALUE as is if
+`functionp' is non nil and function uses the minibuffer."
   (pcase value
-    ;; On function
-    ((pred functionp)
-     (cond
-      (skip-functions value)
-      (skip-interactive
-       ;; Try to eval function, but escape if functions spawns an minibuffer
+    ;; On function (or list that starts with a non keyword symbol)
+    ((or (pred functionp)
+         (and `(,x . ,_) (guard (and (symbolp x) (not (keywordp x))))))
+     (if skip-functions
+         value
        (condition-case _
-           (let ((enable-recursive-minibuffers nil))
-             (funcall-interactively value))
-         (error value)))
-      (t
-       (funcall-interactively value))))
+           ;; Try to eval function, signal on minibuffer
+           (let ((enable-recursive-minibuffers (not skip-interactive)))
+             (if (functionp value)
+                 (funcall-interactively value)
+               (eval value)))
+         (error value))))
     ;; On plist recursively evaluate
     ((pred dape--plistp)
      (dape--config-eval-1 value skip-functions check skip-interactive))
@@ -4990,9 +4986,7 @@ non nil and function uses the minibuffer."
     ((pred vectorp)
      (cl-map 'vector
              (lambda (value)
-               (dape--config-eval-value value
-                                        skip-functions
-                                        check
+               (dape--config-eval-value value skip-functions check
                                         skip-interactive))
              value))
     ;; On symbol evaluate symbol value
@@ -5001,7 +4995,7 @@ non nil and function uses the minibuffer."
           (guard (not (eq (symbol-value value) value))))
      (dape--config-eval-value (symbol-value value)
                               skip-functions check skip-interactive))
-    ;; Otherwise return value
+    ;; Otherwise just value
     (_ value)))
 
 (defun dape--config-eval-1 (config &optional skip-functions check
