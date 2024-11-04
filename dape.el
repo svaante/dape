@@ -4162,8 +4162,8 @@ current buffer with CONN config."
   ;; org function `gdb-locals-table-columns-list'.
   (let (columns)
     (dolist (config dape-info-variable-table-row-config columns)
-      (let* ((key  (car config))
-             (max  (cdr config))
+      (let* ((key (car config))
+             (max (cdr config))
              (prop-org (alist-get key alist))
              (prop prop-org))
         (when prop-org
