@@ -3662,10 +3662,15 @@ displayed."
 
 (dape--buffer-map dape-info-exceptions-line-map dape-info-exceptions-toggle)
 
-(define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode
-  "Breakpoints"
+(defvar dape--info-breakpoints-font-lock-keywords
+  '(("^\\(y\\)"  (1 font-lock-warning-face))
+    ("^\\(n\\)"  (1 font-lock-doc-face)))
+  "Keywords for `dape-info-breakpoints-mode'.")
+
+(define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
   "Major mode for Dape info breakpoints."
-  :interactive nil)
+  :interactive nil
+  (setq font-lock-defaults '(dape--info-breakpoints-font-lock-keywords)))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-breakpoints-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
@@ -3689,9 +3694,7 @@ displayed."
         (list
          (if-let ((hits (dape--breakpoint-hits breakpoint)))
              (format "%s" hits)
-           (if verified-p
-               (propertize "y" 'font-lock-face 'font-lock-warning-face)
-             (propertize "n" 'font-lock-face 'font-lock-doc-face)))
+           (if verified-p "y" "n"))
          (pcase (dape--breakpoint-type breakpoint)
            ('log        "Log  ")
            ('hits       "Hits ")
@@ -3711,18 +3714,17 @@ displayed."
            keymap ,dape-info-breakpoints-line-map
            mouse-face highlight
            help-echo "mouse-2, RET: visit breakpoint"
-           ,@(unless verified-p '(face shadow)))))
+           ,@(unless verified-p '(font-lock-face shadow)))))
       (cl-loop
        for plist in dape--data-breakpoints do
        (gdb-table-add-row
         table
-        (list (propertize "y" 'font-lock-face 'font-lock-warning-face)
+        (list "y"
               "Data "
               (format "%s %s %s"
-                      (propertize
-                       (plist-get plist :name)
-                       'font-lock-face
-                       'font-lock-variable-name-face)
+                      (propertize (plist-get plist :name)
+                                  'font-lock-face
+                                  'font-lock-variable-name-face)
                       (plist-get plist :accessType)
                       (when-let ((data-id (plist-get plist :dataId)))
                         (format "(%s)" data-id))))
@@ -3732,9 +3734,7 @@ displayed."
        for exception in dape--exceptions do
        (gdb-table-add-row
         table
-        (list (if (plist-get exception :enabled)
-                  (propertize "y" 'font-lock-face 'font-lock-warning-face)
-                (propertize "n" 'font-lock-face 'font-lock-doc-face))
+        (list (if (plist-get exception :enabled) "y" "n")
               "Excep"
               (format "%s" (plist-get exception :label)))
         (list 'dape--info-exception exception
