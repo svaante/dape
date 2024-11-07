@@ -4252,7 +4252,9 @@ or `prefix' part of variable string."
 ;; FIXME Empty header line when adapter is killed
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
   "Major mode for Dape info scope."
-  :interactive nil)
+  :interactive nil
+  (dape--info-update-with
+    (insert "No scope information available.")))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-scope-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
