@@ -154,13 +154,9 @@
            command-args ("--port" :autoport
                          "--settings" "{\"sourceLanguages\":[\"rust\"]}")
            ,@codelldb
-           :program (lambda ()
-                      (file-name-concat "target" "debug"
-                                        (thread-first (dape-cwd)
-                                                      (directory-file-name)
-                                                      (file-name-split)
-                                                      (last)
-                                                      (car))))
+           :program (file-name-concat "target" "debug"
+                                      (car (last (file-name-split
+                                                  (directory-file-name (dape-cwd))))))
            ,@common)))
     (cpptools
      modes (c-mode c-ts-mode c++-mode c++-ts-mode)
@@ -210,12 +206,8 @@
                    :program dape-buffer-default
                    ,@common)
           (debugpy-module ,@debugpy
-                          :module (lambda ()
-                                    (thread-first default-directory
-                                                  (directory-file-name)
-                                                  (file-name-split)
-                                                  (last)
-                                                  (car)))
+                          :module (car (last (file-name-split
+                                              (directory-file-name default-directory))))
                           ,@common)))
     (dlv
      modes (go-mode go-ts-mode)
@@ -312,7 +304,9 @@
            :url "http://localhost:3000"
            :webRoot dape-cwd)))
     ,@(let ((lldb-common
-             `( modes (c-mode c-ts-mode c++-mode c++-ts-mode rust-mode rust-ts-mode rustic-mode)
+             `( modes ( c-mode c-ts-mode
+                        c++-mode c++-ts-mode
+                        rust-mode rust-ts-mode rustic-mode)
                 ensure dape-ensure-command
                 command-cwd dape-command-cwd
                 :cwd "."
@@ -332,15 +326,11 @@
      command-args ["--interpreter=vscode"]
      :request "launch"
      :cwd dape-cwd
-     :program (lambda ()
-                (let ((dlls
-                       (file-expand-wildcards
-                        (file-name-concat "bin" "Debug" "*" "*.dll"))))
-                  (if dlls
-                      (file-relative-name
-                       (file-relative-name (car dlls)))
-                    ".dll"
-                    (dape-cwd))))
+     :program (if-let ((dlls
+                        (file-expand-wildcards
+                         (file-name-concat "bin" "Debug" "*" "*.dll"))))
+                  (file-relative-name (file-relative-name (car dlls)))
+                ".dll")
      :stopAtEntry nil)
     (ocamlearlybird
      ensure dape-ensure-command
@@ -348,13 +338,8 @@
      command "ocamlearlybird"
      command-args ("debug")
      :type "ocaml"
-     :program (lambda ()
-                (file-name-concat
-                 (dape-cwd)
-                 "_build" "default" "bin"
-                 (concat
-                  (file-name-base (dape-buffer-default))
-                  ".bc")))
+     :program (file-name-concat (dape-cwd) "_build" "default" "bin"
+                                (concat (file-name-base (dape-buffer-default)) ".bc"))
      :console "internalConsole"
      :stopOnEntry nil
      :arguments [])
@@ -377,9 +362,7 @@
      ;; rails server
      ;; bundle exec ruby foo.rb
      ;; bundle exec rake test
-     -c (lambda ()
-          (format "ruby %s"
-                  (or (dape-buffer-default) ""))))
+     -c (concat "ruby " (dape-buffer-default)))
     (jdtls
      modes (java-mode java-ts-mode)
      ensure (lambda (config)
