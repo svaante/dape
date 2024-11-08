@@ -753,12 +753,6 @@ The hook is run with one argument, the compilation buffer."
   "Show `dape-configs' hints in minibuffer."
   :type 'boolean)
 
-(defcustom dape-history-evaluated t
-  "Keep `dape-history' configurations evaluated.
-Non-nil means each configuration read in command `dape' will be
-evaluated before being pushed to `dape-history'."
-  :type 'boolean)
-
 (defcustom dape-ui-debounce-time 0.1
   "Number of seconds to debounce `revert-buffer' for UI buffers."
   :type 'float)
@@ -5229,12 +5223,8 @@ See `dape--config-mode-p' how \"valid\" is defined."
            ;; Take first suggested config if only one exist
            (and (length= suggested-configs 1)
                 (car suggested-configs))))
-         (default-value
-          (when initial-contents
-            (pcase-let ((`(,key ,config) (dape--config-from-string initial-contents)))
-              (if dape-history-evaluated (format "%s " key)
-                (dape--config-to-string
-                 key (ignore-errors (dape--config-eval key config))))))))
+         (default-value (when initial-contents
+                          (concat (car (string-split initial-contents)) " "))))
     (setq dape--minibuffer-last-buffer (current-buffer)
           dape--minibuffer-cache nil)
     (minibuffer-with-setup-hook
@@ -5258,7 +5248,7 @@ See `dape--config-mode-p' how \"valid\" is defined."
           (dape--minibuffer-hint))
       (pcase-let*
           ((str
-            (let ((history-add-new-input (not dape-history-evaluated)))
+            (let ((history-add-new-input nil))
               (read-from-minibuffer
                "Run adapter: "
                initial-contents
@@ -5283,9 +5273,8 @@ See `dape--config-mode-p' how \"valid\" is defined."
            (`(,key ,config)
             (dape--config-from-string (substring-no-properties str)))
            (evaled-config (dape--config-eval key config)))
-        (when dape-history-evaluated
-          (setq dape-history (cons (dape--config-to-string key evaled-config)
-                                   dape-history)))
+        (setq dape-history (cons (dape--config-to-string key evaled-config)
+                                 dape-history))
         evaled-config))))
 
 
