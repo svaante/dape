@@ -5142,10 +5142,11 @@ nil."
 
 (defun dape--config-completion-at-point ()
   "Function for `completion-at-point' fn for `dape--read-config'."
-  (let (key args args-bounds last-p)
+  (let (key key-end args args-bounds last-p)
     (save-excursion
       (goto-char (minibuffer-prompt-end))
       (setq key (ignore-errors (read (current-buffer))))
+      (setq key-end (point))
       (ignore-errors
         (while t
           (setq last-p (point))
@@ -5155,9 +5156,7 @@ nil."
           args-bounds (nreverse args-bounds))
     (cond
      ;; Complete config key
-     ((or (not key)
-          (and (not args)
-               (thing-at-point 'symbol)))
+     ((<= (point) key-end)
       (pcase-let ((`(,start . ,end)
                    (or (bounds-of-thing-at-point 'symbol)
                        (cons (point) (point)))))
