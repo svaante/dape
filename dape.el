@@ -528,6 +528,10 @@ Functions and symbols:
                         ((const :tag "Adapter type" :type) string)
                         ((const :tag "Request type launch/attach" :request) string)))))
 
+(defcustom dape-config-dash-form-p nil
+  "If ENV PROGRAM ARGS sh like string format is preferred."
+  :type 'boolean)
+
 (defcustom dape-default-config-functions
   '(dape-config-autoport dape-config-tramp)
   "Functions applied on config before starting debugging session.
@@ -5105,12 +5109,26 @@ Where ALIST-KEY exists in `dape-configs'."
 
 (defun dape--config-to-string (key post-eval-config)
   "Create string from KEY and POST-EVAL-CONFIG."
-  (let ((config-diff (dape--config-diff key post-eval-config)))
+  (pcase-let* ((config-diff (dape--config-diff key post-eval-config))
+               ((map :env :program :args) config-diff)
+               (zap-form-p (and dape-config-dash-form-p
+                                (or program (and env (not args))))))
+    (when zap-form-p
+      (cl-loop for key in '(:program :env :args) do
+               (setq config-diff (map-delete config-diff key))))
     (concat (when key (format "%s" key))
-            (and-let* ((config-diff)
+            (when-let ((config-diff)
                        (config-str (prin1-to-string config-diff)))
-              (format " %s"
-                      (substring config-str 1 (1- (length config-str))))))))
+              (format " %s" (substring config-str 1 (1- (length config-str)))))
+            (when zap-form-p
+              (concat " -"
+                      (cl-loop for (symbol value) on env by #'cddr
+                               for name = (substring (symbol-name symbol) 1)
+                               concat (format " %s=%s"
+                                              (shell-quote-argument name)
+                                              (shell-quote-argument value)))
+                      (cl-loop for arg in (cons program (append args nil)) concat
+                               (format " %s" (shell-quote-argument arg))))))))
 
 (defun dape--config-ensure (config &optional signal)
   "Ensure that CONFIG is executable.
