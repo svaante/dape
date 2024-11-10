@@ -5350,7 +5350,7 @@ mouse-1: Display minor mode menu"
                     help-echo "Active child connections")))))))
 
 (add-to-list 'mode-line-misc-info
-             `(dape-active-mode ("[" dape--mode-line-format "]")))
+             `(dape-active-mode ("[" dape--mode-line-format "] ")))
 
 
 ;;; Keymaps
