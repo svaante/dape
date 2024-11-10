@@ -3729,8 +3729,10 @@ displayed."
 
 (defvar dape--info-thread-position nil
   "`dape-info-thread-mode' marker for `overlay-arrow-variable-list'.")
-(defvar dape-info--threads-bench nil
-  "List of benched connections.")
+(defvar-local dape--info-threads-fetch-other-threads-p nil
+  ;; XXX Workaround for some adapters seemingly not being able to
+  ;;     handle parallel stack traces.
+  "If non nil skip fetching thread information for other threads.")
 (defvar dape-info--threads-tt-bench 2
   "Time to Bench.")
 
@@ -3755,7 +3757,7 @@ See `dape-request' for expected CB signature."
   (let (threads)
     (cond
      ;; Current CONN is benched
-     ((member conn dape-info--threads-bench)
+     (dape--info-threads-fetch-other-threads-p
       (dape--request-continue cb))
      ;; Stopped threads
      ((setq threads
@@ -3774,25 +3776,17 @@ See `dape-request' for expected CB signature."
           (dape--with-request (dape--stack-trace conn thread 1)
             (plist-put thread :request-in-flight nil)
             ;; Time response, if slow bench that CONN
-            (when (and (time-less-p (timer-relative-time
+            (when (and (not dape--info-threads-fetch-other-threads-p)
+                       (time-less-p (timer-relative-time
                                      start-time dape-info--threads-tt-bench)
-                                    (current-time))
-                       (not (member conn dape-info--threads-bench)))
-              ;; TODO Apply to all future connections independent on
-              ;;      type
-              (dape--warn
-               "Disabling stack trace info in Threads buffer for connection (slow)")
-              (push conn dape-info--threads-bench))
+                                    (current-time)))
+              (dape--warn "Disabling stack trace info in Threads buffer (slow)")
+              (setq dape--info-threads-fetch-other-threads-p t))
             ;; When all request have resolved return
             (when (length= threads (setf responses (1+ responses)))
               (dape--request-continue cb))))))
      ;; No stopped threads
-     (t (dape--request-continue cb))))
-  ;; House keeping, no need to keep dead connections in bench
-  (when dape-info--threads-bench
-    (let ((conns (dape--live-connections)))
-      (cl-delete-if-not (lambda (conn) (member conn conns))
-                        dape-info--threads-bench))))
+     (t (dape--request-continue cb)))))
 
 (define-derived-mode dape-info-threads-mode dape-info-parent-mode "Threads"
   "Major mode for dape info threads."
