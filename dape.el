@@ -5083,7 +5083,9 @@ Where ALIST-KEY exists in `dape-configs'."
   (pcase-let* ((config-diff (dape--config-diff key post-eval-config))
                ((map :env :program :args) config-diff)
                (zap-form-p (and dape-config-dash-form-p
-                                (or program (and env (not args))))))
+                                (or (stringp program)
+                                    (and (consp env) (keywordp (car env))
+                                         (not args))))))
     (when zap-form-p
       (cl-loop for key in '(:program :env :args) do
                (setq config-diff (map-delete config-diff key))))
