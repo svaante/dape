@@ -2369,6 +2369,8 @@ CONN is inferred for interactive invocations."
                (dape--modules conn) nil
                (dape--sources conn) nil
                (dape--restart-in-progress-p conn) t)
+         ;; FIXME This is not according to spec should give
+         ;;       launch/attach args
          (dape--with-request (dape-request conn "restart" nil)
            (setf (dape--restart-in-progress-p conn) nil)))
         (dape-history
