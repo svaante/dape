@@ -3566,8 +3566,7 @@ displayed."
                             collect
                             (list 'dape-info-scope-mode i name)))
                   (t
-                   `((,mode nil
-                            ,(alist-get mode dape--info-buffer-name-alist))))))))
+                   `((,mode nil ,(alist-get mode dape--info-buffer-name-alist))))))))
 
 
 ;;; Info breakpoints buffer
@@ -3596,12 +3595,12 @@ displayed."
     (with-selected-window (display-buffer buffer dape-display-source-buffer-action)
       (goto-char (point-min))
       (forward-line (1- line))
-      (call-interactively
-       (pcase (dape--breakpoint-type dape--info-breakpoint)
-         ('log #'dape-breakpoint-log)
-         ('expression #'dape-breakpoint-expression)
-         ('hits #'dape-breakpoint-hits)
-         (_ (user-error "Unable to edit breakpoint on line without log or expression breakpoint")))))))
+      (call-interactively (pcase (dape--breakpoint-type dape--info-breakpoint)
+                            ('log #'dape-breakpoint-log)
+                            ('expression #'dape-breakpoint-expression)
+                            ('hits #'dape-breakpoint-hits)
+                            (_ (user-error "Unable to edit breakpoint on line \
+without log or expression breakpoint")))))))
 
 (dape--buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
   (define-key map "D" 'dape-info-breakpoint-delete)
