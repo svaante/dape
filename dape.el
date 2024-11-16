@@ -4993,7 +4993,7 @@ configurations: %s"
                   key (mapconcat (lambda (e) (symbol-name (car e)))
                                  dape-configs ", ")))
     (dape--config-eval-1 (seq-reduce (apply-partially 'apply 'plist-put)
-                                     (seq-partition options 2)
+                                     (nreverse (seq-partition options 2))
                                      (copy-tree base-config)))))
 
 (defun dape--config-from-string (str)
