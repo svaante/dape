@@ -3652,10 +3652,14 @@ without log or expression breakpoint")))))))
        (dape--breakpoint-buffer-or-path-line breakpoint)
        for verified-plist = (dape--breakpoint-verified breakpoint)
        for verified-p =
-       (or ;; No live connection show every breakpoint as verified
+       (or
+        ;; If no live connection show all as verified
         (not (dape--live-connection 'last t))
+        ;; If actually verified by some connection
         (cl-find-if (apply-partially 'plist-get verified-plist)
-                    (dape--live-connections)))
+                    (dape--live-connections))
+        ;; If hit then must be verified
+        (dape--breakpoint-hits breakpoint))
        do
        (gdb-table-add-row
         table
