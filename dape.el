@@ -1148,7 +1148,7 @@ as is."
          (config
           (and conn
                ;; If child connection check parent
-               (or (and-let* ((parent (dape--parent conn)))
+               (or (when-let ((parent (dape--parent conn)))
                      (dape--config parent))
                    (dape--config conn))))
          (root-guess (dape--guess-root config))
@@ -3304,11 +3304,11 @@ Buffer is displayed with `dape-display-source-buffer-action'."
                            when (eq frame selected) return
                            (cl-loop for frame in cell
                                     for source = (plist-get frame :source) when
-                                    (or (and-let* ((reference (plist-get source :sourceReference))
-                                                   ((< 0 reference))))
-                                        (and-let* ((remote-path (plist-get source :path))
-                                                   (path (dape--path-local conn remote-path))
-                                                   ((file-exists-p path)))))
+                                    (or (when-let ((reference (plist-get source :sourceReference)))
+                                          (< 0 reference))
+                                        (when-let* ((remote-path (plist-get source :path))
+                                                    (path (dape--path-local conn remote-path)))
+                                          (file-exists-p path)))
                                     return frame))))
         ;; Check if frame source should be available, otherwise fetch all
         (if-let ((frame (displayable-frame)))
@@ -3825,9 +3825,9 @@ See `dape-request' for expected CB signature."
              (concat
               (when dape-info-thread-buffer-verbose-names
                 (concat (plist-get thread :name) " "))
-              (or (and-let* ((status (plist-get thread :status)))
-                    (format "%s" status))
-                  "unknown")
+              (if-let ((status (plist-get thread :status)))
+                  (format "%s" status)
+                "unknown")
               ;; Include frame information for stopped threads
               (if-let* (((equal (plist-get thread :status) 'stopped))
                         (top-stack (car (plist-get thread :stackFrames))))
@@ -4047,7 +4047,9 @@ current buffer with CONN config."
 (defun dape--variable-expanded-p (path)
   "If PATH should be expanded."
   (gethash path dape--variable-expanded-p
-           (and-let* ((auto-expand
+           (when-let ((auto-expand
+                       ;; See `dape-variable-auto-expand-alist'.
+                       ;; Expects car of PATH to specify context
                        (or (alist-get (car (last path)) dape-variable-auto-expand-alist)
                            (alist-get nil dape-variable-auto-expand-alist))))
              (length< path (+ auto-expand 2)))))
@@ -5113,7 +5115,7 @@ nil."
     t))
 
 (defun dape--config-mode-p (config)
-  "Is CONFIG enabled for current mode."
+  "Return non nil if CONFIG is for current major mode."
   (let ((modes (plist-get config 'modes)))
     (or (not modes)
         (apply 'provided-mode-derived-p
@@ -5170,11 +5172,10 @@ nil."
       (list (point) (point) nil :exclusive 'no)))))
 
 (defun dape--read-config ()
-  "Read config from minibuffer.
-Initial contents defaults to valid configuration if there is only one
-or last mode valid history item from this session.
-
-See `dape--config-mode-p' how \"valid\" is defined."
+  "Read configuration from minibuffer.
+Completes from suggested conjurations, a configuration is suggested if
+it's for current `major-mode' and it's available.
+See `modes' and `ensure' in `dape-configs'."
   (let* ((suggested-configs
           (cl-loop for (key . config) in dape-configs
                    when (and (dape--config-mode-p config)
@@ -5257,11 +5258,11 @@ See `dape--config-mode-p' how \"valid\" is defined."
   "Hook function to produce doc strings for `eldoc'.
 On success calls CB with the doc string.
 See `eldoc-documentation-functions', for more information."
-  (and-let* ((conn (dape--live-connection 'last t))
-             ((dape--capable-p conn :supportsEvaluateForHovers))
-             (symbol (thing-at-point 'symbol))
-             (name (substring-no-properties symbol))
-             (id (plist-get (dape--current-stack-frame conn) :id)))
+  (when-let* ((conn (dape--live-connection 'last t))
+              ((dape--capable-p conn :supportsEvaluateForHovers))
+              (symbol (thing-at-point 'symbol))
+              (name (substring-no-properties symbol))
+              (id (plist-get (dape--current-stack-frame conn) :id)))
     (dape--with-request-bind
         (body error)
         (dape--evaluate-expression conn id name "hover")
