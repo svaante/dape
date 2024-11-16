@@ -3085,38 +3085,27 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (setf id (plist-put id conn (plist-get update :id))
           verified (plist-put verified conn
                               (eq (plist-get update :verified) t)))
-    (run-hooks 'dape-update-ui-hook)
     ;; Move breakpoints
     (pcase-let ((`(,buffer-or-path . ,line)
-                 (dape--breakpoint-buffer-or-path-line breakpoint)))
-      ;; XXX Breakpoint overlay might be dead at this point as
-      ;;     another invocation of `dape--breakpoint-update' could
-      ;;     have deleted it.  If that is the reason for nil buffer we
-      ;;     are fine.
-      (when-let* (buffer-or-path
-                  ;; TODO Here we go opening buffers anyway, no good.
-                  (buffer (if (bufferp buffer-or-path) buffer-or-path
-                            (find-file-noselect buffer-or-path))))
-        (dape--with-request
-            (dape--source-ensure
-             conn (append ;; Default to current overlay as `:source'
-                   update `(:source ,(dape--breakpoint-source-plist conn buffer-or-path))))
-          (when-let* ((marker (dape--object-to-marker conn update))
-                      (new-buffer (marker-buffer marker))
-                      (new-line (plist-get update :line))
-                      ;; Should be a no op if buffer and line is the same
-                      ((not (and (= line new-line) (eq buffer new-buffer)))))
-            (dape--breakpoint-delete-overlay breakpoint)
-            (dape--with-line new-buffer new-line
+                 (dape--breakpoint-buffer-or-path-line breakpoint))
+                (new-line (plist-get update :line)))
+      ;; XXX Breakpoint overlay might have been killed by another
+      ;;     invocation of `dape--breakpoint-update'
+      (when (and buffer-or-path (numberp new-line) (not (eq line new-line)))
+        (dape--breakpoint-delete-overlay breakpoint)
+        ;; XXX Assume that breakpoints are only moved by line
+        (if (bufferp buffer-or-path)
+            (dape--with-line buffer-or-path new-line
               (dape-breakpoint-remove-at-point 'skip-update)
               (dape--breakpoint-set-overlay breakpoint)
               (pulse-momentary-highlight-region
                (line-beginning-position) (line-beginning-position 2) 'next-error))
-            ;; Sync breakpoint state (both from and to buffer)
-            (dape--breakpoint-broadcast-update buffer new-buffer)
-            (dape--message "Breakpoint in %s moved from line %s to %s"
-                           buffer line new-line))
-          (run-hooks 'dape-update-ui-hook))))))
+          (setcdr (dape--breakpoint-overlay-or-cons breakpoint) new-line))
+        ;; Sync breakpoint state
+        (dape--breakpoint-broadcast-update buffer-or-path)
+        (dape--message "Breakpoint in %s moved from line %s to %s"
+                       buffer-or-path line new-line))))
+  (run-hooks 'dape-update-ui-hook))
 
 (defun dape-breakpoint-load (&optional file)
   "Load breakpoints from FILE.
