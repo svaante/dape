@@ -3124,8 +3124,7 @@ All breakpoints will be removed before loading new ones.
 Will open buffers containing breakpoints.
 Will use `dape-default-breakpoints-file' if FILE is nil."
   (interactive
-   (list
-    (read-file-name "Load breakpoints from file: ")))
+   (list (read-file-name "Load breakpoints from file: ")))
   (setq file (or file dape-default-breakpoints-file))
   (when (file-exists-p file)
     (dape-breakpoint-remove-all)
