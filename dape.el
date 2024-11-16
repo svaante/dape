@@ -3981,8 +3981,7 @@ current buffer with CONN config."
                          dape--connection)))
       (cl-loop with modules = (dape--modules conn)
                with table = (make-gdb-table)
-               for module in (reverse modules)
-               do
+               for module in (reverse modules) do
                (gdb-table-add-row
                 table
                 (list
@@ -5185,12 +5184,12 @@ See `dape--config-mode-p' how \"valid\" is defined."
           (or
            ;; Take `dape-command' if exist
            (when dape-command
-             (dape--config-to-string (car dape-command)
-                                     (cdr dape-command)))
+             (dape--config-to-string (car dape-command) (cdr dape-command)))
            ;; Take first valid history item
            (seq-find (lambda (str)
                        (ignore-errors
-                         (thread-first (dape--config-from-string str) (car)
+                         (thread-first (dape--config-from-string str)
+                                       (car)
                                        (dape--config-to-string nil)
                                        (member suggested-configs))))
                      dape-history)
