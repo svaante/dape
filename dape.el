@@ -5140,7 +5140,7 @@ nil."
     (setq args (nreverse args)
           args-bounds (nreverse args-bounds))
     (cond
-     ;; Complete config key
+     ;; Complete key
      ((<= (point) key-end)
       (pcase-let ((`(,start . ,end)
                    (or (bounds-of-thing-at-point 'symbol)
@@ -5148,8 +5148,8 @@ nil."
         (list start end
               (mapcar (lambda (suggestion) (format "%s " suggestion))
                       dape--minibuffer-suggestions))))
-     ;; Complete config args
-     ((and (not (plist-member args '-))
+     ;; Complete args
+     ((and (not (plist-member args '-)) ;; Skip zap/dash notation
            (alist-get key dape-configs)
            (or (and (plistp args)
                     (thing-at-point 'whitespace))
