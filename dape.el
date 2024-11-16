@@ -1547,17 +1547,17 @@ See `dape-request' for expected CB signature."
                 (if (dape--capable-p conn :supportsLogPoints)
                     (plist-put source-breakpoint
                                :logMessage (dape--breakpoint-value breakpoint))
-                  (dape--message "Adapter does not support log breakpoints")))
+                  (dape--warn "Adapter does not support `dape-breakpoint-log'")))
                ('expression
                 (if (dape--capable-p conn :supportsConditionalBreakpoints)
                     (plist-put source-breakpoint
                                :condition (dape--breakpoint-value breakpoint))
-                  (dape--message "Adapter does not support expression breakpoints")))
+                  (dape--warn "Adapter does not support `dape-breakpoint-expression'")))
                ('hits
                 (if (dape--capable-p conn :supportsHitConditionalBreakpoints)
                     (plist-put source-breakpoint
                                :hitCondition (dape--breakpoint-value breakpoint))
-                  (dape--message "Adapter does not support hits breakpoints"))))
+                  (dape--warn "Adapter does not support `dape-breakpoint-hits'"))))
              source-breakpoint)
            into source-breakpoints finally do
            (dape--with-request-bind
