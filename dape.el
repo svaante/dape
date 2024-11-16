@@ -3042,6 +3042,8 @@ If there are breakpoints at current line remove those breakpoints from
   (dape--breakpoint-broadcast-update (current-buffer)))
 
 (defun dape--breakpoint-delete-overlay (breakpoint)
+  "Delete of BREAKPOINT overlay.
+Handling restoring margin if necessary."
   (let ((buffer-or-path (dape--breakpoint-buffer-or-path breakpoint)))
     (when-let ((buffer (and (bufferp buffer-or-path) buffer-or-path)))
       (delete-overlay (dape--breakpoint-overlay-or-cons breakpoint))
