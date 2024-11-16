@@ -4880,9 +4880,9 @@ Update `dape--inlay-hint-overlays' from SCOPES."
            with base-config = (alist-get hint-key dape-configs)
            for (key value) on hint-config by 'cddr
            unless (or (memq key dape-minibuffer-hint-ignore-properties)
-                      (and (eq key 'port) (eq value :autoport))
-                      (eq key 'ensure))
-           collect
+                      (memq key displayed-keys)
+                      (and (eq key 'port) (eq value :autoport)))
+           collect key into displayed-keys and collect
            (concat
             (propertize (format "%s" key)
                         'face 'font-lock-keyword-face)
