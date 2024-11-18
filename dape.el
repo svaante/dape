@@ -5353,7 +5353,7 @@ mouse-1: Display minor mode menu"
                     face shadow
                     help-echo "Active child connections")))))))
 
-(add-to-list 'global-mode-string
+(add-to-list 'mode-line-misc-info
              `(dape-active-mode ("[" dape--mode-line-format "] ")))
 
 
