@@ -472,6 +472,10 @@ Symbol keys (Used by dape):
   interpretations of the DAP specification.
   See: GDB bug 32090.
 
+Note: The char - carries special meaning when reading options in
+`dape' and therefore should not be used be used as an key.
+See `dape-config-dash-form'.
+
 Connection to Debug Adapter:
 - If command is specified and not port, dape communicates with the
   debug adapter through stdin/stdout.
@@ -511,8 +515,15 @@ Functions and symbols:
                         ((const :tag "Adapter type" :type) string)
                         ((const :tag "Request type launch/attach" :request) string)))))
 
-(defcustom dape-config-dash-form-p nil
-  "If ENV PROGRAM ARGS sh like string format is preferred."
+(defcustom dape-config-dash-form t
+  "If non nil store configurations in dash form in `dape-history'.
+With dash form - switches the reader modes from properties and
+values to sh like format ENV PROGRAM ARGS.
+
+This is useful for adapters which follows the
+`:program', `:env' and `:args' convention.
+
+Example: debugpy - ENV=value program arg1 arg2"
   :type 'boolean)
 
 (defcustom dape-default-config-functions
@@ -5081,7 +5092,7 @@ Where ALIST-KEY exists in `dape-configs'."
   "Create string from KEY and POST-EVAL-CONFIG."
   (pcase-let* ((config-diff (dape--config-diff key post-eval-config))
                ((map :env :program :args) config-diff)
-               (zap-form-p (and dape-config-dash-form-p
+               (zap-form-p (and dape-config-dash-form
                                 (or (stringp program)
                                     (and (consp env) (keywordp (car env))
                                          (not args))))))
