@@ -4900,7 +4900,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
             (with-current-buffer dape--minibuffer-last-buffer
               (condition-case err
                   (propertize
-                   (format "%S" (dape--config-eval-value value nil nil 'skip-interactive))
+                   (format "%S" (dape--config-eval-value value nil 'skip-interactive))
                    'face
                    (when (equal value (plist-get base-config key))
                      'shadow))
@@ -4941,13 +4941,12 @@ Update `dape--inlay-hint-overlays' from SCOPES."
   "Non-nil if and only if OBJECT is a valid plist."
   (and (listp object) (zerop (% (length object) 2))))
 
-(defun dape--config-eval-value (value &optional skip-functions check
-                                      skip-interactive)
+(defun dape--config-eval-value (value &optional skip-functions skip-interactive)
   "Return recursively evaluated VALUE.
-If SKIP-FUNCTIONS is non nil return VALUE as is if `functionp' is non
-nil.  If CHECK is non nil assert VALUE types, signal `user-error' on
-mismatch.  If SKIP-INTERACTIVE is non nil return VALUE as is if
-`functionp' is non nil and function uses the minibuffer."
+If SKIP-FUNCTIONS is non nil return VALUE as is if `functionp' is
+non nil.
+If SKIP-INTERACTIVE is non nil return VALUE as is if `functionp' is
+non nil and function uses the minibuffer."
   (pcase value
     ;; On function (or list that starts with a non keyword symbol)
     ((or (pred functionp)
@@ -4963,36 +4962,31 @@ mismatch.  If SKIP-INTERACTIVE is non nil return VALUE as is if
          (error value))))
     ;; On plist recursively evaluate
     ((pred dape--plistp)
-     (dape--config-eval-1 value skip-functions check skip-interactive))
+     (dape--config-eval-1 value skip-functions skip-interactive))
     ;; On vector evaluate each item
     ((pred vectorp)
      (cl-map 'vector
              (lambda (value)
-               (dape--config-eval-value value skip-functions check
-                                        skip-interactive))
+               (dape--config-eval-value value skip-functions skip-interactive))
              value))
     ;; On symbol evaluate symbol value
     ((and (pred symbolp)
           ;; Guard against infinite recursion
           (guard (not (eq (symbol-value value) value))))
-     (dape--config-eval-value (symbol-value value)
-                              skip-functions check skip-interactive))
+     (dape--config-eval-value (symbol-value value) skip-functions
+                              skip-interactive))
     ;; Otherwise just value
     (_ value)))
 
-(defun dape--config-eval-1 (config &optional skip-functions check
-                                   skip-interactive)
-  "Helper for `dape--config-eval'."
+(defun dape--config-eval-1 (config &optional skip-functions skip-interactive)
+  "Return evaluated CONFIG.
+See `dape--config-eval' for SKIP-FUNCTIONS and SKIP-INTERACTIVE."
   (cl-loop for (key value) on config by 'cddr append
            (cond
             ((memql key '(modes fn ensure)) (list key value))
-            ((and check (not (keywordp key)))
-             (user-error "Unexpected key %S; lists of things needs be \
-arrays [%S ...], if meant as an object replace (%S ...) with (:%s ...)"
-                         key key key key))
             ((list key
-                   (dape--config-eval-value value skip-functions
-                                            (or check (keywordp key))
+                   (dape--config-eval-value value
+                                            skip-functions
                                             skip-interactive))))))
 (defun dape--config-eval (key options)
   "Evaluate config with KEY and OPTIONS."
