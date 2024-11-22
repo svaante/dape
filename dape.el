@@ -3093,6 +3093,8 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (run-hooks 'dape-update-ui-hook))
 
 (defun dape--breakpoint-source (breakpoint)
+  "Return the source of BREAKPOINT.
+The source is either a buffer or a file path."
   (if-let ((buffer (dape--breakpoint-buffer breakpoint)))
       buffer
     (dape--breakpoint-path breakpoint)))
@@ -5327,7 +5329,7 @@ See `eldoc-documentation-functions', for more information."
 (put 'dape--mode-line-format 'risky-local-variable t)
 
 (defun dape--mode-line-format ()
-  "Update `dape--mode-line-format' format."
+  "Update variable `dape--mode-line-format' format."
   (let ((conn (or (dape--live-connection 'last t)
                   dape--connection)))
     (setq dape--mode-line-format
