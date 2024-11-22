@@ -2805,8 +2805,6 @@ Using BUFFER and STR."
   ;; TODO Look for alternatives to hexl, which handles address offsets
   (add-hook 'eldoc-documentation-functions
             #'dape--memory-print-current-point-info nil t)
-  ;; FIXME Is `revert-buffer-in-progress-p' is not respected
-  ;;       as most of the work is done in an callback.
   (setq revert-buffer-function #'dape--memory-revert))
 
 (define-key dape-memory-mode-map "\C-x]" #'dape-memory-next-page)
@@ -3415,9 +3413,6 @@ Each buffers store its own debounce context."
               truncate-lines t
               cursor-in-non-selected-windows nil
               dape--info-debounce-timer (timer-create)
-              ;; FIXME Is `revert-buffer-in-progress-p' is not
-              ;;       respected as most of the work is done in an
-              ;;       callback.
               revert-buffer-function #'dape--info-revert)
   (add-hook 'window-buffer-change-functions 'dape--info-buffer-change-fn
             nil 'local)
