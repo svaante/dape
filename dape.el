@@ -752,7 +752,8 @@ The hook is run with one argument, the compilation buffer."
   :type 'natnum)
 
 (defcustom dape-debug nil
-  "Print debug info in *dape-repl* *dape-connection events* buffers."
+  "If non nil log debug info in repl and connection events buffers.
+Debug logging has an noticeable effect on performance."
   :type 'boolean)
 
 
