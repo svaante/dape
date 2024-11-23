@@ -682,10 +682,6 @@ left-to-right display order of the properties."
   :type '(choice (const :tag "Truncate string at new line" line)
                  (const :tag "No formatting" nil)))
 
-(defcustom dape-info-header-scope-max-name 15
-  "Max length of scope name in `header-line-format'."
-  :type 'integer)
-
 (defcustom dape-info-file-name-max 25
   "Max length of file name in dape info buffers."
   :type 'integer)
