@@ -1234,7 +1234,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
 
 (defmacro dape--buffer-map (name fn &rest body)
   "Helper macro to create info buffer map with NAME.
-FN is executed on mouse-2 and \r, BODY is executed with `map' bound."
+FN is executed on mouse-2 and \\r, BODY is executed with `map' bound."
   (declare (indent defun))
   `(defvar ,name
      (let ((map (make-sparse-keymap)))
