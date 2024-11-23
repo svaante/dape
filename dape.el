@@ -2955,6 +2955,13 @@ of memory read."
   :global t
   :lighter nil)
 
+(defun dape--breakpoint-maybe-remove-ff-hook ()
+  "Remove `find-file-hook' if all breakpoints have buffers."
+  (cl-loop for breakpoint in dape--breakpoints
+           always (bufferp (dape--breakpoint-source breakpoint))
+           finally do (remove-hook 'find-file-hook
+                                   #'dape--breakpoint-find-file-hook)))
+
 (defun dape--breakpoint-find-file-hook ()
   "Convert cons breakpoints into overlay breakpoints.
 Used as an hook on `find-file-hook'."
@@ -2967,7 +2974,9 @@ Used as an hook on `find-file-hook'."
              for line = (dape--breakpoint-line breakpoint)
              unless (dape--breakpoint-buffer breakpoint) do
              (dape--with-line (current-buffer) line
-               (dape--breakpoint-set-overlay breakpoint)))))
+               (dape--breakpoint-set-overlay breakpoint))
+             (run-hooks 'dape-update-ui-hook)))
+  (dape--breakpoint-maybe-remove-ff-hook))
 
 (defvar dape--original-margin nil
   "Bookkeeping for buffer margin width.")
@@ -3042,7 +3051,6 @@ If FROM-RESTART is non nil keep id and verified."
            if (buffer-file-name (current-buffer)) do
            (with-slots (overlay) breakpoint
              (when overlay
-               ;; TODO Remove dape--breakpoint-find-file-hook
                (add-hook 'find-file-hook #'dape--breakpoint-find-file-hook)
                (delete-overlay overlay))
              (setf overlay nil)
@@ -3096,6 +3104,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (unless skip-update
     (dape--breakpoint-broadcast-update (dape--breakpoint-source breakpoint)))
   (dape--breakpoint-delete-overlay breakpoint)
+  (dape--breakpoint-maybe-remove-ff-hook)
   (run-hooks 'dape-update-ui-hook))
 
 (defun dape--breakpoint-source (breakpoint)
@@ -3157,7 +3166,6 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
                (dape--with-line (find-file-noselect file) line
                  (dape--breakpoint-place type value)))
               (t
-               ;; TODO Remove dape--breakpoint-find-file-hook
                (add-hook 'find-file-hook #'dape--breakpoint-find-file-hook)
                (push (dape--breakpoint-make
                       :path-line (cons file line) :type type :value value)
