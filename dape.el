@@ -474,7 +474,7 @@ Symbol keys (Used by dape):
 
 Note: The char - carries special meaning when reading options in
 `dape' and therefore should not be used be used as an key.
-See `dape-config-dash-form'.
+See `dape-history-use-dash-form'.
 
 Connection to Debug Adapter:
 - If command is specified and not port, dape communicates with the
@@ -515,10 +515,11 @@ Functions and symbols:
                         ((const :tag "Adapter type" :type) string)
                         ((const :tag "Request type launch/attach" :request) string)))))
 
-(defcustom dape-config-dash-form t
-  "If non nil store configurations in dash form in `dape-history'.
-With dash form - switches the reader modes from properties and
-values to sh like format ENV PROGRAM ARGS.
+(defcustom dape-history-use-dash-form t
+  "If non nil store configuration options in dash form.
+With dash form - switches the reader mode from properties and
+values to sh like format with ENV PROGRAM ARGS.
+Adapter configuration options are stored in `dape-history'.
 
 This is useful for adapters which follows the
 `:program', `:env' and `:args' convention.
@@ -5092,7 +5093,7 @@ Where ALIST-KEY exists in `dape-configs'."
   "Create string from KEY and POST-EVAL-CONFIG."
   (pcase-let* ((config-diff (dape--config-diff key post-eval-config))
                ((map :env :program :args) config-diff)
-               (zap-form-p (and dape-config-dash-form
+               (zap-form-p (and dape-history-use-dash-form
                                 (or (stringp program)
                                     (and (consp env) (keywordp (car env))
                                          (not args))))))
