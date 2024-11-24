@@ -3,7 +3,7 @@
 #+language: en
 
 * Version 0.16.0
-- Decouple breakpoints from buffers killing buffer no longer kills breakpoints
+- Add decoupling of breakpoints from buffers (killing buffer no longer kills breakpoints)
 - Add =command-insert-stderr= property to =dape-configs= (stderr in =dlv=)
 - Add =command-env= property to =dape-configs=
 - Add support for =hl-line-mode=
