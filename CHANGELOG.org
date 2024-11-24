@@ -2,6 +2,25 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.17.0
+- Add dash form configuration options parsing see =dape-history-use-dash-form=
+- Add error face on on unsupported breakpoint type
+- Add placeholder text in scope buffer
+- Add shorthand for function evaluation in configs if car of list is not an keyword
+- Add support for adapter option argsCanBeInterpretedByShell
+- Add default expansion of variable levels based on context =dape-variable-auto-expand-alist=
+- Add let adapters create new breakpoints from breakpoint event
+- Change let hit breakpoints count as verified
+- Change slow stack trace in thread buffer workaround
+- Fix clean up find-file-hook after usage
+- Fix unnecessary buffer creation on adapter configuration
+- Fix completion of adapter name in minibuffer if options are already specified
+- Fix let string config dictate order parsed plist
+- Fix add command-insert-stderr to hint-ignore-properties
+- Fix only display key hint once
+- Fix argument order reversal in config evaluation
+- Fix follow mode-line-misc-info suffix space separator convention
+
 * Version 0.16.0
 - Add decoupling of breakpoints from buffers (killing buffer no longer kills breakpoints)
 - Add =command-insert-stderr= property to =dape-configs= (stderr in =dlv=)
