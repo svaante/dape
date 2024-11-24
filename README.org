@@ -31,7 +31,6 @@ And with ~(setq dape-buffer-window-arrangement 'gud)~ + =corfu= as ~completion-i
 [[https://raw.githubusercontent.com/svaante/dape/resources/gud_0_16_0.png]]
 With =minibuffer= adapter configuration hints:
 [[https://raw.githubusercontent.com/svaante/dape/resources/minibuffer_0_16_0.png]]
-Screenshots taken with [[https://elpa.gnu.org/packages/standard-themes.html][standard-light]].
 
 * Configuration
 =Dape= includes pre-defined debug adapter configurations for various programming languages. Refer to ~dape-configs~ for more details. If =dape= doesn't include a configuration suitable for your needs, you can implement your own.
@@ -45,9 +44,9 @@ Screenshots taken with [[https://elpa.gnu.org/packages/standard-themes.html][sta
 
     :hook
     ;; Save breakpoints on quit
-    ;; ((kill-emacs . dape-breakpoint-save)
+    ;; (kill-emacs . dape-breakpoint-save)
     ;; Load breakpoints on startup
-    ;;  (after-init . dape-breakpoint-load))
+    ;; (after-init . dape-breakpoint-load)
 
     :config
     ;; Turn on global bindings for setting breakpoints with mouse
