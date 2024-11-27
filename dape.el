@@ -2655,20 +2655,22 @@ CONN is inferred by either last stopped or last created connection."
 
 ;;;###autoload
 (defun dape (config &optional skip-compile)
-  "Start debugging session.
-Start a debugging session for CONFIG.
-See `dape-configs' for more information on CONFIG.
+  "Start a debugging session using CONFIG.
+When called interactively, the command prompts for a alist KEY from
+`dape-configs', followed by additional property-value pairs.  These
+pairs override the properties in the plist associated with the key
+in `dape-configs'.
 
-When called as an interactive command, the first symbol like
-is read as key in the `dape-configs' alist and rest as elements
-which override value plist in `dape-configs'.
-
-Interactive example:
+For example, interactively invoking:
   launch :program \"bin\"
+executes the `launch' configuration from `dape-configs', overriding
+the `:program' option with \"bin\".
 
-Executes alist key `launch' in `dape-configs' with :program as \"bin\".
+CONFIG is an keyword-value plist, see VALUEs in `dape-config' alist.
+SKIP-COMPILE argument is used internally for recursive calls
+and should not be specified manually.
 
-Use SKIP-COMPILE to skip compilation."
+For more information see `dape-configs'."
   (interactive (list (dape--read-config)))
   (dape--with-request (dape-kill (dape--live-connection 'parent t))
     (dape--config-ensure config t)
