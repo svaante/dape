@@ -713,7 +713,8 @@ left-to-right display order of the properties."
                 :value-type function))
 
 (defcustom dape-compile-fn #'compile
-  "Function to run compile with."
+  "Function to compile with.
+The function is called with an command string."
   :type 'function)
 
 (defcustom dape-default-breakpoints-file
@@ -730,7 +731,7 @@ project's root.  See `dape--default-cwd'."
   :type 'function)
 
 (defcustom dape-compile-hook nil
-  "Called after dape compilation succeeded.
+  "Called after dape compilation finishes.
 The hook is run with one argument, the compilation buffer."
   :type 'hook)
 
@@ -2368,23 +2369,27 @@ CONN is inferred for interactive invocations."
     (when error
       (error "Failed to pause: %s" error))))
 
-(defun dape-restart (&optional conn)
+(defun dape-restart (&optional conn skip-compile)
   "Restart debugging session.
-CONN is inferred for interactive invocations."
+CONN is inferred for interactive invocations.
+SKIP-COMPILE is used internally for recursive calls."
   (interactive (list (dape--live-connection 'last t)))
   (dape--stack-frame-cleanup)
   (cond ((and conn (dape--capable-p conn :supportsRestartRequest))
-         (dape--breakpoints-reset 'from-restart)
-         (setq dape--connection-selected nil)
-         (setf (dape--threads conn) nil
-               (dape--thread-id conn) nil
-               (dape--modules conn) nil
-               (dape--sources conn) nil
-               (dape--restart-in-progress-p conn) t)
-         (dape--with-request
-             (dape-request conn "restart"
-                           `(:arguments ,(dape--launch-or-attach-arguments conn)))
-           (setf (dape--restart-in-progress-p conn) nil)))
+         (if (and (not skip-compile) (plist-get (dape--config conn) 'compile))
+             (dape--compile (dape--config conn)
+                            (lambda () (dape-restart conn 'skip-compile)))
+           (dape--breakpoints-reset 'from-restart)
+           (setq dape--connection-selected nil)
+           (setf (dape--threads conn) nil
+                 (dape--thread-id conn) nil
+                 (dape--modules conn) nil
+                 (dape--sources conn) nil
+                 (dape--restart-in-progress-p conn) t)
+           (dape--with-request
+               (dape-request conn "restart"
+                             `(:arguments ,(dape--launch-or-attach-arguments conn)))
+             (setf (dape--restart-in-progress-p conn) nil))))
         (dape-history
          (dape (apply 'dape--config-eval (dape--config-from-string (car dape-history)))))
         ((user-error "Unable to derive session to restart, run `dape'"))))
@@ -2685,35 +2690,31 @@ For more information see `dape-configs'."
                         (append fns dape-default-config-functions)
                         (copy-tree config))))
     (if (and (not skip-compile) (plist-get config 'compile))
-        (dape--compile config)
+        (dape--compile config (lambda () (dape config 'skip-compile)))
       (setq dape--connection (dape--create-connection config))
       (dape--start-debugging dape--connection))))
 
 
 ;;; Compile
 
-(defvar-local dape--compile-config nil)
+(defvar-local dape--compile-after-fn nil)
 
 (defun dape--compile-compilation-finish (buffer str)
   "Hook for `dape--compile-compilation-finish'.
 Using BUFFER and STR."
-  (remove-hook 'compilation-finish-functions
-               #'dape--compile-compilation-finish)
-  (cond
-   ((equal "finished\n" str)
-    (dape dape--compile-config 'skip-compile)
-    (run-hook-with-args 'dape-compile-hook buffer))
-   (t (dape--message "Compilation failed %s" (string-trim-right str)))))
+  (remove-hook 'compilation-finish-functions #'dape--compile-compilation-finish)
+  (cond ((equal "finished\n" str) (funcall dape--compile-after-fn))
+        (t (dape--message "Compilation failed %s" (string-trim-right str))))
+  (run-hook-with-args 'dape-compile-hook buffer))
 
-(defun dape--compile (config)
-  "Start compilation for CONFIG."
+(defun dape--compile (config fn)
+  "Start compilation for CONFIG then call FN."
   (let ((default-directory (dape--guess-root config))
         (command (plist-get config 'compile)))
     (funcall dape-compile-fn command)
     (with-current-buffer (compilation-find-buffer)
-      (setq dape--compile-config config)
-      (add-hook 'compilation-finish-functions
-                #'dape--compile-compilation-finish nil t))))
+      (setq dape--compile-after-fn fn)
+      (add-hook 'compilation-finish-functions #'dape--compile-compilation-finish nil t))))
 
 
 ;;; Memory viewer
