@@ -714,7 +714,7 @@ left-to-right display order of the properties."
 
 (defcustom dape-compile-fn #'compile
   "Function to compile with.
-The function is called with an command string."
+The function is called with a command string."
   :type 'function)
 
 (defcustom dape-default-breakpoints-file
