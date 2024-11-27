@@ -1505,39 +1505,42 @@ timeout period is configurable with `dape-request-timeout'"
       (unless (plist-get (dape--config conn) 'defer-launch-attach)
         (dape--launch-or-attach conn)))))
 
+(defun dape--launch-or-attach-arguments (conn)
+  "Return plist of launch/attach arguments for CONN."
+  ;; Transform config to jsonrpc serializable format
+  ;; Remove all non `keywordp' keys and transform null to
+  ;; :json-false
+  (cl-labels
+      ((transform-value (value)
+         (pcase value
+           ('nil :json-false)
+           ;; FIXME Need a way to create json null values
+           ;;       see #72, :null could be an candidate.
+           ;;       Using :null is quite harmless as it has
+           ;;       no friction with `dape-configs'
+           ;;       evaluation.  So it should be fine to keep
+           ;;       supporting it even if it's not the way
+           ;;       forwards.
+           (:null
+            nil)
+           ((pred vectorp)
+            (cl-map 'vector #'transform-value value))
+           ((pred listp)
+            (create-body value))
+           (_ value)))
+       (create-body (config)
+         (cl-loop for (key value) on config by 'cddr
+                  when (keywordp key)
+                  append (list key (transform-value value)))))
+    (create-body (dape--config conn))))
+
 (defun dape--launch-or-attach (conn)
   "Launch or attach CONN."
   (dape--with-request-bind
       (_body error)
-      (dape-request
-       conn
-       (or (plist-get (dape--config conn) :request) "launch")
-       ;; Transform config to jsonrpc serializable format
-       ;; Remove all non `keywordp' keys and transform null to
-       ;; :json-false
-       (cl-labels
-           ((transform-value (value)
-              (pcase value
-                ('nil :json-false)
-                ;; FIXME Need a way to create json null values
-                ;;       see #72, :null could be an candidate.
-                ;;       Using :null is quite harmless as it has
-                ;;       no friction with `dape-configs'
-                ;;       evaluation.  So it should be fine to keep
-                ;;       supporting it even if it's not the way
-                ;;       forwards.
-                (:null
-                 nil)
-                ((pred vectorp)
-                 (cl-map 'vector #'transform-value value))
-                ((pred listp)
-                 (create-body value))
-                (_ value)))
-            (create-body (config)
-              (cl-loop for (key value) on config by 'cddr
-                       when (keywordp key)
-                       append (list key (transform-value value)))))
-         (create-body (dape--config conn))))
+      (dape-request conn
+                    (or (plist-get (dape--config conn) :request) "launch")
+                    (dape--launch-or-attach-arguments conn))
     (when error
       (dape--warn "%s" error)
       (dape-kill conn))))
@@ -2378,9 +2381,9 @@ CONN is inferred for interactive invocations."
                (dape--modules conn) nil
                (dape--sources conn) nil
                (dape--restart-in-progress-p conn) t)
-         ;; FIXME This is not according to spec should give
-         ;;       launch/attach args
-         (dape--with-request (dape-request conn "restart" nil)
+         (dape--with-request
+             (dape-request conn "restart"
+                           `(:arguments ,(dape--launch-or-attach-arguments conn)))
            (setf (dape--restart-in-progress-p conn) nil)))
         (dape-history
          (dape (apply 'dape--config-eval (dape--config-from-string (car dape-history)))))
