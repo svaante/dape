@@ -2912,6 +2912,7 @@ of memory read."
                                     map))))))
       (let ((ov (apply 'make-overlay (dape--overlay-region))))
         (overlay-put ov 'modification-hooks '(dape--breakpoint-freeze))
+        (overlay-put ov 'category 'dape-breakpoint)
         (overlay-put ov 'window t)
         (pcase type
           ('log
