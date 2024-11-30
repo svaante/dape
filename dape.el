@@ -3283,6 +3283,7 @@ Helper for `dape--stack-frame-display'."
           (setq dape--stack-position-overlay
                 (let ((ov (make-overlay (line-beginning-position)
                                         (line-beginning-position 2))))
+                  (overlay-put ov 'category 'dape-source-line)
                   (overlay-put ov 'face 'dape-source-line-face)
                   (when deepest-p
                     (when-let ((exception-description
