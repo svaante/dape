@@ -822,11 +822,11 @@ Non interactive global minor mode."
 
 (defun dape--warn (format &rest args)
   "Display warning/error message with FORMAT and ARGS."
-  (dape--repl-insert-error (format "* %s *" (apply #'format format args))))
+  (dape--repl-insert-error (format "* %s *\n" (apply #'format format args))))
 
 (defun dape--message (format &rest args)
   "Display message with FORMAT and ARGS."
-  (dape--repl-insert (format "* %s *" (apply #'format format args))))
+  (dape--repl-insert (format "* %s *\n" (apply #'format format args))))
 
 (defmacro dape--with-request-bind (vars fn-args &rest body)
   "Call FN with ARGS and execute BODY on callback with VARS bound.
@@ -2091,7 +2091,7 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
               (seq-filter 'stringp
                           (list (plist-get body :text)
                                 (plist-get body :description))))
-             (str (mapconcat 'identity texts ":\n\t")))
+             (str (concat (mapconcat 'identity texts ":\n\t") "\n")))
         (setf (dape--exception-description conn) str)
         (dape--repl-insert-error str)))
     ;; Update breakpoints hits
@@ -2243,7 +2243,7 @@ symbol `dape-connection'."
                           (content (with-current-buffer buffer (buffer-string)))
                           ((not (string-empty-p content))))
                 (dape--warn "Dumping content of <%s>" (buffer-name buffer))
-                (dape--repl-insert-error content))
+                (dape--repl-insert-error (concat content "\n")))
               (delete-process server-process)
               (user-error "Unable to connect to server"))
           (when dape-debug
@@ -2294,7 +2294,7 @@ symbol `dape-connection'."
                       (content (with-current-buffer buffer (buffer-string)))
                       ((not (string-empty-p content))))
             (dape--warn "Dumping content of <%s>" (buffer-name buffer))
-            (dape--repl-insert-error content))))
+            (dape--repl-insert-error (concat content "\n")))))
        (unless (dape--parent conn)
          ;; When connection w/o parent cleanup in source buffer UI
          (dape--stack-frame-cleanup)
@@ -2647,7 +2647,7 @@ CONN is inferred by either last stopped or last created connection."
      (error
       (if (string-empty-p error)
           (dape--warn "Failed to evaluate %S" (substring-no-properties expression))
-        (dape--repl-insert-error error)))
+        (dape--warn error)))
      ((and (get-buffer "*dape-repl*")
            (numberp variablesReference)
            (not (zerop variablesReference)))
@@ -2656,7 +2656,7 @@ CONN is inferred by either last stopped or last created connection."
      (t
       ;; Refresh is needed as evaluate can change values
       (dape--update conn 'variables nil)
-      (dape--repl-insert result)))))
+      (dape--repl-insert (concat result "\n"))))))
 
 ;;;###autoload
 (defun dape (config &optional skip-compile)
@@ -3285,13 +3285,11 @@ Helper for `dape--stack-frame-display'."
                                         (line-beginning-position 2))))
                   (overlay-put ov 'category 'dape-source-line)
                   (overlay-put ov 'face 'dape-source-line-face)
-                  (when deepest-p
-                    (when-let ((exception-description
-                                (dape--exception-description conn)))
-                      (overlay-put ov 'after-string
-                                   (propertize (concat exception-description "\n")
-                                               'face
-                                               'dape-exception-description-face))))
+                  (when-let* (deepest-p
+                              (description (dape--exception-description conn)))
+                    (overlay-put ov 'after-string
+                                 (propertize description 'face
+                                             'dape-exception-description-face)))
                   ov)
                 fringe-indicator-alist
                 (unless deepest-p
@@ -4432,30 +4430,27 @@ or \\[dape-info-watch-abort-changes] to abort changes")))
 (defun dape--repl-insert (string)
   "Insert STRING into REPL.
 If REPL buffer is not live STRING will be displayed in minibuffer."
-  (when (and (stringp string) (not (string-empty-p string)))
-    ;; Pop duplicate newline
-    (when (eql (aref string (1- (length string))) ?\n)
-      (setq string (substring string 0 (1- (length string)))))
-    (setq string (concat "\n" string))
+  (when (stringp string)
     (if-let ((buffer (get-buffer "*dape-repl*")))
         (with-current-buffer buffer
-          (let (start)
-            (if comint-last-prompt
-                (goto-char (1- (marker-position (car comint-last-prompt))))
-              (goto-char (point-max)))
-            (setq start (point-marker))
-            (let ((inhibit-read-only t))
-              (insert string))
-            (goto-char (point-max))
-            ;; HACK Run hooks as if comint-output-filter was executed
-            ;;      Could not get comint-output-filter to work by moving
-            ;;      process marker. Comint removes forgets last prompt
-            ;;      and everything goes to shit.
-            (when-let ((process (get-buffer-process buffer)))
-              (set-marker (process-mark process)
-                          (point-max)))
-            (let ((comint-last-output-start start))
-              (run-hook-with-args 'comint-output-filter-functions string))))
+          (save-excursion
+            (let (start)
+              (if comint-last-prompt
+                  (goto-char (marker-position (car comint-last-prompt)))
+                (goto-char (point-max)))
+              (setq start (point-marker))
+              (let ((inhibit-read-only t))
+                (insert string))
+              (when comint-last-prompt
+                ;; XXX We are writing at the comint marker which
+                ;;     forces us to move it by hand
+                (move-marker (car comint-last-prompt) (point)))
+              (goto-char (point-max))
+              ;; HACK Run hooks as if `comint-output-filter' was executed
+              (when-let ((process (get-buffer-process buffer)))
+                (set-marker (process-mark process) (point-max)))
+              (let ((comint-last-output-start start))
+                (run-hook-with-args 'comint-output-filter-functions string)))))
       ;; Fallback to `message' if repl buffer closed
       (message (string-trim string)))))
 
@@ -4477,17 +4472,10 @@ VARIABLE is expected to be the string representation of a varable."
       (when-let ((start (save-excursion
                           (previous-single-property-change
                            point 'dape--repl-variable)))
-                 (end (save-excursion (next-single-property-change
-                                       point 'dape--repl-variable))))
-        (save-window-excursion
-          (let ((inhibit-read-only t)
-                (line (line-number-at-pos (point) t)))
-            (delete-region start end)
-            (goto-char start)
-            (insert variable)
-            (ignore-errors
-              (goto-char (point-min))
-              (forward-line (1- line)))))))))
+                 (end (save-excursion
+                        (next-single-property-change
+                         point 'dape--repl-variable))))
+        (replace-region-contents start end (lambda () variable))))))
 
 (dape--command-at-line dape-repl-scope-toggle (dape--info-path
                                                dape--repl-variable)
@@ -4520,8 +4508,9 @@ Call CB with the variable as string for insertion into *dape-repl*."
                                        (list 'name dape-info-variable-name-map
                                              'value dape-info-variable-value-map
                                              'prefix dape-repl-variable-prefix-map))
-        (funcall cb (propertize (gdb-table-string table " ")
-                                'dape--repl-variable variable))))))
+        (funcall cb (thread-first (gdb-table-string table " ")
+                                  (concat "\n")
+                                  (propertize 'dape--repl-variable variable)))))))
 
 (defun dape--repl-shorthand-alist ()
   "Return shorthanded version of `dape-repl-commands'."
