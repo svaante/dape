@@ -4885,7 +4885,8 @@ Update `dape--inlay-hint-overlays' from SCOPES."
   "Display current configuration in minibuffer in overlay."
   (pcase-let*
       ((`(,key ,config ,error-message ,hint-rows) dape--minibuffer-cache)
-       (str (string-trim (buffer-substring (minibuffer-prompt-end) (point-max))))
+       (str (string-trim
+             (buffer-substring-no-properties (minibuffer-prompt-end) (point-max))))
        (`(,hint-key ,hint-config) (ignore-errors (dape--config-from-string str)))
        (default-directory
         (or (with-current-buffer dape--minibuffer-last-buffer
