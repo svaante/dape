@@ -5045,6 +5045,8 @@ Where ALIST-KEY exists in `dape-configs'."
           (let ((thing (read (current-buffer))))
             (cond
              ((eq thing '-)
+              (unless (dape--plistp read-config)
+                (user-error "Expecting complete options list before `-'"))
               (cl-loop
                with command = (split-string-shell-command
                                (buffer-substring (point) (point-max)))
@@ -5065,7 +5067,7 @@ Where ALIST-KEY exists in `dape-configs'."
                and return (goto-char (point-max))))
              (t
               (push thing read-config))))))
-      ;; Try to save half baked plist (value missing)
+      ;; Balance half baked options list
       (when (not (dape--plistp read-config))
         (pop read-config))
       (unless (dape--plistp read-config)
