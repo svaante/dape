@@ -1275,16 +1275,15 @@ them then executes BODY."
 ;;; Connection
 
 (defun dape--live-connection (type &optional nowarn require-selected)
-  "Get live connection of TYPE.
+  "Return connection instance of TYPE.
 TYPE is expected to be one of the following symbols:
-
-parent   parent connection.
-last     last created child connection or parent which has an active
-         thread.
-running  last created child connection or parent which has an active
-         thread but no stopped threads.
-stopped  last created child connection or parent which has stopped
-         threads.
+- parent: Parent connection.
+- last: Last created child connection or parent which has an active
+  thread.
+- running: Last created child connection or parent which has an active
+  thread but no stopped threads.
+- stopped: Last created child connection or parent which has stopped
+  threads.
 
 If NOWARN is non nil does not error on no active process.
 If REQUIRE-SELECTED is non nil require returned connection to be the
@@ -1300,14 +1299,14 @@ See `dape--connection-selected'."
          (conn
           (pcase type
             ('parent (car connections))
-            ('last (seq-find #'dape--thread-id ordered))
-            ('running (seq-find (lambda (conn)
-                                  (and (dape--thread-id conn)
-                                       (not (dape--stopped-threads conn))))
-                                ordered))
-            ('stopped (seq-find (lambda (conn)
-                                  (and (dape--stopped-threads conn)))
-                                ordered)))))
+            ('last (cl-find-if #'dape--thread-id ordered))
+            ('running (cl-find-if (lambda (conn)
+                                    (and (dape--thread-id conn)
+                                         (not (dape--stopped-threads conn))))
+                                  ordered))
+            ('stopped (cl-find-if (lambda (conn)
+                                    (and (dape--stopped-threads conn)))
+                                  ordered)))))
     (unless (or nowarn conn)
       (user-error "No %sdebug connection live"
                   ;; `parent' and `last' does not make sense to the user
