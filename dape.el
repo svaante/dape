@@ -474,7 +474,7 @@ Symbol keys (Used by dape):
 
 Note: The char - carries special meaning when reading options in
 `dape' and therefore should not be used be used as an key.
-See `dape-history-use-dash-form'.
+See `dape-history-add'.
 
 Connection to Debug Adapter:
 - If command is specified and not port, dape communicates with the
@@ -514,18 +514,6 @@ Functions and symbols:
                         ((const :tag "Use configurationDone as trigger for launch/attach" defer-launch-attach) boolean)
                         ((const :tag "Adapter type" :type) string)
                         ((const :tag "Request type launch/attach" :request) string)))))
-
-(defcustom dape-history-use-dash-form t
-  "If non nil store configuration options in dash form.
-With dash form - switches the reader mode from properties and
-values to sh like format with ENV PROGRAM ARGS.
-Adapter configuration options are stored in `dape-history'.
-
-This is useful for adapters which follows the
-`:program', `:env' and `:args' convention.
-
-Example: debugpy - ENV=value program arg1 arg2"
-  :type 'boolean)
 
 (defcustom dape-default-config-functions
   '(dape-config-autoport dape-config-tramp)
@@ -744,6 +732,22 @@ The hook is run with one argument, the compilation buffer."
 (defcustom dape-minibuffer-hint t
   "Show `dape-configs' hints in minibuffer."
   :type 'boolean)
+
+(defcustom dape-history-add 'input
+  "How to push configuration options onto `dape-history'.
+
+- input: Store input as is read from minibuffer.
+- evaled: Input is evaluated then checked against base
+  configuration in `dape-configs'.  Each options that differ from
+  base are stored.
+- dash-form: Like evaled but stores options in dash form if possible.
+  With dash form characters after - are interpret in sh like format
+  with ENV PROGRAM ARGS.  This is useful for adapters which accepts
+  :env, :program and :args as launch options.
+  Example: \"launch - ENV=value program arg1 arg2\""
+  :type '(choice (const :tag "Input" input)
+		 (const :tag "Evaluated input" evaled)
+		 (const :tag "Evaluated input in dash form" evaled-dash-form)))
 
 (defcustom dape-ui-debounce-time 0.1
   "Number of seconds to debounce `revert-buffer' for UI buffers."
@@ -2374,24 +2378,29 @@ CONN is inferred for interactive invocations.
 SKIP-COMPILE is used internally for recursive calls."
   (interactive (list (dape--live-connection 'last t)))
   (dape--stack-frame-cleanup)
-  (cond ((and conn (dape--capable-p conn :supportsRestartRequest))
-         (if (and (not skip-compile) (plist-get (dape--config conn) 'compile))
-             (dape--compile (dape--config conn)
-                            (lambda () (dape-restart conn 'skip-compile)))
-           (dape--breakpoints-reset 'from-restart)
-           (setq dape--connection-selected nil)
-           (setf (dape--threads conn) nil
-                 (dape--thread-id conn) nil
-                 (dape--modules conn) nil
-                 (dape--sources conn) nil
-                 (dape--restart-in-progress-p conn) t)
-           (dape--with-request
-               (dape-request conn "restart"
-                             `(:arguments ,(dape--launch-or-attach-arguments conn)))
-             (setf (dape--restart-in-progress-p conn) nil))))
-        (dape-history
-         (dape (apply 'dape--config-eval (dape--config-from-string (car dape-history)))))
-        ((user-error "Unable to derive session to restart, run `dape'"))))
+  (cond
+   ;; Use restart if adapter supports it
+   ((and conn (dape--capable-p conn :supportsRestartRequest))
+    (if (and (not skip-compile) (plist-get (dape--config conn) 'compile))
+        (dape--compile (dape--config conn)
+                       (lambda () (dape-restart conn 'skip-compile)))
+      (dape--breakpoints-reset 'from-restart)
+      (setq dape--connection-selected nil)
+      (setf (dape--threads conn) nil
+            (dape--thread-id conn) nil
+            (dape--modules conn) nil
+            (dape--sources conn) nil
+            (dape--restart-in-progress-p conn) t)
+      (dape--with-request
+          (dape-request conn "restart"
+                        `(:arguments ,(dape--launch-or-attach-arguments conn)))
+        (setf (dape--restart-in-progress-p conn) nil))))
+   ;; Use old connection
+   (dape--connection (dape (dape--config dape--connection)))
+   ;; Use history
+   (dape-history
+    (dape (apply #'dape--config-eval (dape--config-from-string (car dape-history)))))
+   ((user-error "Unable to derive session to restart, run `dape'"))))
 
 (defun dape-kill (conn &optional cb with-disconnect)
   "Kill debug session.
@@ -5097,7 +5106,7 @@ Where ALIST-KEY exists in `dape-configs'."
   "Create string from KEY and POST-EVAL-CONFIG."
   (pcase-let* ((config-diff (dape--config-diff key post-eval-config))
                ((map :env :program :args) config-diff)
-               (zap-form-p (and dape-history-use-dash-form
+               (zap-form-p (and (eq dape-history-add 'evaled-dash-form)
                                 (or (stringp program)
                                     (and (consp env) (keywordp (car env))
                                          (not args))))))
@@ -5216,8 +5225,14 @@ See `modes' and `ensure' in `dape-configs'."
            ;; Take first suggested config if only one exist
            (and (length= suggested-configs 1)
                 (car suggested-configs))))
-         (default-value (when initial-contents
-                          (concat (car (string-split initial-contents)) " "))))
+         (default-value
+          (when initial-contents
+            (pcase-let ((`(,key ,config)
+                         (dape--config-from-string initial-contents)))
+              (list
+               (dape--config-to-string
+                key (ignore-errors (dape--config-eval key config)))
+               (format "%s " key))))))
     (setq dape--minibuffer-last-buffer (current-buffer)
           dape--minibuffer-cache nil)
     (minibuffer-with-setup-hook
@@ -5241,7 +5256,7 @@ See `modes' and `ensure' in `dape-configs'."
           (dape--minibuffer-hint))
       (pcase-let*
           ((str
-            (let ((history-add-new-input nil))
+            (let ((history-add-new-input (eq dape-history-add 'input)))
               (read-from-minibuffer
                "Run adapter: "
                initial-contents
@@ -5266,8 +5281,8 @@ See `modes' and `ensure' in `dape-configs'."
            (`(,key ,config)
             (dape--config-from-string (substring-no-properties str)))
            (evaled-config (dape--config-eval key config)))
-        (setq dape-history (cons (dape--config-to-string key evaled-config)
-                                 dape-history))
+        (unless (eq dape-history-add 'input)
+          (push (dape--config-to-string key evaled-config) dape-history))
         evaled-config))))
 
 
