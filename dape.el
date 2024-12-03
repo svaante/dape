@@ -5228,7 +5228,7 @@ See `modes' and `ensure' in `dape-configs'."
          (default-value
           (when initial-contents
             (pcase-let ((`(,key ,config)
-                         (dape--config-from-string initial-contents)))
+                         (ignore-errors (dape--config-from-string initial-contents))))
               (list
                (dape--config-to-string
                 key (ignore-errors (dape--config-eval key config)))
