@@ -2440,7 +2440,7 @@ connection.  CONN is inferred for interactive invocations."
   (dape--kill-buffers 'skip-process-buffers)
   (dape--with-request
       (dape-request conn "disconnect"
-                    (list :terminateDebuggee nil))
+                    (list :terminateDebuggee :json-false))
     (jsonrpc-shutdown conn)
     (dape--kill-buffers)))
 
