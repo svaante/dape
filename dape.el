@@ -3677,8 +3677,8 @@ without log or expression breakpoint"))))))
 (dape--buffer-map dape-info-exceptions-line-map dape-info-exceptions-toggle)
 
 (defvar dape--info-breakpoints-font-lock-keywords
-  '(("^\\(y\\)"  (1 font-lock-warning-face))
-    ("^\\(n\\)"  (1 font-lock-doc-face)))
+  '(("^ *\\(y\\)"  (1 font-lock-warning-face))
+    ("^ *\\(n\\)"  (1 font-lock-doc-face)))
   "Keywords for `dape-info-breakpoints-mode'.")
 
 (define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
