@@ -2655,7 +2655,7 @@ CONN is inferred by either last stopped or last created connection."
      (error
       (if (string-empty-p error)
           (dape--warn "Failed to evaluate %S" (substring-no-properties expression))
-        (dape--warn error)))
+        (dape--repl-insert-error error)))
      ((and (get-buffer "*dape-repl*")
            (numberp variablesReference)
            (not (zerop variablesReference)))
