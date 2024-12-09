@@ -3759,7 +3759,7 @@ without log or expression breakpoint"))))))
 
 (defvar dape--info-thread-position nil
   "`dape-info-thread-mode' marker for `overlay-arrow-variable-list'.")
-(defvar-local dape--info-threads-fetch-other-threads-p nil
+(defvar-local dape--info-threads-skip-other-p nil
   ;; XXX Workaround for some adapters seemingly not being able to
   ;;     handle parallel stack traces.
   "If non nil skip fetching thread information for other threads.")
@@ -3787,7 +3787,7 @@ See `dape-request' for expected CB signature."
   (let (threads)
     (cond
      ;; Current CONN is benched
-     (dape--info-threads-fetch-other-threads-p
+     (dape--info-threads-skip-other-p
       (dape--request-continue cb))
      ;; Stopped threads
      ((setq threads
@@ -3806,12 +3806,12 @@ See `dape-request' for expected CB signature."
           (dape--with-request (dape--stack-trace conn thread 1)
             (plist-put thread :request-in-flight nil)
             ;; Time response, if slow bench that CONN
-            (when (and (not dape--info-threads-fetch-other-threads-p)
+            (when (and (not dape--info-threads-skip-other-p)
                        (time-less-p (timer-relative-time
                                      start-time dape-info--threads-tt-bench)
                                     (current-time)))
-              (dape--warn "Disabling stack trace info in Threads buffer (slow)")
-              (setq dape--info-threads-fetch-other-threads-p t))
+              (dape--warn "Disabling stack info for other threads (slow)")
+              (setq dape--info-threads-skip-other-p t))
             ;; When all request have resolved return
             (when (length= threads (setf responses (1+ responses)))
               (dape--request-continue cb))))))
