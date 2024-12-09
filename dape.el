@@ -1447,6 +1447,9 @@ See `dape--connection-selected'."
   "Error string for request timeout.
 Useful for `eq' comparison to derive request timeout error.")
 
+(defvar dape--request-blocking nil
+  "If non nil do request blocking.")
+
 (defun dape-request (conn command arguments &optional cb)
   "Send request with COMMAND and ARGUMENTS to adapter CONN.
 If callback function CB is supplied, it's called on timeout
@@ -1454,25 +1457,32 @@ and success.
 
 CB will be called with PLIST and ERROR.
 On success, ERROR will be nil.
-On failure, ERROR will be an string."
-  (jsonrpc-async-request conn command arguments
-                         :success-fn
-                         (when (functionp cb)
-                           (lambda (result)
-                             (funcall cb (plist-get result :body)
-                                      (unless (eq (plist-get result :success) t)
-                                        (or (plist-get result :message) "")))))
-                         :error-fn 'ignore ;; will never be called
-                         :timeout-fn
-                         (when (functionp cb)
-                           (lambda ()
-                             (dape--warn
-                              "Command %S timed out after %d seconds, the \
+On failure, ERROR will be an string.
+
+If `dape--request-blocking' is non nil do blocking request."
+  (cl-flet ((success-fn (result)
+              (funcall cb (plist-get result :body)
+                       (unless (eq (plist-get result :success) t)
+                         (or (plist-get result :message) ""))))
+            (timeout-fn ()
+              (dape--warn
+               "Command %S timed out after %d seconds, the \
 timeout period is configurable with `dape-request-timeout'"
-                              command
-                              dape-request-timeout)
-                             (funcall cb nil dape--timeout-error)))
-                         :timeout dape-request-timeout))
+               command
+               dape-request-timeout)
+              (funcall cb nil dape--timeout-error)))
+    (if dape--request-blocking
+        (let ((result (jsonrpc-request conn command arguments)))
+          (when cb (success-fn result)))
+      (jsonrpc-async-request conn command arguments
+                             :success-fn
+                             (when cb
+                               #'success-fn)
+                             :error-fn #'ignore ;; will never be called
+                             :timeout-fn
+                             (when cb
+                               #'timeout-fn)
+                             :timeout dape-request-timeout))))
 
 (defun dape--initialize (conn)
   "Initialize CONN."
@@ -2559,23 +2569,18 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
    (let* ((conn (dape--live-connection 'stopped))
           (current-thread (dape--current-thread conn))
           (collection
-           (let (done)
+           ;; Only one stack frame is guaranteed to be available,
+           ;; so we need to reach out to make sure we got the full set.
+           ;; See `dape--stack-trace'.
+           (let ((dape--request-blocking t))
              (dape--with-request
-                 (dape--stack-trace conn current-thread dape-stack-trace-levels)
-               ;; Only one stack frame is guaranteed to be available,
-               ;; so we need to reach out to make sure we got the full set.
-               ;; See `dape--stack-trace'.
-               (setf done t))
-             (with-timeout (5 nil)
-               (while (not done) (accept-process-output nil 0.1)))
+                 (dape--stack-trace conn current-thread dape-stack-trace-levels))
              (mapcar (lambda (stack) (cons (plist-get stack :name)
                                            (plist-get stack :id)))
                      (plist-get current-thread :stackFrames))))
           (stack-name
            (completing-read (format "Select stack (current %s): "
-                                    (thread-first conn
-                                                  (dape--current-stack-frame)
-                                                  (plist-get :name)))
+                                    (plist-get (dape--current-stack-frame conn) :name))
                             collection nil t)))
      (list conn (alist-get stack-name collection nil nil 'equal))))
   (setf (dape--stack-id conn) stack-id)
