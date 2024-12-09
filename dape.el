@@ -1405,29 +1405,29 @@ See `dape--connection-selected'."
     (with-slots (last-id n-sent-notifs) conn
       (cond ((eq subtype 'notification)
              (cl-incf n-sent-notifs)
-             `(:type "event"
-                     :seq ,(+ last-id n-sent-notifs)
-                     :event ,method
-                     :body ,params))
+             `( :type "event"
+                :seq ,(+ last-id n-sent-notifs)
+                :event ,method
+                :body ,params))
             ((eq subtype 'request)
-             `(:type "request"
-                     :seq ,(+ (setq last-id id) n-sent-notifs)
-                     :command ,method
-                     ,@(when params `(:arguments ,params))))
+             `( :type "request"
+                :seq ,(+ (setq last-id id) n-sent-notifs)
+                :command ,method
+                ,@(when params `(:arguments ,params))))
             (error
-             `(:type "response"
-                     :seq ,(+ (setq last-id id) n-sent-notifs)
-                     :request_seq ,last-id
-                     :success :json-false
-                     :message ,(plist-get error :message)
-                     :body ,(plist-get error :data)))
+             `( :type "response"
+                :seq ,(+ (setq last-id id) n-sent-notifs)
+                :request_seq ,last-id
+                :success :json-false
+                :message ,(plist-get error :message)
+                :body ,(plist-get error :data)))
             (t
-             `(:type "response"
-                     :seq ,(+ (setq last-id id) n-sent-notifs)
-                     :request_seq ,last-id
-                     :command ,method
-                     :success t
-                     ,@(and result `(:body ,result))))))))
+             `( :type "response"
+                :seq ,(+ (setq last-id id) n-sent-notifs)
+                :request_seq ,last-id
+                :command ,method
+                :success t
+                ,@(and result `(:body ,result))))))))
 
 (cl-defmethod jsonrpc-convert-from-endpoint ((_conn dape-connection) dap-message)
   "Convert JSONRPCesque DAP-MESSAGE to JSONRPC plist."
@@ -1439,6 +1439,7 @@ See `dape--connection-selected'."
     (cond ((string= type "event")
            `(:method ,event :params ,body))
           ((string= type "response")
+           ;; Skipping :error field to skip error handling by signal
            `(:id ,request_seq :result ,dap-message))
           (command
            `(:id ,seq :method ,command :params ,arguments)))))
@@ -1525,8 +1526,7 @@ timeout period is configurable with `dape-request-timeout'"
            ;;       evaluation.  So it should be fine to keep
            ;;       supporting it even if it's not the way
            ;;       forwards.
-           (:null
-            nil)
+           (:null nil)
            ((pred vectorp)
             (cl-map 'vector #'transform-value value))
            ((pred listp)
@@ -3336,17 +3336,19 @@ Buffer is displayed with `dape-display-source-buffer-action'."
            (thread (dape--current-thread conn))
            (deepest-p (eq selected (car (plist-get thread :stackFrames)))))
       (cl-flet ((displayable-frame ()
-                  (cl-loop with frames = (plist-get thread :stackFrames)
-                           for cell on frames for (frame . _rest) = cell
-                           when (eq frame selected) return
-                           (cl-loop for frame in cell
-                                    for source = (plist-get frame :source) when
-                                    (or (when-let ((reference (plist-get source :sourceReference)))
-                                          (< 0 reference))
-                                        (when-let* ((remote-path (plist-get source :path))
-                                                    (path (dape--path-local conn remote-path)))
-                                          (file-exists-p path)))
-                                    return frame))))
+                  (cl-loop
+                   with frames = (plist-get thread :stackFrames)
+                   for cell on frames for (frame . _rest) = cell
+                   when (eq frame selected) return
+                   (cl-loop
+                    for frame in cell
+                    for source = (plist-get frame :source) when
+                    (or (when-let ((reference (plist-get source :sourceReference)))
+                          (< 0 reference))
+                        (when-let* ((remote-path (plist-get source :path))
+                                    (path (dape--path-local conn remote-path)))
+                          (file-exists-p path)))
+                    return frame))))
         ;; Check if frame source should be available, otherwise fetch all
         (if-let ((frame (displayable-frame)))
             (dape--stack-frame-display-1 conn frame deepest-p)
@@ -3526,18 +3528,18 @@ See `dape--info-call-update-with'."
     buffer))
 
 (defun dape-info-update ()
-  "Update and display `dape-info-*' buffers."
+  "Update and display dape info buffers."
   (dolist (buffer (dape--info-buffer-list))
     (when (get-buffer-window buffer)
       (with-current-buffer buffer
         (revert-buffer)))))
 
 (defun dape-info (&optional maybe-kill kill)
-  "Update and display *dape-info* buffers.
+  "Toggle dape info buffers.
 When called interactively MAYBE-KILL is non nil.
-When MAYBE-KILL is non nil kill buffers if all *dape-info* buffers
-are already displayed.
-When KILL is non nil kill buffers *dape-info* buffers.
+When MAYBE-KILL is non nil kill buffers if all buffers are already
+displayed.
+When KILL is non nil kill buffers dape info buffers.
 
 See `dape-info-buffer-window-groups' to customize which buffers get
 displayed."
@@ -3920,7 +3922,7 @@ See `dape-request' for expected CB signature."
   (add-to-list 'overlay-arrow-variable-list 'dape--info-stack-position))
 
 (defun dape--info-stack-buffer-insert (conn current-stack-frame stack-frames)
-  "Helper for inserting stack info into *dape-info Stack* buffer.
+  "Helper for inserting stack info into stack buffer.
 Create table from CURRENT-STACK-FRAME and STACK-FRAMES and insert into
 current buffer with CONN config."
   (cl-loop with table = (make-gdb-table)
@@ -4531,8 +4533,8 @@ Call CB with the variable as string for insertion into *dape-repl*."
            finally return shorthand-alist))
 
 (defun dape--repl-input-sender (dummy-process input)
-  "Dape repl `comint-input-sender'.
-Send INPUT to DUMMY-PROCESS."
+  "Send INPUT to DUMMY-PROCESS.
+Called by `comint-input-sender' in `dape-repl-mode'."
   (let (cmd)
     (cond
      ;; Run previous input
