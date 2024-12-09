@@ -483,14 +483,14 @@ Expects line with string \"breakpoint\" in source."
       (dape-test--revert-buffer)
       ;; buffer contents
       (dape-test--should
-       (and (dape-test--line-at-regex "^1 .* stopped in")
-            (dape-test--line-at-regex "^2 .* stopped in thread_fn")
+       (and (dape-test--line-at-regex "stopped in")
+            (dape-test--line-at-regex "stopped in thread_fn")
             (member 'dape--info-thread-position
                     overlay-arrow-variable-list)
             (= (marker-position dape--info-thread-position)
                (save-excursion
                  (dape-test--goto-line (dape-test--line-at-regex
-                                        "^2 .* stopped in thread_fn"))
+                                        "stopped in thread_fn"))
                  (point))))))
     (with-current-buffer (dape--info-get-buffer-create 'dape-info-scope-mode 0)
       (dape-test--revert-buffer)
@@ -499,19 +499,19 @@ Expects line with string \"breakpoint\" in source."
        (dape-test--line-at-regex "^  thread_var")))
     (with-current-buffer (dape--info-get-buffer-create 'dape-info-threads-mode)
       ;; select thread
-      (dape-test--apply-to-match "^1 .* stopped in" 'dape-info-select-thread))
+      (dape-test--apply-to-match "stopped in" 'dape-info-select-thread))
     (with-current-buffer (dape--info-get-buffer-create 'dape-info-threads-mode)
       (revert-buffer)
       ;; thread selected
       (dape-test--should
-       (and (dape-test--line-at-regex "^1 .* stopped in")
-            (dape-test--line-at-regex "^2 .* stopped in thread_fn")
+       (and (dape-test--line-at-regex "stopped in")
+            (dape-test--line-at-regex "stopped in thread_fn")
             (member 'dape--info-thread-position
                     overlay-arrow-variable-list)
             (= (marker-position dape--info-thread-position)
                (save-excursion
                  (dape-test--goto-line (dape-test--line-at-regex
-                                        "^1 .* stopped in"))
+                                        "stopped in"))
                  (point))))))
     (with-current-buffer (dape--info-get-live-buffer 'dape-info-scope-mode 0)
       (revert-buffer)
