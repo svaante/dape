@@ -688,6 +688,11 @@ left-to-right display order of the properties."
     ("out" . dape-step-out)
     ("up" . dape-stack-select-up)
     ("down" . dape-stack-select-down)
+    ("threads" . dape-list-threads)
+    ("stack" . dape-list-stack)
+    ("modules" . dape-list-modules)
+    ("sources" . dape-list-sources)
+    ("breakpoints" . dape-list-breakpoints)
     ("restart" . dape-restart)
     ("kill" . dape-kill)
     ("disconnect" . dape-disconnect-quit)
@@ -2604,6 +2609,31 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (interactive (list (dape--live-connection 'stopped) 1))
   (dape-stack-select-up conn (* n -1)))
 
+(defun dape-list-threads ()
+  "List threads for active debug session."
+  (interactive)
+  (dape--repl-insert-info-buffer 'dape-info-threads-mode))
+
+(defun dape-list-stack ()
+  "List stack for active debug session."
+  (interactive)
+  (dape--repl-insert-info-buffer 'dape-info-stack-mode))
+
+(defun dape-list-modules ()
+  "List modules for active debug session."
+  (interactive)
+  (dape--repl-insert-info-buffer 'dape-info-modules-mode))
+
+(defun dape-list-sources ()
+  "List sources for active debug session."
+  (interactive)
+  (dape--repl-insert-info-buffer 'dape-info-sources-mode))
+
+(defun dape-list-breakpoints ()
+  "List breakpoints."
+  (interactive)
+  (dape--repl-insert-info-buffer 'dape-info-breakpoints-mode))
+
 (defun dape-watch-dwim (expression &optional skip-add skip-remove)
   "Add or remove watch for EXPRESSION.
 Watched symbols are displayed in *`dape-info' Watch* buffer.
@@ -2658,8 +2688,8 @@ CONN is inferred by either last stopped or last created connection."
      ((and (get-buffer "*dape-repl*")
            (numberp variablesReference)
            (not (zerop variablesReference)))
-      (dape--repl-create-variable-table
-       conn (plist-put body :name expression) #'dape--repl-insert))
+      (dape--repl-insert
+       (concat (dape--repl-variable (plist-put body :name expression)) "\n")))
      (t
       ;; Refresh is needed as evaluate can change values
       (dape--update conn 'variables nil)
@@ -3630,7 +3660,8 @@ displayed."
 (dape--command-at-line dape-info-breakpoint-delete (dape--info-breakpoint)
   "Delete breakpoint at line in dape info buffer."
   (dape--breakpoint-remove dape--info-breakpoint)
-  (dape--display-buffer (dape--info-get-buffer-create 'dape-info-breakpoints-mode)))
+  (revert-buffer)
+  (run-hooks 'dape-update-ui-hook))
 
 (dape--command-at-line dape-info-breakpoint-log-edit (dape--info-breakpoint)
   "Edit breakpoint at line in dape info buffer."
@@ -3660,6 +3691,7 @@ without log or expression breakpoint"))))))
               dape--data-breakpoints))
   (when-let ((conn (dape--live-connection 'stopped t)))
     (dape--with-request (dape--set-data-breakpoints conn)))
+  (revert-buffer)
   (run-hooks 'dape-update-ui-hook))
 
 (dape--buffer-map dape-info-data-breakpoints-line-map nil
@@ -3670,9 +3702,10 @@ without log or expression breakpoint"))))))
   "Toggle exception at line in dape info buffer."
   (plist-put dape--info-exception :enabled
              (not (plist-get dape--info-exception :enabled)))
-  (dape-info-update)
   (dolist (conn (dape--live-connections))
-    (dape--set-exception-breakpoints conn)))
+    (dape--set-exception-breakpoints conn))
+  (revert-buffer)
+  (run-hooks 'dape-update-ui-hook))
 
 (dape--buffer-map dape-info-exceptions-line-map dape-info-exceptions-toggle)
 
@@ -4191,12 +4224,10 @@ current buffer with CONN config."
             (push prop columns)))))
     (nreverse columns)))
 
-(defun dape--info-scope-add-variable (table object ref path expanded-p maps)
+(defun dape--info-scope-add-variable (table object ref path expanded-p)
   "Add variable OBJECT with REF and PATH to TABLE.
-EXPANDED-P is called with PATH and OBJECT to determine if function
-should continue to be called recursively.
-MAPS is an PLIST where the VALUES add `keymaps' to `name', `value'
-or `prefix' part of variable string."
+EXPANDED-P is called with PATH and OBJECT to determine if recursive
+calls should stop."
   (let* ((name (or (plist-get object :name) ""))
          (type (or (plist-get object :type) ""))
          (value (or (plist-get object :value)
@@ -4207,43 +4238,39 @@ or `prefix' part of variable string."
          (expanded (funcall expanded-p path))
          row)
     (setq name
-          (apply 'propertize name
-                 'font-lock-face font-lock-variable-name-face
-                 'face font-lock-variable-name-face
-                 (when-let ((map (plist-get maps 'name)))
-                   (list 'mouse-face 'highlight
-                         'help-echo "mouse-2: create or remove watch expression"
-                         'keymap map)))
+          (propertize name
+                      'font-lock-face font-lock-variable-name-face
+                      'face font-lock-variable-name-face
+                      'mouse-face 'highlight
+                      'help-echo "mouse-2: create or remove watch expression"
+                      'keymap dape-info-variable-name-map)
           type
           (propertize type
                       'font-lock-face font-lock-type-face
                       'face font-lock-type-face)
           value
-          (apply 'propertize value
-                 (when-let ((map (plist-get maps 'value)))
-                   (list 'mouse-face 'highlight
-                         'help-echo "mouse-2: edit value"
-                         'keymap map)))
+          (propertize value
+                      'mouse-face 'highlight
+                      'help-echo "mouse-2: edit value"
+                      'keymap dape-info-variable-value-map)
           prefix
-          (let ((map (plist-get maps 'prefix)))
-            (cond
-             ((not map) prefix)
-             ((zerop (or (plist-get object :variablesReference) 0))
-              (concat prefix "  "))
-             ((and expanded (plist-get object :variables))
-              (concat
-               (propertize (concat prefix "-")
-                           'mouse-face 'highlight
-                           'help-echo "mouse-2: contract"
-                           'keymap map)
-               " "))
-             (t
-              (concat
-               (propertize (concat prefix "+")
-                           'mouse-face 'highlight
-                           'help-echo "mouse-2: expand"
-                           'keymap map)
-               " ")))))
+          (cond
+           ((zerop (or (plist-get object :variablesReference) 0))
+            (concat prefix "  "))
+           ((and expanded (plist-get object :variables))
+            (concat
+             (propertize (concat prefix "-")
+                         'mouse-face 'highlight
+                         'help-echo "mouse-2: contract"
+                         'keymap dape-info-variable-prefix-map)
+             " "))
+           (t
+            (concat
+             (propertize (concat prefix "+")
+                         'mouse-face 'highlight
+                         'help-echo "mouse-2: expand"
+                         'keymap dape-info-variable-prefix-map)
+             " "))))
     (setq row (dape--info-locals-table-columns-list
                `((name  . ,name)
                  (type  . ,type)
@@ -4260,9 +4287,9 @@ or `prefix' part of variable string."
     (when expanded
       ;; TODO Should be paged
       (dolist (variable (plist-get object :variables))
-        (dape--info-scope-add-variable
-         table variable (plist-get object :variablesReference)
-         path expanded-p maps)))))
+        (dape--info-scope-add-variable table variable
+                                       (plist-get object :variablesReference)
+                                       path expanded-p)))))
 
 ;; FIXME Empty header line when adapter is killed
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
@@ -4306,10 +4333,7 @@ or `prefix' part of variable string."
               object
               (plist-get scope :variablesReference)
               (list dape--info-scope-index)
-              #'dape--variable-expanded-p
-              (list 'name dape-info-variable-name-map
-                    'value dape-info-variable-value-map
-                    'prefix dape-info-variable-prefix-map))
+              #'dape--variable-expanded-p)
              finally (insert (gdb-table-string table " ")))))))))
 
 
@@ -4362,10 +4386,7 @@ or `prefix' part of variable string."
                                            dape-info-variable-table-aligned)
                            do
                            (dape--info-scope-add-variable table watch nil '(watch)
-                                                          #'dape--variable-expanded-p
-                                                          (list 'name dape-info-variable-name-map
-                                                                'value dape-info-variable-value-map
-                                                                'prefix dape-info-variable-prefix-map))
+                                                          #'dape--variable-expanded-p)
                            finally (insert (gdb-table-string table " "))))))))))
      (t
       (dape--info-update-with
@@ -4375,10 +4396,7 @@ or `prefix' part of variable string."
                                  dape-info-variable-table-aligned)
                  do
                  (dape--info-scope-add-variable table watch nil '(watch)
-                                                #'dape--variable-expanded-p
-                                                (list 'name dape-info-variable-name-map
-                                                      'value dape-info-variable-value-map
-                                                      'prefix dape-info-variable-prefix-map))
+                                                #'dape--variable-expanded-p)
                  finally (insert (gdb-table-string table " "))))))))
 
 (defvar dape--info-watch-edit-font-lock-keywords
@@ -4471,53 +4489,60 @@ If REPL buffer is not live STRING will be displayed in minibuffer."
               (dummy-process (get-buffer-process buffer)))
     (comint-output-filter dummy-process dape--repl-prompt)))
 
-(defun dape--repl-update-variable (point variable)
-  "Insert VARIABLE at POINT in *dape-repl* buffer.
-VARIABLE is expected to be the string representation of a varable."
-  (when-let ((buffer (get-buffer "*dape-repl*")))
-    (with-current-buffer buffer
-      (when-let ((start (save-excursion
-                          (previous-single-property-change
-                           point 'dape--repl-variable)))
-                 (end (save-excursion
-                        (next-single-property-change
-                         point 'dape--repl-variable))))
-        (replace-region-contents start end (lambda () variable))))))
+(defun dape--repl-revert-region (&rest _)
+  "Revert region by cont text property dape--revert-tag."
+  (when-let ((fn (get-text-property (point) 'dape--revert-fn))
+             (start (save-excursion
+                      (previous-single-property-change
+                       (1+ (point)) 'dape--revert-tag)))
+             (end (save-excursion
+                    (next-single-property-change
+                     (point) 'dape--revert-tag))))
+    (let ((line (line-number-at-pos (point) t)))
+      (save-excursion
+        (delete-region start end)
+        (insert (funcall fn)))
+      (ignore-errors
+        (goto-char (point-min))
+        (forward-line (1- line))))))
 
-(dape--command-at-line dape-repl-scope-toggle (dape--info-path
-                                               dape--repl-variable)
-  "Expand or contract variable at line in dape repl buffer."
-  (unless (dape--live-connection 'stopped)
-    (user-error "No stopped threads"))
-  (puthash dape--info-path (not (gethash dape--info-path dape--variable-expanded-p))
-           dape--variable-expanded-p)
-  (dape--repl-create-variable-table (or (dape--live-connection 'stopped t)
-                                        (dape--live-connection 'last))
-                                    dape--repl-variable
-                                    (apply-partially #'dape--repl-update-variable
-                                                     (1+ (point)))))
+(defun dape--repl-variable (variable)
+  "Return VARIABLE string representation with CONN."
+  (when-let* ((conn (or (dape--live-connection 'stopped t)
+                        (dape--live-connection 'last t))))
+    (let ((dape--request-blocking t))
+      (dape--variables conn variable #'ignore)
+      (dape--variables-recursive conn variable `(,(plist-get variable :name) repl)
+                                 #'dape--variable-expanded-p #'ignore)))
+  (let ((table (make-gdb-table)))
+    (setf (gdb-table-right-align table) dape-info-variable-table-aligned)
+    (dape--info-scope-add-variable table variable nil '(repl) #'dape--variable-expanded-p)
+    (propertize (gdb-table-string table " ")
+                'dape--revert-tag (cl-gensym "dape-region-tag")
+                'dape--revert-fn (apply-partially #'dape--repl-variable variable))))
 
-(dape--buffer-map dape-repl-variable-prefix-map dape-repl-scope-toggle)
+(defun dape--repl-info-string (mode)
+  "Return buffer content by MODE and `revert-buffer'."
+  (with-temp-buffer
+    (funcall mode)
+    (let ((dape-ui-debounce-time 0)
+          (dape--request-blocking t))
+      (revert-buffer))
+    (font-lock-ensure)
+    (cl-loop with str = (buffer-substring (point-min) (point-max))
+             for (start end props) in (object-intervals str) do
+             (put-text-property start end 'font-lock-face (plist-get props 'face) str)
+             finally do
+             (add-text-properties
+              0 (length str)
+              `( dape--revert-tag ,(cl-gensym "dape-region-tag")
+                 dape--revert-fn ,(apply-partially #'dape--repl-info-string mode))
+              str)
+             finally return str)))
 
-(defun dape--repl-create-variable-table (conn variable cb)
-  "Create VARIABLE string representation with CONN.
-Call CB with the variable as string for insertion into *dape-repl*."
-  (dape--with-request (dape--variables conn variable)
-    (dape--with-request
-        (dape--variables-recursive conn variable
-                                   (list (plist-get variable :name) 'repl)
-                                   #'dape--variable-expanded-p)
-      (let ((table (make-gdb-table)))
-        (setf (gdb-table-right-align table)
-              dape-info-variable-table-aligned)
-        (dape--info-scope-add-variable table variable nil
-                                       '(repl) #'dape--variable-expanded-p
-                                       (list 'name dape-info-variable-name-map
-                                             'value dape-info-variable-value-map
-                                             'prefix dape-repl-variable-prefix-map))
-        (funcall cb (thread-first (gdb-table-string table " ")
-                                  (concat "\n")
-                                  (propertize 'dape--repl-variable variable)))))))
+(defun dape--repl-insert-info-buffer (mode)
+  "Insert string into repl by MODE and `revert-buffer'."
+  (dape--repl-insert (concat (dape--repl-info-string mode) "\n")))
 
 (defun dape--repl-shorthand-alist ()
   "Return shorthanded version of `dape-repl-commands'."
@@ -4646,7 +4671,8 @@ Called by `comint-input-sender' in `dape-repl-mode'."
   "Mode for *dape-repl* buffer."
   :group 'dape
   :interactive nil
-  (setq-local comint-prompt-read-only t
+  (setq-local revert-buffer-function #'dape--repl-revert-region
+              comint-prompt-read-only t
               comint-scroll-to-bottom-on-input t
               ;; HACK ? Always keep prompt at the bottom of the window
               scroll-conservatively 101
@@ -5306,8 +5332,7 @@ See `eldoc-documentation-functions', for more information."
           (let ((table (make-gdb-table)))
             (dape--info-scope-add-variable table (plist-put body :name name)
                                            nil '(hover)
-                                           #'dape--variable-expanded-p
-                                           nil)
+                                           #'dape--variable-expanded-p)
             (funcall cb (gdb-table-string table " ")))))))
   t)
 
