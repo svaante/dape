@@ -3805,7 +3805,8 @@ without log or expression breakpoint"))))))
 
 (dape--command-at-line dape-info-select-thread (dape--info-thread dape--info-conn)
   "Select thread at line in dape info buffer."
-  (dape-select-thread dape--info-conn (plist-get dape--info-thread :id)))
+  (dape-select-thread dape--info-conn (plist-get dape--info-thread :id))
+  (revert-buffer))
 
 (defvar dape--info-threads-font-lock-keywords
   (append gdb-threads-font-lock-keywords
@@ -3874,7 +3875,7 @@ See `dape-request' for expected CB signature."
          with current-thread = (dape--current-thread conn)
          with conn-prefix-p = (length> (cl-remove-if-not 'dape--threads conns) 1)
          with line-count = 0
-         with selected-line = nil
+         with selected-line
          for conn in conns
          for index upfrom 1 do
          (cl-loop
@@ -3914,6 +3915,7 @@ See `dape-request' for expected CB signature."
            (list
             'dape--info-conn conn
             'dape--info-thread thread
+            'dape--selected (eq current-thread thread)
             'mouse-face 'highlight
             'keymap dape-info-threads-line-map
             'help-echo "mouse-2, RET: select thread")))
@@ -3939,7 +3941,8 @@ See `dape-request' for expected CB signature."
 (dape--command-at-line dape-info-stack-select (dape--info-frame)
   "Select stack at line in dape info buffer."
   (dape-select-stack (dape--live-connection 'stopped)
-                     (plist-get dape--info-frame :id)))
+                     (plist-get dape--info-frame :id))
+  (revert-buffer))
 
 (dape--buffer-map dape-info-stack-line-map dape-info-stack-select)
 
@@ -3955,7 +3958,11 @@ See `dape-request' for expected CB signature."
 Create table from CURRENT-STACK-FRAME and STACK-FRAMES and insert into
 current buffer with CONN config."
   (cl-loop with table = (make-gdb-table)
+           with selected-line
+           for line from 1
            for frame in stack-frames do
+           (when (eq current-stack-frame frame)
+             (setq selected-line line))
            (gdb-table-add-row
             table
             (list
@@ -3975,14 +3982,14 @@ current buffer with CONN config."
               " "))
             (list
              'dape--info-frame frame
+             'dape--selected (eq current-stack-frame frame)
              'mouse-face 'highlight
              'keymap dape-info-stack-line-map
              'help-echo "mouse-2, RET: Select frame"))
-           finally (insert (gdb-table-string table " ")))
-  (cl-loop for stack-frame in stack-frames
-           for line from 1
-           until (eq current-stack-frame stack-frame)
-           finally (gdb-mark-line line dape--info-stack-position)))
+           finally do
+           (insert (gdb-table-string table " "))
+           (when selected-line
+             (gdb-mark-line selected-line dape--info-stack-position))))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-stack-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
@@ -4451,6 +4458,9 @@ or \\[dape-info-watch-abort-changes] to abort changes")))
 (defvar dape--repl-prompt "> "
   "Dape repl prompt.")
 
+(defvar dape--repl-marker nil
+  "`dape-repl-mode' marker for `overlay-arrow-variable-list'.")
+
 (defun dape--repl-insert (string)
   "Insert STRING into REPL.
 If REPL buffer is not live STRING will be displayed in minibuffer."
@@ -4488,6 +4498,12 @@ If REPL buffer is not live STRING will be displayed in minibuffer."
               (dummy-process (get-buffer-process buffer)))
     (comint-output-filter dummy-process dape--repl-prompt)))
 
+(defun dape--repl-move-marker (point)
+  (save-excursion
+    (goto-char point)
+    (when (text-property-search-backward 'dape--selected t)
+      (gdb-mark-line (line-number-at-pos) dape--repl-marker))))
+
 (defun dape--repl-revert-region (&rest _)
   "Revert region by cont text property dape--revert-tag."
   (when-let ((fn (get-text-property (point) 'dape--revert-fn))
@@ -4498,9 +4514,9 @@ If REPL buffer is not live STRING will be displayed in minibuffer."
                     (next-single-property-change
                      (point) 'dape--revert-tag))))
     (let ((line (line-number-at-pos (point) t)))
-      (save-excursion
-        (delete-region start end)
-        (insert (funcall fn)))
+      (delete-region start end)
+      (insert (funcall fn))
+      (dape--repl-move-marker (1+ (point)))
       (ignore-errors
         (goto-char (point-min))
         (forward-line (1- line))))))
@@ -4541,7 +4557,10 @@ If REPL buffer is not live STRING will be displayed in minibuffer."
 
 (defun dape--repl-insert-info-buffer (mode)
   "Insert string into repl by MODE and `revert-buffer'."
-  (dape--repl-insert (concat (dape--repl-info-string mode) "\n")))
+  (dape--repl-insert (concat (dape--repl-info-string mode) "\n"))
+  (when-let ((buffer (get-buffer "*dape-repl*")))
+    (with-current-buffer buffer
+      (dape--repl-move-marker (point-max)))))
 
 (defun dape--repl-shorthand-alist ()
   "Return shorthanded version of `dape-repl-commands'."
@@ -4671,6 +4690,7 @@ Called by `comint-input-sender' in `dape-repl-mode'."
   :group 'dape
   :interactive nil
   (setq-local revert-buffer-function #'dape--repl-revert-region
+              dape--repl-marker (make-marker)
               comint-prompt-read-only t
               comint-scroll-to-bottom-on-input t
               ;; HACK ? Always keep prompt at the bottom of the window
@@ -4678,6 +4698,7 @@ Called by `comint-input-sender' in `dape-repl-mode'."
               comint-input-sender 'dape--repl-input-sender
               comint-prompt-regexp (concat "^" (regexp-quote dape--repl-prompt))
               comint-process-echoes nil)
+  (add-to-list 'overlay-arrow-variable-list 'dape--repl-marker)
   (add-hook 'completion-at-point-functions #'dape--repl-completion-at-point nil t)
   ;; Stolen from ielm
   ;; Start a dummy process just to please comint
