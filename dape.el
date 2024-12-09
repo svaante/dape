@@ -3355,9 +3355,8 @@ Buffer is displayed with `dape-display-source-buffer-action'."
 
 (defvar-local dape--info-buffer-related nil
   "List of related buffers.")
-(defvar-local dape--info-buffer-identifier nil
-  "Identifying var for buffers, used only in scope buffer.
-Used there as scope index.")
+(defvar-local dape--info-scope-index nil
+  "Index for `dape-info-scope-mode' buffers.")
 
 (defvar dape--info-buffers nil
   "List containing `dape-info' buffers, might be un-live.")
@@ -3369,10 +3368,10 @@ Used there as scope index.")
 
 (defun dape--info-buffer-p (mode &optional identifier)
   "Is buffer of MODE with IDENTIFIER.
-Uses `dape--info-buffer-identifier' as IDENTIFIER."
+Uses `dape--info-scope-index' as IDENTIFIER."
   (and (derived-mode-p mode)
        (or (not identifier)
-           (equal dape--info-buffer-identifier identifier))))
+           (equal dape--info-scope-index identifier))))
 
 (defun dape--info-buffer-tab (&optional reversed)
   "Select next related buffer in `dape-info' buffers.
@@ -3439,7 +3438,7 @@ Each buffers store its own debounce context."
 (defun dape--info-header (name mode id help-echo mouse-face face)
   "Helper to create buffer header.
 Creates header with string NAME, mouse map to select buffer
-identified with MODE and ID (see `dape--info-buffer-identifier')
+identified with MODE and ID (see `dape--info-scope-index')
 with HELP-ECHO string, MOUSE-FACE and FACE."
   (propertize name 'help-echo help-echo 'mouse-face mouse-face 'face face
               'keymap
@@ -3517,7 +3516,7 @@ See `dape--info-call-update-with'."
     (with-current-buffer buffer
       (unless (eq major-mode mode)
         (funcall mode)
-        (setq dape--info-buffer-identifier identifier)
+        (setq dape--info-scope-index identifier)
         (push buffer dape--info-buffers)))
     buffer))
 
@@ -4278,13 +4277,13 @@ or `prefix' part of variable string."
               ;;       have shrunk since last update and current
               ;;       scope buffer should be killed and replaced if
               ;;       if visible
-              (scope (nth dape--info-buffer-identifier scopes))
+              (scope (nth dape--info-scope-index scopes))
               ;; Check for stopped threads to reduce flickering
               ((dape--stopped-threads conn)))
     (dape--with-request (dape--variables conn scope)
       (dape--with-request
           (dape--variables-recursive conn scope
-                                     (list dape--info-buffer-identifier)
+                                     (list dape--info-scope-index)
                                      #'dape--variable-expanded-p)
         (when (and scope scopes (dape--stopped-threads conn))
           (dape--info-update-with
@@ -4301,7 +4300,7 @@ or `prefix' part of variable string."
               table
               object
               (plist-get scope :variablesReference)
-              (list dape--info-buffer-identifier)
+              (list dape--info-scope-index)
               #'dape--variable-expanded-p
               (list 'name dape-info-variable-name-map
                     'value dape-info-variable-value-map
