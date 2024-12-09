@@ -3724,7 +3724,6 @@ without log or expression breakpoint"))))))
   "Revert buffer function for MAJOR-MODE `dape-info-breakpoints-mode'."
   (dape--info-update-with
     (let ((table (make-gdb-table)))
-      (gdb-table-add-row table (list "A" "Type " "Where/On"))
       (cl-loop
        for breakpoint in dape--breakpoints
        for line = (dape--breakpoint-line breakpoint)
