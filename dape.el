@@ -642,10 +642,6 @@ Additionally, the order the element in the alist determines the
 left-to-right display order of the properties."
   :type '(alist :key-type symbol :value-type integer))
 
-(defcustom dape-info-thread-buffer-verbose-names t
-  "Show long thread names in threads buffer."
-  :type 'boolean)
-
 (defcustom dape-info-thread-buffer-locations t
   "Show file information or library names in threads buffer."
   :type 'boolean)
@@ -2541,9 +2537,7 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                     (cl-loop for thread in (dape--threads conn) collect
                              `(,(concat (when conn-prefix-p
                                           (format "%s: " index))
-                                        (format "%s %s"
-                                                (plist-get thread :id)
-                                                (plist-get thread :name)))
+                                        (plist-get thread :name))
                                ,conn
                                ,(plist-get thread :id)))))
           (thread-name
@@ -3857,11 +3851,10 @@ See `dape-request' for expected CB signature."
            (append
             (when conn-prefix-p
               (list (format "%s:" index)))
-            (list (format "%s" (plist-get thread :id)))
             (list
              (concat
-              (when dape-info-thread-buffer-verbose-names
-                (concat (plist-get thread :name) " "))
+              (plist-get thread :name)
+              " "
               (if-let ((status (plist-get thread :status)))
                   (format "%s" status)
                 "unknown")
