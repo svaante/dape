@@ -692,6 +692,7 @@ left-to-right display order of the properties."
     ("sources" . dape-list-sources)
     ("breakpoints" . dape-list-breakpoints)
     ("scope" . dape-list-scope)
+    ("watch" . dape-list-watch)
     ("restart" . dape-restart)
     ("kill" . dape-kill)
     ("disconnect" . dape-disconnect-quit)
@@ -2643,6 +2644,11 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (interactive)
   (dape--repl-insert-info-buffer 'dape-info-scope-mode 0))
 
+(defun dape-list-watch ()
+  "List watched variables for active debug session."
+  (interactive)
+  (dape--repl-insert-info-buffer 'dape-info-watch-mode))
+
 (defun dape-watch-dwim (expression &optional skip-add skip-remove)
   "Add or remove watch for EXPRESSION.
 Watched symbols are displayed in *`dape-info' Watch* buffer.
@@ -2671,8 +2677,9 @@ Optional argument SKIP-REMOVE limits usage to only adding watched vars."
     (unless skip-add
       (push (list :name expression)
             dape--watched)
-      ;; FIXME Remove dependency on ui in core commands
-      (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode))))
+      (when (called-interactively-p 'interactive)
+        ;; FIXME Remove dependency on ui in core commands
+        (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode)))))
   (run-hooks 'dape-update-ui-hook))
 
 (defun dape-evaluate-expression (conn expression)
@@ -4158,9 +4165,7 @@ current buffer with CONN config."
                        (plist-get dape--info-variable :name))
                    (eq major-mode 'dape-info-watch-mode)
                    (eq major-mode 'dape-info-scope-mode))
-  (when (derived-mode-p 'dape-info-parent-mode)
-    (gdb-set-window-buffer
-     (dape--info-get-buffer-create 'dape-info-watch-mode) t)))
+  (revert-buffer))
 
 (dape--buffer-map dape-info-variable-name-map dape-info-scope-watch-dwim)
 
