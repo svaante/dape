@@ -720,7 +720,8 @@ project's root.  See `dape--default-cwd'."
 
 (defcustom dape-compile-hook nil
   "Called after dape compilation finishes.
-The hook is run with one argument, the compilation buffer."
+The hook is run with one argument, the compilation buffer when
+compilation is successful."
   :type 'hook)
 
 (defcustom dape-minibuffer-hint-ignore-properties
@@ -2748,9 +2749,10 @@ For more information see `dape-configs'."
   "Hook for `dape--compile-compilation-finish'.
 Using BUFFER and STR."
   (remove-hook 'compilation-finish-functions #'dape--compile-compilation-finish)
-  (cond ((equal "finished\n" str) (funcall dape--compile-after-fn))
-        (t (dape--message "Compilation failed %s" (string-trim-right str))))
-  (run-hook-with-args 'dape-compile-hook buffer))
+  (if (equal "finished\n" str)
+      (progn (funcall dape--compile-after-fn)
+             (run-hook-with-args 'dape-compile-hook buffer))
+    (dape--message "Compilation failed %s" (string-trim-right str))))
 
 (defun dape--compile (config fn)
   "Start compilation for CONFIG then call FN."
