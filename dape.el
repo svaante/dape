@@ -52,13 +52,11 @@
 (require 'comint)
 (require 'repeat)
 (require 'compile)
-(require 'tree-widget)
 (require 'project)
 (require 'gdb-mi)
 (require 'hexl)
 (require 'tramp)
 (require 'jsonrpc)
-(require 'eglot) ;; jdtls config
 
 
 ;;; Obsolete aliases
@@ -368,9 +366,9 @@
      ensure (lambda (config)
               (let ((file (dape-config-get config :filePath)))
                 (unless (and (stringp file) (file-exists-p file))
-                  (user-error "Unable to find locate :filePath `%s'" file))
+                  (user-error "Unable to locate :filePath `%s'" file))
                 (with-current-buffer (find-file-noselect file)
-                  (unless (eglot-current-server)
+                  (unless (and (featurep 'eglot) (eglot-current-server))
                     (user-error "No eglot instance active in buffer %s" (current-buffer)))
                   (unless (seq-contains-p (eglot--server-capable :executeCommandProvider :commands)
         			          "vscode.java.resolveClasspath")
@@ -394,10 +392,12 @@
      ,@(cl-flet ((resolve-main-class (key)
                    (ignore-errors
                      (let* ((main-classes
-                             (eglot-execute-command (eglot-current-server)
-                                                    "vscode.java.resolveMainClass"
-                                                    (file-name-nondirectory
-                                                     (directory-file-name (dape-cwd)))))
+                             (with-no-warnings
+                               (eglot-execute-command
+                                (eglot-current-server)
+                                "vscode.java.resolveMainClass"
+                                (file-name-nondirectory
+                                 (directory-file-name (dape-cwd))))))
                             (main-class
                              (or (seq-find (lambda(val)
                                              (equal (plist-get val :filePath)
@@ -410,11 +410,9 @@
               (or (resolve-main-class :filePath)
                   (expand-file-name (dape-buffer-default) (dape-cwd))))
            :mainClass
-           ,(lambda ()
-              (or (resolve-main-class :mainClass) ""))
+           ,(lambda () (resolve-main-class :mainClass))
            :projectName
-           ,(lambda ()
-              (or (resolve-main-class :projectName) ""))))
+           ,(lambda () (resolve-main-class :projectName))))
      :args ""
      :stopOnEntry nil
      :type "java"
