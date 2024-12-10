@@ -2593,6 +2593,10 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
 (defun dape-stack-select-up (conn n)
   "Select N stacks above current selected stack for adapter CONN."
   (interactive (list (dape--live-connection 'stopped) 1))
+  ;; Ensure all threads.  See `dape--stack-trace'.
+  (let ((dape--request-blocking t))
+    (dape--with-request
+        (dape--stack-trace conn (dape--current-thread conn) dape-stack-trace-levels)))
   (if (dape--stopped-threads conn)
       (let* ((current-stack (dape--current-stack-frame conn))
              (stacks (plist-get (dape--current-thread conn) :stackFrames))
