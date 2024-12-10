@@ -693,6 +693,7 @@ left-to-right display order of the properties."
     ("modules" . dape-list-modules)
     ("sources" . dape-list-sources)
     ("breakpoints" . dape-list-breakpoints)
+    ("scope" . dape-list-scope)
     ("restart" . dape-restart)
     ("kill" . dape-kill)
     ("disconnect" . dape-disconnect-quit)
@@ -2634,6 +2635,11 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (interactive)
   (dape--repl-insert-info-buffer 'dape-info-breakpoints-mode))
 
+(defun dape-list-scope ()
+  "List variables in scope 0 for active debug session."
+  (interactive)
+  (dape--repl-insert-info-buffer 'dape-info-scope-mode 0))
+
 (defun dape-watch-dwim (expression &optional skip-add skip-remove)
   "Add or remove watch for EXPRESSION.
 Watched symbols are displayed in *`dape-info' Watch* buffer.
@@ -4538,10 +4544,12 @@ If REPL buffer is not live STRING will be displayed in minibuffer."
                 'dape--revert-tag (cl-gensym "dape-region-tag")
                 'dape--revert-fn (apply-partially #'dape--repl-variable variable))))
 
-(defun dape--repl-info-string (mode)
-  "Return buffer content by MODE and `revert-buffer'."
+(defun dape--repl-info-string (mode index)
+  "Return info buffer content by MODE and `revert-buffer'.
+See `dape--info-scope-index' for information on INDEX."
   (with-temp-buffer
     (funcall mode)
+    (setq dape--info-scope-index index)
     (let ((dape-ui-debounce-time 0)
           (dape--request-blocking t))
       (revert-buffer))
@@ -4553,13 +4561,14 @@ If REPL buffer is not live STRING will be displayed in minibuffer."
              (add-text-properties
               0 (length str)
               `( dape--revert-tag ,(cl-gensym "dape-region-tag")
-                 dape--revert-fn ,(apply-partially #'dape--repl-info-string mode))
+                 dape--revert-fn ,(apply-partially #'dape--repl-info-string mode index))
               str)
              finally return str)))
 
-(defun dape--repl-insert-info-buffer (mode)
-  "Insert string into repl by MODE and `revert-buffer'."
-  (dape--repl-insert (concat (dape--repl-info-string mode) "\n"))
+(defun dape--repl-insert-info-buffer (mode &optional index)
+  "Insert content of MODE info buffer into repl.
+See `dape--repl-info-string' for information on INDEX."
+  (dape--repl-insert (concat (dape--repl-info-string mode index) "\n"))
   (when-let ((buffer (get-buffer "*dape-repl*")))
     (with-current-buffer buffer
       (dape--repl-move-marker (point-max)))))
