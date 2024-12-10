@@ -4513,13 +4513,15 @@ If REPL buffer is not live STRING will be displayed in minibuffer."
              (end (save-excursion
                     (next-single-property-change
                      (point) 'dape--revert-tag))))
-    (let ((line (line-number-at-pos (point) t)))
+    (let ((line (line-number-at-pos (point) t))
+          (col (current-column)))
       (delete-region start end)
       (insert (funcall fn))
       (dape--repl-move-marker (1+ (point)))
       (ignore-errors
         (goto-char (point-min))
-        (forward-line (1- line))))))
+        (forward-line (1- line))
+        (forward-char col)))))
 
 (defun dape--repl-variable (variable)
   "Return VARIABLE string representation with CONN."
