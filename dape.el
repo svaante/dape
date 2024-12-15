@@ -2758,7 +2758,7 @@ Using BUFFER and STR."
   (if (equal "finished\n" str)
       (progn (funcall dape--compile-after-fn)
              (run-hook-with-args 'dape-compile-hook buffer))
-    (dape--message "Compilation failed %s" (string-trim-right str))))
+    (dape--warn "Compilation failed \"%s\"" (string-trim-right str))))
 
 (defun dape--compile (config fn)
   "Start compilation for CONFIG then call FN."
