@@ -2559,7 +2559,6 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
           (thread-name
            (completing-read
             (format "Select thread (current %s): "
-                    ;; TODO Show current thread with connection prefix
                     (thread-first conn (dape--current-thread)
                                   (plist-get :name)))
             collection nil t)))
