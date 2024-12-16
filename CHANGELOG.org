@@ -2,6 +2,22 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.18.0
+- Add =dape-list-*= commands for improved REPL experience
+- Add custom =dape-history-add= for history customization
+- Add placeholder text for modules and sources
+- Change remove adapter output string processing
+- Remove breakpoint info header
+- Remove useless adapter thread id from thread info buffer
+- Remove eglot require
+- Fix alignment on "disconnect" DAP specification
+- Fix font-lock for breakpoint buffer when hits > 9
+- Fix missing overlay categories for dape-breakpoint, dape-source-line
+- Fix compile when dape-restart when request is used
+- Fix =dape-compile-hook= firing only on success
+- Fix restart for adapters using optional arguments
+- Fix leaking dash replacement hints on unbalanced options list
+
 * Version 0.17.0
 - Add dash form configuration options parsing see =dape-history-use-dash-form=
 - Add error face on on unsupported breakpoint type
