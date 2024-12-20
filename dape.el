@@ -4518,7 +4518,7 @@ The search is done backwards from POINT.  The line is marked with
 `dape--repl-marker' and `gdb-mark-line'."
   (save-excursion
     (goto-char point)
-    (when (text-property-search-backward 'dape--selected t)
+    (when (text-property-search-backward 'dape--selected)
       (gdb-mark-line (line-number-at-pos) dape--repl-marker))))
 
 (defun dape--repl-revert-region (&rest _)
