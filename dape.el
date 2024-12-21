@@ -621,6 +621,10 @@ present in an group."
   "Hide mode line in dape info buffers."
   :type 'boolean)
 
+(defcustom dape-info-table-indexed nil
+  "Show index of rows in tabulated info."
+  :type 'boolean)
+
 (defcustom dape-info-variable-table-aligned nil
   "Align columns in variable tables."
   :type 'boolean)
@@ -675,20 +679,19 @@ left-to-right display order of the properties."
     ("out" . dape-step-out)
     ("up" . dape-stack-select-up)
     ("down" . dape-stack-select-down)
-    ("threads" . dape-list-threads)
-    ("stack" . dape-list-stack)
-    ("modules" . dape-list-modules)
-    ("sources" . dape-list-sources)
-    ("breakpoints" . dape-list-breakpoints)
-    ("scope" . dape-list-scope)
-    ("watch" . dape-list-watch)
+    ("threads" . dape-repl-threads)
+    ("stack" . dape-repl-stack)
+    ("modules" . dape-repl-modules)
+    ("sources" . dape-repl-sources)
+    ("breakpoints" . dape-repl-breakpoints)
+    ("scope" . dape-repl-scope)
+    ("watch" . dape-repl-watch)
     ("restart" . dape-restart)
     ("kill" . dape-kill)
     ("disconnect" . dape-disconnect-quit)
     ("quit" . dape-quit))
-  "Dape commands available in REPL buffer."
-  :type '(alist :key-type string
-                :value-type function))
+  "Dape commands available in *dape-repl* buffer."
+  :type '(alist :key-type string :value-type function))
 
 (defcustom dape-breakpoint-margin-string "B"
   "String to display breakpoint in margin."
@@ -2592,54 +2595,15 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
     (dape--with-request
         (dape--stack-trace conn (dape--current-thread conn) dape-stack-trace-levels)))
   (if (dape--stopped-threads conn)
-      (let* ((current-stack (dape--current-stack-frame conn))
-             (stacks (plist-get (dape--current-thread conn) :stackFrames))
-             (i (cl-loop for i upfrom 0 for stack in stacks
-                         when (equal stack current-stack) return (+ i n))))
-        (if (not (and (<= 0 i) (< i (length stacks))))
-            (message "Index %s out of range" i)
-          (dape-select-stack conn (plist-get (nth i stacks) :id))))
+      (let* ((frames (plist-get (dape--current-thread conn) :stackFrames))
+             (current-n (cl-position (dape--current-stack-frame conn) frames)))
+        (dape-select-stack conn (plist-get (nth (+ current-n n) frames) :id)))
     (message "No stopped threads")))
 
 (defun dape-stack-select-down (conn n)
   "Select N stacks below current selected stack for adapter CONN."
   (interactive (list (dape--live-connection 'stopped) 1))
   (dape-stack-select-up conn (* n -1)))
-
-(defun dape-list-threads ()
-  "List threads for active debug session."
-  (interactive)
-  (dape--repl-insert-info-buffer 'dape-info-threads-mode))
-
-(defun dape-list-stack ()
-  "List stack for active debug session."
-  (interactive)
-  (dape--repl-insert-info-buffer 'dape-info-stack-mode))
-
-(defun dape-list-modules ()
-  "List modules for active debug session."
-  (interactive)
-  (dape--repl-insert-info-buffer 'dape-info-modules-mode))
-
-(defun dape-list-sources ()
-  "List sources for active debug session."
-  (interactive)
-  (dape--repl-insert-info-buffer 'dape-info-sources-mode))
-
-(defun dape-list-breakpoints ()
-  "List breakpoints."
-  (interactive)
-  (dape--repl-insert-info-buffer 'dape-info-breakpoints-mode))
-
-(defun dape-list-scope ()
-  "List variables in scope 0 for active debug session."
-  (interactive)
-  (dape--repl-insert-info-buffer 'dape-info-scope-mode 0))
-
-(defun dape-list-watch ()
-  "List watched variables for active debug session."
-  (interactive)
-  (dape--repl-insert-info-buffer 'dape-info-watch-mode))
 
 (defun dape-watch-dwim (expression &optional no-add no-remove)
   "Add or remove watch for EXPRESSION.
@@ -3871,20 +3835,19 @@ See `dape-request' for expected CB signature."
          with conns = (dape--live-connections)
          with current-thread = (dape--current-thread conn)
          with conn-prefix-p = (length> (cl-remove-if-not 'dape--threads conns) 1)
-         with line-count = 0
+         with line = 0
          with selected-line
          for conn in conns
          for index upfrom 1 do
          (cl-loop
           for thread in (dape--threads conn) do
-          (setq line-count (1+ line-count))
-          (when (eq current-thread thread)
-            (setq selected-line line-count))
+          (cl-incf line)
+          (when (eq current-thread thread) (setq selected-line line))
           (gdb-table-add-row
            table
            (append
-            (when conn-prefix-p
-              (list (format "%s:" index)))
+            (when dape-info-table-indexed (list (format "%s" line)))
+            (when conn-prefix-p (list (format "%s:" index)))
             (list
              (concat
               (plist-get thread :name)
@@ -3962,27 +3925,27 @@ current buffer with CONN config."
              (setq selected-line line))
            (gdb-table-add-row
             table
-            (list
-             "in"
-             (concat
-              (plist-get frame :name)
-              (when-let* ((dape-info-stack-buffer-locations)
-                          (path (thread-first frame
-                                              (plist-get :source)
-                                              (plist-get :path)))
-                          (path (dape--path-local conn path)))
-                (concat " of "
-                        (dape--format-file-line path (plist-get frame :line))))
-              (when-let ((dape-info-stack-buffer-addresses)
-                         (ref (plist-get frame :instructionPointerReference)))
-                (concat " at " ref))
-              " "))
-            (list
-             'dape--info-frame frame
-             'dape--selected (eq current-stack-frame frame)
-             'mouse-face 'highlight
-             'keymap dape-info-stack-line-map
-             'help-echo "mouse-2, RET: Select frame"))
+            (append
+             (when dape-info-table-indexed (list (format "%s" line)))
+             (list "in"
+                   (concat
+                    (plist-get frame :name)
+                    (when-let* ((dape-info-stack-buffer-locations)
+                                (path (thread-first frame
+                                                    (plist-get :source)
+                                                    (plist-get :path)))
+                                (path (dape--path-local conn path)))
+                      (concat " of "
+                              (dape--format-file-line path (plist-get frame :line))))
+                    (when-let ((dape-info-stack-buffer-addresses)
+                               (ref (plist-get frame :instructionPointerReference)))
+                      (concat " at " ref))
+                    " ")))
+            (list 'dape--info-frame frame
+                  'dape--selected (eq current-stack-frame frame)
+                  'mouse-face 'highlight
+                  'keymap dape-info-stack-line-map
+                  'help-echo "mouse-2, RET: Select frame"))
            finally do
            (insert (gdb-table-string table " "))
            (when selected-line
@@ -4541,6 +4504,7 @@ See `dape--info-scope-index' for information on INDEX."
     (funcall mode)
     (setq dape--info-scope-index index)
     (let ((dape-ui-debounce-time 0)
+          (dape-info-table-indexed t)
           (dape--request-blocking t))
       (revert-buffer))
     (font-lock-ensure)
@@ -4576,34 +4540,37 @@ See `dape--repl-info-string' for information on INDEX."
 (defun dape--repl-input-sender (dummy-process input)
   "Send INPUT to DUMMY-PROCESS.
 Called by `comint-input-sender' in `dape-repl-mode'."
-  (let (cmd)
-    (cond
-     ;; Run previous input
-     ((and (string-empty-p input)
-           (not (string-empty-p (car (ring-elements comint-input-ring)))))
-      (when-let ((last (car (ring-elements comint-input-ring))))
-        (message "Using last command %s" last)
-        (dape--repl-input-sender dummy-process last)))
-     ;; Run command from `dape-named-commands'
-     ((setq cmd
-            (or (alist-get input dape-repl-commands nil nil 'equal)
-                (and dape-repl-use-shorthand
-                     (cdr (assoc input (dape--repl-shorthand-alist))))))
-      (dape--repl-insert-prompt)
-      ;; HACK: Special handing of `dape-quit', `comint-send-input'
-      ;;       expects buffer to be still live after calling
-      ;;       `comint-input-sender'.  Kill buffer with timer instead
-      ;;       to avoid error signal.
-      (if (eq 'dape-quit cmd)
-          (run-with-timer 0 nil 'call-interactively #'dape-quit)
-	(call-interactively cmd)))
-     ;; Evaluate expression
-     (t
-      (dape--repl-insert-prompt)
-      (dape-evaluate-expression
-       (or (dape--live-connection 'stopped t)
-           (dape--live-connection 'last))
-       (string-trim (substring-no-properties input)))))))
+  (cond
+   ;; Run previous input
+   ((and (string-empty-p input)
+         (not (string-empty-p (car (ring-elements comint-input-ring)))))
+    (when-let ((last (car (ring-elements comint-input-ring))))
+      (message "Using last command %s" last)
+      (dape--repl-input-sender dummy-process last)))
+   ;; Run command from `dape-named-commands'
+   ((pcase-let* ((`(,cmd . ,args)
+                  (string-split input split-string-default-separators))
+                 (fn (or (alist-get cmd dape-repl-commands nil nil 'equal)
+                         (and dape-repl-use-shorthand
+                              (cdr (assoc cmd (dape--repl-shorthand-alist)))))))
+      (when fn
+        (dape--repl-insert-prompt)
+        ;; HACK: Special handing of `dape-quit', `comint-send-input'
+        ;;       expects buffer to be still live after calling
+        ;;       `comint-input-sender'.  Kill buffer with timer instead
+        ;;       to avoid error signal.
+        (cond ((eq 'dape-quit fn)
+               (run-with-timer 0 nil #'call-interactively #'dape-quit))
+              ((commandp fn) (call-interactively fn))
+              ((funcall fn (string-join args " "))))
+        t)))
+   ;; Evaluate expression
+   (t
+    (dape--repl-insert-prompt)
+    (dape-evaluate-expression
+     (or (dape--live-connection 'stopped t)
+         (dape--live-connection 'last))
+     (string-trim (substring-no-properties input))))))
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
@@ -4685,6 +4652,49 @@ Called by `comint-input-sender' in `dape-repl-mode'."
      (save-excursion
        (goto-char (car bounds))
        (looking-back (regexp-opt trigger-chars) line-start)))))
+
+(defun dape-repl-threads (input)
+  "List threads in *dape-repl* buffer.
+If INPUT string is a number select thread N+1th thread."
+  (when-let* ((index (unless (string-blank-p input) (string-to-number input))))
+    (cl-loop with n = 0 for conn in (dape--live-connections)
+             for thread = (cl-loop for thread in (dape--threads conn)
+                                   when (equal (cl-incf n) index) return thread)
+             when thread return (dape-select-thread conn (plist-get thread :id))))
+  (dape--repl-insert-info-buffer 'dape-info-threads-mode))
+
+(defun dape-repl-stack (input)
+  "List modules in *dape-repl* buffer.
+If INPUT string is a number select stack N+1th thread."
+  (when-let* ((index (unless (string-blank-p input) (string-to-number input)))
+              (conn (dape--live-connection 'stopped t))
+              (frames (plist-get (dape--current-thread conn) :stackFrames)))
+    (dape-select-stack conn (plist-get (nth (1- index) frames) :id)))
+  (dape--repl-insert-info-buffer 'dape-info-stack-mode))
+
+(defun dape-repl-modules (_)
+  "List modules in *dape-repl* buffer."
+  (dape--repl-insert-info-buffer 'dape-info-modules-mode))
+
+(defun dape-repl-sources (_)
+  "List sources in *dape-repl* buffer."
+  (dape--repl-insert-info-buffer 'dape-info-sources-mode))
+
+(defun dape-repl-breakpoints (_)
+  "List breakpoints in *dape-repl* buffer."
+  (dape--repl-insert-info-buffer 'dape-info-breakpoints-mode))
+
+(defun dape-repl-scope (input)
+  "List variables of scope in *dape-repl* buffer.
+If INPUT string is a number list Nth scope."
+  (dape--repl-insert-info-buffer 'dape-info-scope-mode (string-to-number input)))
+
+(defun dape-repl-watch (input)
+  "List watched variables in *dape-repl* buffer.
+If INPUT is non blank add or remove expression to watch list."
+  (unless (string-blank-p input)
+    (dape-watch-dwim input))
+  (dape--repl-insert-info-buffer 'dape-info-watch-mode))
 
 (define-derived-mode dape-repl-mode comint-mode "REPL"
   "Mode for *dape-repl* buffer."
