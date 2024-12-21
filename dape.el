@@ -349,9 +349,7 @@
      fn (lambda (config)
           (plist-put config 'command-args
                      (mapcar (lambda (arg)
-                               (if (eq arg :-c)
-                                   (plist-get config '-c)
-                                 arg))
+                               (if (eq arg :-c) (plist-get config '-c) arg))
                              (plist-get config 'command-args))))
      port :autoport
      command-cwd dape-command-cwd
@@ -529,51 +527,19 @@ Sometimes it is useful for files or directories to supply local values
 for this variable.
 
 Example value:
-\(codelldb-cc :program \"/home/user/project/a.out\")"
+\(launch :program \"a.out\")"
   :type 'sexp)
 ;;;###autoload(put 'dape-command 'safe-local-variable #'listp)
-
-(defcustom dape-mime-mode-alist '(("text/x-lldb.disassembly" . asm-mode)
-                                  ("text/javascript" . js-mode))
-  "Alist of MIME types vs corresponding major mode functions.
-Each element should look like (MIME-TYPE . MODE) where
-    MIME-TYPE is a string and MODE is the major mode function to
-    use for buffers of this MIME type."
-  :type '(alist :key-type string :value-type function))
 
 (defcustom dape-key-prefix "\C-x\C-a"
   "Prefix of all dape commands."
   :type 'key-sequence)
-
-(defcustom dape-display-source-buffer-action
-  `((display-buffer-use-some-window display-buffer-pop-up-window)
-    (some-window
-     . (lambda (&rest _)
-         (cl-loop for w in (window-list nil 'skip-minibuffer) unless
-                  (buffer-match-p '(or (derived-mode . dape-shell-mode)
-                                       (derived-mode . dape-repl-mode)
-                                       (derived-mode . dape-memory-mode)
-                                       (derived-mode . dape-info-parent-mode))
-                                  (window-buffer w))
-                  return w))))
-  "`display-buffer' action used when displaying source buffer."
-  :type 'sexp)
 
 (defcustom dape-buffer-window-arrangement 'left
   "Rules for display dape buffers."
   :type '(choice (const :tag "GUD gdb like" gud)
                  (const :tag "Left side" left)
                  (const :tag "Right side" right)))
-
-(defcustom dape-info-buffer-window-groups
-  '((dape-info-scope-mode dape-info-watch-mode)
-    (dape-info-stack-mode dape-info-modules-mode dape-info-sources-mode)
-    (dape-info-breakpoints-mode dape-info-threads-mode))
-  "Window display rules for `dape-info-parent-mode' derived modes.
-Each list of modes is displayed in the same window.  The first item of
-each group is displayed by `dape-info'.  All modes doesn't need to be
-present in an group."
-  :type '(repeat (repeat function)))
 
 (defcustom dape-variable-auto-expand-alist '((hover . 1) (repl . 1) (watch . 1))
   "Default expansion depth for displaying variables.
@@ -598,6 +564,20 @@ variable should be expanded by default."
   "The number of stack frames fetched."
   :type 'natnum)
 
+(defcustom dape-display-source-buffer-action
+  `((display-buffer-use-some-window display-buffer-pop-up-window)
+    (some-window
+     . (lambda (&rest _)
+         (cl-loop for w in (window-list nil 'skip-minibuffer) unless
+                  (buffer-match-p '(or (derived-mode . dape-shell-mode)
+                                       (derived-mode . dape-repl-mode)
+                                       (derived-mode . dape-memory-mode)
+                                       (derived-mode . dape-info-parent-mode))
+                                  (window-buffer w))
+                  return w))))
+  "`display-buffer' action used when displaying source buffer."
+  :type 'sexp)
+
 (defcustom dape-start-hook '(dape-repl dape-info)
   "Called when session starts."
   :type 'hook)
@@ -614,9 +594,27 @@ variable should be expanded by default."
   "Called in buffer when placing overlay arrow for stack frame."
   :type 'hook)
 
+(defcustom dape-mime-mode-alist '(("text/x-lldb.disassembly" . asm-mode)
+                                  ("text/javascript" . js-mode))
+  "Alist of MIME types vs corresponding major mode functions.
+Each element should look like (MIME-TYPE . MODE) where MIME-TYPE is
+a string and MODE is the major mode function to use for buffers of
+this MIME type."
+  :type '(alist :key-type string :value-type function))
+
 (defcustom dape-memory-page-size 1024
   "The bytes read with `dape-read-memory'."
   :type 'natnum)
+
+(defcustom dape-info-buffer-window-groups
+  '((dape-info-scope-mode dape-info-watch-mode)
+    (dape-info-stack-mode dape-info-modules-mode dape-info-sources-mode)
+    (dape-info-breakpoints-mode dape-info-threads-mode))
+  "Window display rules for `dape-info-parent-mode' derived modes.
+Each list of modes is displayed in the same window.  The first item of
+each group is displayed by `dape-info'.  All modes doesn't need to be
+present in an group."
+  :type '(repeat (repeat function)))
 
 (defcustom dape-info-hide-mode-line
   (and (memql dape-buffer-window-arrangement '(left right)) t)
@@ -660,18 +658,9 @@ left-to-right display order of the properties."
   "Show frame addresses in stack buffer."
   :type 'boolean)
 
-(defcustom dape-info-buffer-variable-format 'line
-  "How variables are formatted in *dape-info* buffer."
-  :type '(choice (const :tag "Truncate string at new line" line)
-                 (const :tag "No formatting" nil)))
-
 (defcustom dape-info-file-name-max 25
   "Max length of file name in dape info buffers."
   :type 'integer)
-
-(defcustom dape-breakpoint-margin-string "B"
-  "String to display breakpoint in margin."
-  :type 'string)
 
 (defcustom dape-repl-use-shorthand t
   "Dape `dape-repl-commands' can be invoked with first char of command."
@@ -701,16 +690,20 @@ left-to-right display order of the properties."
   :type '(alist :key-type string
                 :value-type function))
 
-(defcustom dape-compile-fn #'compile
-  "Function to compile with.
-The function is called with a command string."
-  :type 'function)
+(defcustom dape-breakpoint-margin-string "B"
+  "String to display breakpoint in margin."
+  :type 'string)
 
 (defcustom dape-default-breakpoints-file
   (locate-user-emacs-file "dape-breakpoints")
   "Default file for loading and saving breakpoints.
 See `dape-breakpoint-load' and `dape-breakpoint-save'."
   :type 'file)
+
+(defcustom dape-compile-fn #'compile
+  "Function to compile with.
+The function is called with a command string."
+  :type 'function)
 
 (defcustom dape-cwd-fn #'dape--default-cwd
   "Function to get current working directory.
@@ -4235,9 +4228,7 @@ current buffer with CONN config."
              (prop-org (alist-get key alist))
              (prop prop-org))
         (when prop-org
-          (when (eq dape-info-buffer-variable-format 'line)
-            (setq prop
-                  (substring prop 0 (string-match-p "\n" prop))))
+          (setq prop (substring prop 0 (string-match-p "\n" prop)))
           (if (and (> max 0) (length> prop max))
               (push (propertize (string-truncate-left prop max) 'help-echo prop-org)
                     columns)
@@ -4771,10 +4762,9 @@ Empty input will rerun last command.\n\n"
 
 (defcustom dape-inlay-hints nil
   "Inlay variable hints."
-  :type '(choice
-          (const :tag "No inlay hints." nil)
-          (const :tag "Inlay current line and previous line (same as 2)." t)
-          (natnum :tag "Number of lines with hints.")))
+  :type '(choice (const :tag "No inlay hints." nil)
+                 (const :tag "Inlay current line and previous line (same as 2)." t)
+                 (natnum :tag "Number of lines with hints.")))
 
 (defcustom dape-inlay-hints-variable-name-max 25
   "Max length of variable name in inlay hints."
