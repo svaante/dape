@@ -2,6 +2,11 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.19.0
+- Add argument support REPL and to =dape-repl-*= commands
+- Change =dape-list-*= names to be REPL specific
+- Fix bash-debug BASHDB_HOME path
+
 * Version 0.18.0
 - Add =dape-list-*= commands for improved REPL experience
 - Add custom =dape-history-add= for history customization
