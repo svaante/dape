@@ -2641,37 +2641,27 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (interactive)
   (dape--repl-insert-info-buffer 'dape-info-watch-mode))
 
-(defun dape-watch-dwim (expression &optional skip-add skip-remove)
+(defun dape-watch-dwim (expression &optional no-add no-remove)
   "Add or remove watch for EXPRESSION.
-Watched symbols are displayed in *`dape-info' Watch* buffer.
-*`dape-info' Watch* buffer is displayed by executing the `dape-info'
-command.
-Optional argument SKIP-ADD limits usage to only removal of watched vars.
-Optional argument SKIP-REMOVE limits usage to only adding watched vars."
+NO-ADD limits usage to only removal of watched vars.
+NO-REMOVE limits usage to only adding watched vars."
   (interactive
    (list (string-trim
-          (completing-read "Watch or unwatch symbol: "
-                           (mapcar (lambda (plist) (plist-get plist :name))
-                                   dape--watched)
-                           nil nil
-                           (or (and (region-active-p)
-                                    (buffer-substring (region-beginning)
-                                                      (region-end)))
-                               (thing-at-point 'symbol))))))
-  (if-let ((plist
-            (cl-find-if (lambda (plist)
-                          (equal (plist-get plist :name)
-                                 expression))
-                        dape--watched)))
-      (unless skip-remove
-        (setq dape--watched
-              (cl-remove plist dape--watched)))
-    (unless skip-add
-      (push (list :name expression)
-            dape--watched)
-      (when (called-interactively-p 'interactive)
-        ;; FIXME Remove dependency on ui in core commands
-        (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode)))))
+          (completing-read
+           "Watch or unwatch symbol: "
+           (mapcar (lambda (plist) (plist-get plist :name)) dape--watched)
+           nil nil
+           (or (and (region-active-p)
+                    (buffer-substring (region-beginning) (region-end)))
+               (thing-at-point 'symbol))))))
+  (if-let ((watched
+            (cl-find expression dape--watched
+                     :key (lambda (plist) (plist-get plist :name))
+                     :test #'equal)))
+      (unless no-remove
+        (setq dape--watched (cl-delete watched dape--watched)))
+    (unless no-add
+      (push (list :name expression) dape--watched)))
   (run-hooks 'dape-update-ui-hook))
 
 (defun dape-evaluate-expression (conn expression)
@@ -3613,14 +3603,12 @@ displayed."
 
 (defun dape--info-buffer-name (mode &optional identifier)
   "Create buffer name from MODE and IDENTIFIER."
-  (cond
-   ((eq 'dape-info-scope-mode mode)
-    (concat "*dape-info Scope*"
-            (unless (zerop identifier)
-              (format "<%s>" identifier))))
-   ((format "*dape-info %s*"
-            (or (alist-get mode dape--info-buffer-name-alist)
-                (error "Unable to create mode from %s with %s" mode identifier))))))
+  (cond ((eq 'dape-info-scope-mode mode)
+         (concat "*dape-info Scope*"
+                 (unless (zerop identifier)
+                   (format "<%s>" identifier))))
+        ((format "*dape-info %s*"
+                 (alist-get mode dape--info-buffer-name-alist)))))
 
 (defun dape--info-set-related-buffers ()
   "Store related buffers in `dape--info-buffer-related'."
@@ -4723,24 +4711,24 @@ Called by `comint-input-sender' in `dape-repl-mode'."
                                     nil)
     (set-process-filter (get-buffer-process (current-buffer))
                         'comint-output-filter)
-    (insert (format
-             "* Welcome to Dape REPL! *
+    (insert
+     (format
+      "* Welcome to Dape REPL! *
 Available Dape commands: %s
 Empty input will rerun last command.\n\n"
-             (mapconcat
-              (pcase-lambda (`(,str . ,command))
-                (setq str (concat str))
-                (when dape-repl-use-shorthand
-                  (set-text-properties
-                   0 (thread-last (dape--repl-shorthand-alist)
-                                  (rassoc command)
-                                  (car)
-                                  (length))
-                   '(font-lock-face help-key-binding)
-                   str))
-                str)
-              dape-repl-commands
-              ", ")))
+      (mapconcat (pcase-lambda (`(,str . ,command))
+                   (setq str (concat str))
+                   (when dape-repl-use-shorthand
+                     (set-text-properties
+                      0 (thread-last (dape--repl-shorthand-alist)
+                                     (rassoc command)
+                                     (car)
+                                     (length))
+                      '(font-lock-face help-key-binding)
+                      str))
+                   str)
+                 dape-repl-commands
+                 ", ")))
     (set-marker (process-mark (get-buffer-process (current-buffer))) (point))
     (comint-output-filter (get-buffer-process (current-buffer))
                           dape--repl-prompt)))
@@ -4748,8 +4736,7 @@ Empty input will rerun last command.\n\n"
 (defun dape-repl ()
   "Create or select *dape-repl* buffer."
   (interactive)
-  (let ((buffer-name "*dape-repl*")
-        window)
+  (let ((buffer-name "*dape-repl*") window)
     (with-current-buffer (get-buffer-create buffer-name)
       (unless (eq major-mode 'dape-repl-mode)
         (dape-repl-mode))
