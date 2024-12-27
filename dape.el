@@ -694,7 +694,8 @@ left-to-right display order of the properties."
     ("restart" . dape-restart)
     ("kill" . dape-kill)
     ("disconnect" . dape-disconnect-quit)
-    ("quit" . dape-quit))
+    ("quit" . dape-quit)
+    ("cd" . cd))
   "Dape commands available in *dape-repl* buffer."
   :type '(alist :key-type string :value-type function))
 
