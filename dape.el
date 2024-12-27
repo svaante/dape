@@ -539,7 +539,8 @@ Example value:
   "Rules for display dape buffers."
   :type '(choice (const :tag "GUD gdb like" gud)
                  (const :tag "Left side" left)
-                 (const :tag "Right side" right)))
+                 (const :tag "Right side" right)
+                 (const :tag "Use `display-buffer-base-action'" nil)))
 
 (defcustom dape-variable-auto-expand-alist '((hover . 1) (repl . 1) (watch . 1))
   "Default expansion depth for displaying variables.
@@ -1220,7 +1221,8 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                       '((display-buffer-in-side-window) (side . bottom) (slot . -1)))
                      (`(,_ . 2)
                       '((display-buffer-in-side-window) (side . bottom) (slot . 0)))
-                     (_ (error "Unable to display buffer of mode `%s'" mode)))))))
+                     (_ (error "Unable to display buffer of mode `%s'" mode))))
+                  (_ nil))))
     (display-buffer buffer `((display-buffer-reuse-window . ,fns) . ,alist))))
 
 (defmacro dape--mouse-command (name doc command)
