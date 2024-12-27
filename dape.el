@@ -57,6 +57,7 @@
 (require 'hexl)
 (require 'tramp)
 (require 'jsonrpc)
+(require 'which-func)
 
 
 ;;; Custom
@@ -202,6 +203,26 @@
      :type "go"
      :cwd "."
      :program ".")
+    (go-gdb-test
+     modes (go-mode go-ts-mode)
+     command "gdb"
+     command-args ("--interpreter=dap")
+     command-cwd (lambda () (file-name-directory (buffer-file-name)))
+     compile (lambda () (format "go test -c -o %s -gcflags '-N -l'" (dape--go-test-binary-name))) ;; compile without optimizations
+     :request "launch"
+     :program dape--go-test-binary-name
+     :args []
+     :stopAtBeginningOfMainSubprogram t)
+    (go-gdb
+     modes (go-mode go-ts-mode)
+     command "gdb"
+     command-args ("--interpreter=dap")
+     command-cwd dape-command-cwd
+     compile (lambda () (format "go build -o %s -gcflags '-N -l'" (dape--go-binary-name))) ;; compile without optimizations
+     :request "launch"
+     :program dape--go-binary-name
+     :args []
+     :stopAtBeginningOfMainSubprogram t)
     (flutter
      ensure dape-ensure-command
      modes (dart-mode)
@@ -866,6 +887,22 @@ Non interactive global minor mode."
 
 
 ;;; Utils
+
+(defun dape--go-test-name ()
+  "Retrieve Go test function name from current cursor position."
+  (if-let* ((file-name (buffer-file-name))
+            ((string-suffix-p "_test.go" file-name))
+            (fn-name (which-function)))
+      `["-test.run" ,(concat "^" (car (split-string (substring-no-properties fn-name))) "$")]
+    []))
+
+(defun dape--go-test-binary-name ()
+  "Format path to Go debugged test binary executable file."
+  (concat (temporary-file-directory) "__test.bin"))
+
+(defun dape--go-binary-name ()
+  "Format path to Go debugger binary exectuable file."
+  (concat (temporary-file-directory) "__prog.bin"))
 
 (defun dape--warn (format &rest args)
   "Display warning/error message with FORMAT and ARGS."
