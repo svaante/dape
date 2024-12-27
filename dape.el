@@ -667,6 +667,10 @@ left-to-right display order of the properties."
   "Max length of file name in dape info buffers."
   :type 'integer)
 
+(defcustom dape-repl-echo-shell-output nil
+  "Echo dape shell output in repl."
+  :type 'boolean)
+
 (defcustom dape-repl-use-shorthand t
   "Dape `dape-repl-commands' can be invoked with first char of command."
   :type 'boolean)
@@ -1941,10 +1945,14 @@ Starts a new adapter CONNs from ARGUMENTS."
                                (list shell-file-name shell-command-switch
                                      (mapconcat #'identity args " "))
                              args))
-                         :filter 'comint-output-filter
+                         :filter (if dape-repl-echo-shell-output
+                                     (lambda (process string)
+                                       (dape--repl-insert string)
+                                       (comint-output-filter process string))
+                                   #'comint-output-filter)
                          :sentinel 'shell-command-sentinel
                          :file-handler t)))
-      (dape--display-buffer buffer)
+      (unless dape-repl-echo-shell-output (dape--display-buffer buffer))
       (list :processId (process-id process)))))
 
 (cl-defmethod dape-handle-request (conn (_command (eql startDebugging)) arguments)
