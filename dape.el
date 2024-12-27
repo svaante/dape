@@ -611,7 +611,7 @@ this MIME type."
   '((dape-info-scope-mode dape-info-watch-mode)
     (dape-info-stack-mode dape-info-modules-mode dape-info-sources-mode)
     (dape-info-breakpoints-mode dape-info-threads-mode))
-  "Window display rules for `dape-info-parent-mode' derived modes.
+  "Window grouping rules for `dape-info' buffers.
 Each list of modes is displayed in the same window.  The first item of
 each group is displayed by `dape-info'.  All modes doesn't need to be
 present in an group."
@@ -634,12 +634,12 @@ present in an group."
   `((name . 0) (value . 0) (type . 0))
   "Configuration for table rows of variables.
 
-An alist that controls the display of the name, type and value of
+An ALIST that controls the display of the name, type and value of
 variables.  The key controls which column to change whereas the
 value determines the maximum number of characters to display in each
 column.  A value of 0 means there is no limit.
 
-Additionally, the order the element in the alist determines the
+Additionally, the order the element in the ALIST determines the
 left-to-right display order of the properties."
   :type '(alist :key-type symbol :value-type integer))
 
@@ -3534,36 +3534,28 @@ See `dape--info-call-update-with'."
       (with-current-buffer buffer
         (revert-buffer)))))
 
-(defun dape-info (&optional maybe-kill kill)
-  "Toggle dape info buffers.
-When called interactively MAYBE-KILL is non nil.
-When MAYBE-KILL is non nil kill buffers if all buffers are already
-displayed.
-When KILL is non nil kill buffers dape info buffers.
-
-See `dape-info-buffer-window-groups' to customize which buffers get
-displayed."
+(defun dape-info (&optional maybe-kill)
+  "Create and display dape info buffers.
+If MAYBE-KILL is non nil (which is always true when called
+interactively) and all info buffers are already displayed, kill each
+buffer info buffer.
+See `dape-info-buffer-window-groups' for how to customize which
+buffers get displayed and how they are grouped."
   (interactive (list t))
-  (cl-labels ((kill-dape-info ()
-                (dolist (buffer (buffer-list))
-                  (when (with-current-buffer buffer
-                          (derived-mode-p 'dape-info-parent-mode))
-                    (kill-buffer buffer)))))
-    (if kill
-        (kill-dape-info)
-      (let (buffer-displayed-p)
-        (dolist (group dape-info-buffer-window-groups)
-          (unless (seq-find (lambda (buffer)
-                              (and (get-buffer-window buffer)
-                                   (with-current-buffer buffer
-                                     (apply 'derived-mode-p group))))
-                            (dape--info-buffer-list))
-            (setq buffer-displayed-p t)
-            (dape--display-buffer
-             (dape--info-get-buffer-create (car group)))))
-        (dape-info-update)
-        (when (and maybe-kill (not buffer-displayed-p))
-          (kill-dape-info))))))
+  (let (buffer-displayed-p)
+    (cl-loop for group in dape-info-buffer-window-groups
+             unless (cl-some (lambda (buffer)
+                               (and (get-buffer-window buffer)
+                                    (with-current-buffer buffer
+                                      (apply #'derived-mode-p group))))
+                             (dape--info-buffer-list))
+             do
+             (setq buffer-displayed-p t)
+             (dape--display-buffer (dape--info-get-buffer-create (car group))))
+    (when (and maybe-kill (not buffer-displayed-p))
+      (cl-loop for buffer in (dape--info-buffer-list)
+               do (kill-buffer buffer)))
+    (dape-info-update)))
 
 (defconst dape--info-buffer-name-alist
   '((dape-info-breakpoints-mode . "Breakpoints")
