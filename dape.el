@@ -4431,17 +4431,16 @@ If REPL buffer is not live STRING will be displayed in minibuffer."
               (setq start (point-marker))
               (let ((inhibit-read-only t))
                 (insert string))
+              ;; XXX Inserting at pos of `comint-last-prompt' ...
               (when comint-last-prompt
-                ;; XXX We are writing at the comint marker which
-                ;;     forces us to move it by hand
                 (move-marker (car comint-last-prompt) (point)))
-              (goto-char (point-max))
-              ;; HACK Run hooks as if `comint-output-filter' was executed
+              ;; and process marker, this forces us to move them by hand.
               (when-let ((process (get-buffer-process buffer)))
-                (set-marker (process-mark process) (point-max)))
+                (set-marker (process-mark process) (+ (point) (length dape--repl-prompt))))
+              ;; HACK Run hooks as if `comint-output-filter' was executed
               (let ((comint-last-output-start start))
                 (run-hook-with-args 'comint-output-filter-functions string)))))
-      ;; Fallback to `message' if repl buffer closed
+      ;; Fallback to `message' if no repl buffer
       (message (string-trim string)))))
 
 (defun dape--repl-insert-error (string)
