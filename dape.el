@@ -1478,12 +1478,10 @@ timeout period is configurable with `dape-request-timeout'"
           (when cb (success-fn result)))
       (jsonrpc-async-request conn command arguments
                              :success-fn
-                             (when cb
-                               #'success-fn)
+                             (when cb #'success-fn)
                              :error-fn #'ignore ;; will never be called
                              :timeout-fn
-                             (when cb
-                               #'timeout-fn)
+                             (when cb #'timeout-fn)
                              :timeout dape-request-timeout))))
 
 (defun dape--initialize (conn)
@@ -3602,8 +3600,7 @@ displayed."
                             for name = (plist-get scope :name)
                             collect
                             (list 'dape-info-scope-mode i name)))
-                  (t
-                   `((,mode nil ,(alist-get mode dape--info-buffer-name-alist))))))))
+                  (`((,mode nil ,(alist-get mode dape--info-buffer-name-alist))))))))
 
 
 ;;; Info breakpoints buffer
@@ -4745,11 +4742,10 @@ Empty input will rerun last command.\n\n"
 (defun dape-repl ()
   "Create or select *dape-repl* buffer."
   (interactive)
-  (let ((buffer-name "*dape-repl*") window)
-    (with-current-buffer (get-buffer-create buffer-name)
-      (unless (eq major-mode 'dape-repl-mode)
-        (dape-repl-mode))
-      (setq window (dape--display-buffer (current-buffer)))
+  (with-current-buffer (get-buffer-create "*dape-repl*")
+    (unless (eq major-mode 'dape-repl-mode)
+      (dape-repl-mode))
+    (let ((window (dape--display-buffer (current-buffer))))
       (when (called-interactively-p 'interactive)
         (select-window window)))))
 
