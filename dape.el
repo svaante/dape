@@ -2807,7 +2807,7 @@ Using BUFFER and STR."
   :interactive nil
   (setq revert-buffer-function #'dape--memory-revert
         mode-line-buffer-identification
-        (append mode-line-buffer-identification '(" {" dape--memory-address "}"))
+        (append mode-line-buffer-identification '(" " dape--memory-address))
         eldoc-documentation-functions nil))
 
 (define-key dape-memory-mode-map "\C-x]" #'dape-memory-next-page)
