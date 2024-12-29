@@ -2635,6 +2635,8 @@ NO-REMOVE limits usage to only adding watched vars."
         (setq dape--watched (cl-delete watched dape--watched)))
     (unless no-add
       (push (list :name expression) dape--watched)))
+  (when (called-interactively-p 'interactive)
+    (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode)))
   (run-hooks 'dape-update-ui-hook))
 
 (defun dape-evaluate-expression (conn expression)
