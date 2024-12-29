@@ -4172,10 +4172,11 @@ current buffer with CONN config."
             (push prop columns)))))
     (nreverse columns)))
 
-(defun dape--info-scope-add-variable (table object ref path expanded-p)
+(defun dape--info-scope-add-variable (table object ref path test-expanded
+                                            &optional no-handles)
   "Add variable OBJECT with REF and PATH to TABLE.
-EXPANDED-P is called with PATH and OBJECT to determine if recursive
-calls should stop."
+TEST-EXPANDED is called with PATH and OBJECT to determine if recursive
+calls should continue.  If NO-HANDLES is non nil skip + - handles."
   (let* ((name (or (plist-get object :name) ""))
          (type (or (plist-get object :type) ""))
          (value (or (plist-get object :value)
@@ -4183,7 +4184,7 @@ calls should stop."
                     " "))
          (prefix (make-string (* (1- (length path)) 2) ?\s))
          (path (cons name path))
-         (expanded (funcall expanded-p path))
+         (expanded-p (funcall test-expanded path))
          row)
     (setq name
           (propertize name
@@ -4203,9 +4204,10 @@ calls should stop."
                       'keymap dape-info-variable-value-map)
           prefix
           (cond
+           (no-handles prefix)
            ((zerop (or (plist-get object :variablesReference) 0))
             (concat prefix "  "))
-           ((and expanded (plist-get object :variables))
+           ((and expanded-p (plist-get object :variables))
             (concat
              (propertize (concat prefix "-")
                          'mouse-face 'highlight
@@ -4232,12 +4234,12 @@ calls should stop."
                              'dape--info-path path
                              ;; `dape--command-at-line' expects non nil
                              'dape--info-ref (or ref 'refless)))
-    (when expanded
+    (when expanded-p
       ;; TODO Should be paged
       (dolist (variable (plist-get object :variables))
         (dape--info-scope-add-variable table variable
                                        (plist-get object :variablesReference)
-                                       path expanded-p)))))
+                                       path test-expanded no-handles)))))
 
 ;; FIXME Empty header line when adapter is killed
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
@@ -4276,12 +4278,11 @@ calls should stop."
              (setf (gdb-table-right-align table)
                    dape-info-variable-table-aligned)
              do
-             (dape--info-scope-add-variable
-              table
-              object
-              (plist-get scope :variablesReference)
-              (list dape--info-scope-index)
-              #'dape--variable-expanded-p)
+             (dape--info-scope-add-variable table
+                                            object
+                                            (plist-get scope :variablesReference)
+                                            (list dape--info-scope-index)
+                                            #'dape--variable-expanded-p)
              finally (insert (gdb-table-string table " ")))))))))
 
 
@@ -5344,8 +5345,8 @@ See `eldoc-documentation-functions', for more information."
                                        #'dape--variable-expanded-p)
           (let ((table (make-gdb-table)))
             (dape--info-scope-add-variable table (plist-put body :name name)
-                                           nil '(hover)
-                                           #'dape--variable-expanded-p)
+                                           nil '(hover) #'dape--variable-expanded-p
+                                           'no-handles)
             (funcall cb (gdb-table-string table " ")))))))
   t)
 
