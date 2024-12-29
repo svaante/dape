@@ -2756,10 +2756,10 @@ Using BUFFER and STR."
        ((not data) (message "No bytes returned from adapter"))
        (t
         (setq dape--memory-address address
+              hexl-max-address dape-memory-page-size
               buffer-undo-list nil)
-        (let ((inhibit-read-only t)
+        (let ((address (dape--memory-address-number))
               (temp-buffer (generate-new-buffer " *temp*" t))
-              (address (dape--memory-address-number))
               (buffer-empty-p (zerop (buffer-size))))
           (with-current-buffer temp-buffer
             (insert (base64-decode-string data))
@@ -2769,29 +2769,24 @@ Using BUFFER and STR."
             (goto-char (point-min))
             (while (re-search-forward "^[0-9a-f]+" nil t)
               (let ((address
-                     (format "%08x" (+ address
-                                       (string-to-number (match-string 0) 16)))))
+                     (format "%08x" (+ address (string-to-number (match-string 0) 16)))))
                 (delete-region (match-beginning 0) (match-end 0))
                 ;; `hexl' does not support address over 8 hex chars
                 (insert (append (substring address (- (length address) 8)))))))
           (replace-buffer-contents temp-buffer)
-          (when buffer-empty-p
-            (goto-char (point-min)))
+          (when buffer-empty-p (hexl-goto-address 0))
           (kill-buffer temp-buffer))
         (set-buffer-modified-p nil)
         (when write-capable-p
-	  (add-hook 'write-contents-functions #'dape--memory-write))
-        (rename-buffer (format "*dape-memory @ %s*" address) t))))))
+          (add-hook 'write-contents-functions #'dape--memory-write)))))))
 
 (defun dape--memory-write ()
   "Write buffer contents to stopped connection."
   (let ((conn (dape--live-connection 'last))
         (buffer (current-buffer))
-        (start (point-min))
-        (end (point-max))
         (address dape--memory-address))
     (with-temp-buffer
-      (insert-buffer-substring buffer start end)
+      (insert-buffer-substring buffer)
       (dehexlify-buffer)
       (dape--with-request-bind
           (_body error)
@@ -2807,18 +2802,13 @@ Using BUFFER and STR."
   ;; Return `t' to signal buffer written
   t)
 
-(defun dape--memory-print-current-point-info (&rest _ignored)
-  "Print address at point."
-  (let ((addr (+ (hexl-current-address) (dape--memory-address-number))))
-    (format "Current memory address is %d/0x%08x" addr addr)))
-
 (define-derived-mode dape-memory-mode hexl-mode "Memory"
   "Mode for reading and writing memory."
   :interactive nil
-  ;; TODO Look for alternatives to hexl, which handles address offsets
-  (add-hook 'eldoc-documentation-functions
-            #'dape--memory-print-current-point-info nil t)
-  (setq revert-buffer-function #'dape--memory-revert))
+  (setq revert-buffer-function #'dape--memory-revert
+        mode-line-buffer-identification
+        (append mode-line-buffer-identification '(" {" dape--memory-address "}"))
+        eldoc-documentation-functions nil))
 
 (define-key dape-memory-mode-map "\C-x]" #'dape-memory-next-page)
 (define-key dape-memory-mode-map "\C-x[" #'dape-memory-previous-page)
@@ -2827,13 +2817,10 @@ Using BUFFER and STR."
   "Move address `dape-memory-page-size' forward.
 When BACKWARD is non nil move backward instead."
   (interactive nil dape-memory-mode)
-  (let ((op (if backward '- '+)))
-    (dape-read-memory
-     (format "0x%08x"
-             (funcall op
-                      (dape--memory-address-number)
-                      dape-memory-page-size))
-     t)))
+  (dape-read-memory (format "0x%08x"
+                            (funcall (if backward '- '+) (dape--memory-address-number)
+                                     dape-memory-page-size))
+                    t))
 
 (defun dape-memory-previous-page ()
   "Move address `dape-memory-page-size' backward."
@@ -2844,8 +2831,7 @@ When BACKWARD is non nil move backward instead."
   "Revert all `dape-memory-mode' buffers."
   (dape--with-debounce dape--memory-debounce-timer dape-ui-debounce-time
     (cl-loop for buffer in (buffer-list)
-             when (eq (with-current-buffer buffer major-mode)
-                      'dape-memory-mode)
+             when (eq (with-current-buffer buffer major-mode) 'dape-memory-mode)
              do (with-current-buffer buffer (revert-buffer)))))
 
 (defun dape-read-memory (address &optional reuse-buffer)
@@ -2854,15 +2840,14 @@ If REUSE-BUFFER is non nil reuse the current buffer to display result
 of memory read."
   (interactive
    (list (string-trim
-          (read-string "Address: "
+          (read-string "Address: " nil nil
                        (when-let ((number (thing-at-point 'number)))
                          (format "0x%08x" number))))))
   (let ((conn (dape--live-connection 'stopped)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
       (user-error "Adapter not capable of reading memory"))
-    (let ((buffer
-           (or (and reuse-buffer (current-buffer))
-               (generate-new-buffer (format "*dape-memory @ %s*" address)))))
+    (let ((buffer (if reuse-buffer (current-buffer)
+                    (generate-new-buffer "*dape-memory*"))))
       (with-current-buffer buffer
         (unless (eq major-mode 'dape-memory-mode)
           (dape-memory-mode)
@@ -2871,8 +2856,7 @@ of memory read."
                       "Write memory with `\\[save-buffer]'"))))
         (setq dape--memory-address address)
         (revert-buffer))
-      (select-window
-       (display-buffer buffer)))))
+      (select-window (display-buffer buffer)))))
 
 ;;; Breakpoints
 
