@@ -2756,7 +2756,7 @@ Using BUFFER and STR."
        ((not data) (message "No bytes returned from adapter"))
        (t
         (setq dape--memory-address address
-              hexl-max-address dape-memory-page-size
+              hexl-max-address (1- dape-memory-page-size)
               buffer-undo-list nil)
         (let ((address (dape--memory-address-number))
               (temp-buffer (generate-new-buffer " *temp*" t))
