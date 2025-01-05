@@ -741,9 +741,8 @@ compilation is successful."
   "How to push configuration options onto `dape-history'.
 
 - input: Store input as is read from minibuffer.
-- evaled: Input is evaluated then checked against base
-  configuration in `dape-configs'.  Each options that differ from
-  base are stored.
+- evaled: Input is evaluated then checked against base configuration
+  in `dape-configs'.  Each options that differ from base are stored.
 - dash-form: Like evaled but stores options in dash form if possible.
   With dash form characters after - are interpret in sh like format
   with ENV PROGRAM ARGS.  This is useful for adapters which accepts
