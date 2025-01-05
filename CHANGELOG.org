@@ -2,6 +2,16 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.20.0
+- Add variable mappings to REPL
+- Add index to thread and stack buffer
+- Add =dape-repl-echo-shell-output= to echo runInTerminal shell to repl
+- Add nil option to =dape-buffer-window-arrangement=
+- Add cd to =dape-commands=
+- Fix remove unnecessary variable handles given to eldoc
+- Fix out of hexl region error
+- Fix invalid overlay-arrow placed on min-point
+
 * Version 0.19.0
 - Add argument support REPL and to =dape-repl-*= commands
 - Change =dape-list-*= names to be REPL specific
