@@ -429,18 +429,18 @@ Expects line with string \"breakpoint\" in source."
                           (dape--info-get-live-buffer 'dape-info-stack-mode))
       ;; buffer contents
       (dape-test--should
-       (and (dape-test--line-at-regex "^in b")
-            (dape-test--line-at-regex "^in a")
+       (and (dape-test--line-at-regex "^1 b")
+            (dape-test--line-at-regex "^2 a")
             (member 'dape--info-stack-position
                     overlay-arrow-variable-list)
             (= (marker-position dape--info-stack-position) 1)))
       ;; select stack frame
-      (dape-test--apply-to-match "^in a" 'dape-info-stack-select)
+      (dape-test--apply-to-match "^2 a" 'dape-info-stack-select)
       ;; buffer contents
       (dape-test--should
        (and (= (marker-position dape--info-stack-position)
                (save-excursion
-                 (dape-test--goto-line (dape-test--line-at-regex "^in a"))
+                 (dape-test--goto-line (dape-test--line-at-regex "^2 a"))
                  (point))))))
     ;; scope buffer should update to new stack
     (with-current-buffer

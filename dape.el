@@ -622,10 +622,6 @@ present in an group."
   "Hide mode line in dape info buffers."
   :type 'boolean)
 
-(defcustom dape-info-table-indexed nil
-  "Show index of rows in tabulated info."
-  :type 'boolean)
-
 (defcustom dape-info-variable-table-aligned nil
   "Align columns in variable tables."
   :type 'boolean)
@@ -2551,15 +2547,12 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
    (let* ((conn (dape--live-connection 'last))
           (collection
            (cl-loop with conns = (dape--live-connections)
-                    with conn-prefix-p =
-                    (length> (cl-remove-if-not 'dape--threads conns) 1)
-                    for conn in conns for index upfrom 1 append
+                    with index = 0
+                    for conn in conns append
                     (cl-loop for thread in (dape--threads conn) collect
-                             `(,(concat (when conn-prefix-p
-                                          (format "%s: " index))
-                                        (plist-get thread :name))
-                               ,conn
-                               ,(plist-get thread :id)))))
+                             (list (format "%s %s" (cl-incf index) (plist-get thread :name))
+                                   conn
+                                   (plist-get thread :id)))))
           (thread-name
            (completing-read
             (format "Select thread (current %s): "
@@ -3819,7 +3812,6 @@ See `dape-request' for expected CB signature."
          with table = (make-gdb-table)
          with conns = (dape--live-connections)
          with current-thread = (dape--current-thread conn)
-         with conn-prefix-p = (length> (cl-remove-if-not 'dape--threads conns) 1)
          with line = 0
          with selected-line
          for conn in conns
@@ -3830,40 +3822,37 @@ See `dape-request' for expected CB signature."
           (when (eq current-thread thread) (setq selected-line line))
           (gdb-table-add-row
            table
-           (append
-            (when dape-info-table-indexed (list (format "%s" line)))
-            (when conn-prefix-p (list (format "%s:" index)))
-            (list
-             (concat
-              (plist-get thread :name)
-              " "
-              (if-let ((status (plist-get thread :status)))
-                  (format "%s" status)
-                "unknown")
-              ;; Include frame information for stopped threads
-              (if-let* (((equal (plist-get thread :status) 'stopped))
-                        (top-stack (car (plist-get thread :stackFrames))))
-                  (concat
-                   " in " (plist-get top-stack :name)
-                   (when-let* ((dape-info-thread-buffer-locations)
-                               (path (thread-first top-stack
-                                                   (plist-get :source)
-                                                   (plist-get :path)))
-                               (path (dape--path-local conn path))
-                               (line (plist-get top-stack :line)))
-                     (concat " of " (dape--format-file-line path line)))
-                   (when-let ((dape-info-thread-buffer-addresses)
-                              (addr
-                               (plist-get top-stack :instructionPointerReference)))
-                     (concat " at " addr))
-                   " ")))))
            (list
-            'dape--info-conn conn
-            'dape--info-thread thread
-            'dape--selected (eq current-thread thread)
-            'mouse-face 'highlight
-            'keymap dape-info-threads-line-map
-            'help-echo "mouse-2, RET: select thread")))
+            (format "%s" line)
+            (concat
+             (plist-get thread :name)
+             " "
+             (if-let ((status (plist-get thread :status)))
+                 (format "%s" status)
+               "unknown")
+             ;; Include frame information for stopped threads
+             (if-let* (((equal (plist-get thread :status) 'stopped))
+                       (top-stack (car (plist-get thread :stackFrames))))
+                 (concat
+                  " in " (plist-get top-stack :name)
+                  (when-let* ((dape-info-thread-buffer-locations)
+                              (path (thread-first top-stack
+                                                  (plist-get :source)
+                                                  (plist-get :path)))
+                              (path (dape--path-local conn path))
+                              (line (plist-get top-stack :line)))
+                    (concat " of " (dape--format-file-line path line)))
+                  (when-let ((dape-info-thread-buffer-addresses)
+                             (addr
+                              (plist-get top-stack :instructionPointerReference)))
+                    (concat " at " addr))
+                  " "))))
+           (list 'dape--info-conn conn
+                 'dape--info-thread thread
+                 'dape--selected (eq current-thread thread)
+                 'mouse-face 'highlight
+                 'keymap dape-info-threads-line-map
+                 'help-echo "mouse-2, RET: select thread")))
          finally do
          (dape--info-update-with
            (insert (gdb-table-string table " "))
@@ -3880,7 +3869,7 @@ See `dape-request' for expected CB signature."
   "`dape-info-stack-mode' marker for `overlay-arrow-variable-list'.")
 
 (defvar dape--info-stack-font-lock-keywords
-  '(("in \\([^ ]+\\)"  (1 font-lock-function-name-face)))
+  '(("^[ 0-9]+ \\([^ ]+\\)"  (1 font-lock-function-name-face)))
   "Font lock keywords used in `gdb-frames-mode'.")
 
 (dape--command-at-line dape-info-stack-select (dape--info-frame)
@@ -3910,22 +3899,21 @@ current buffer with CONN config."
              (setq selected-line line))
            (gdb-table-add-row
             table
-            (append
-             (when dape-info-table-indexed (list (format "%s" line)))
-             (list "in"
-                   (concat
-                    (plist-get frame :name)
-                    (when-let* ((dape-info-stack-buffer-locations)
-                                (path (thread-first frame
-                                                    (plist-get :source)
-                                                    (plist-get :path)))
-                                (path (dape--path-local conn path)))
-                      (concat " of "
-                              (dape--format-file-line path (plist-get frame :line))))
-                    (when-let ((dape-info-stack-buffer-addresses)
-                               (ref (plist-get frame :instructionPointerReference)))
-                      (concat " at " ref))
-                    " ")))
+            (list
+             (format "%s" line)
+             (concat
+              (plist-get frame :name)
+              (when-let* ((dape-info-stack-buffer-locations)
+                          (path (thread-first frame
+                                              (plist-get :source)
+                                              (plist-get :path)))
+                          (path (dape--path-local conn path)))
+                (concat " of "
+                        (dape--format-file-line path (plist-get frame :line))))
+              (when-let ((dape-info-stack-buffer-addresses)
+                         (ref (plist-get frame :instructionPointerReference)))
+                (concat " at " ref))
+              " "))
             (list 'dape--info-frame frame
                   'dape--selected (eq current-stack-frame frame)
                   'mouse-face 'highlight
@@ -4489,7 +4477,6 @@ See `dape--info-scope-index' for information on INDEX."
     (funcall mode)
     (setq dape--info-scope-index index)
     (let ((dape-ui-debounce-time 0)
-          (dape-info-table-indexed t)
           (dape--request-blocking t))
       (revert-buffer))
     (font-lock-ensure)
