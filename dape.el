@@ -1244,7 +1244,6 @@ FN is executed on mouse-2 and \\r, BODY is executed with `map' bound."
   (declare (indent defun))
   `(defvar ,name
      (let ((map (make-sparse-keymap)))
-       (suppress-keymap map)
        (define-key map "\r" ',fn)
        (define-key map [mouse-2] ',fn)
        (define-key map [follow-link] 'mouse-face)
@@ -4132,13 +4131,16 @@ current buffer with CONN config."
            (dape--info-get-buffer-create 'dape-info-breakpoints-mode))
           (run-hooks 'dape-update-ui-hook))))))
 
-(defvar dape-info-scope-mode-map
+(defvar dape-info-variable-map
   (let ((map (make-sparse-keymap)))
     (define-key map "e" 'dape-info-scope-toggle)
     (define-key map "W" 'dape-info-scope-watch-dwim)
     (define-key map "=" 'dape-info-variable-edit)
     (define-key map "b" 'dape-info-scope-data-breakpoint)
     map)
+  "Keymap for buffers or regions displaying variables.")
+
+(defvar dape-info-scope-mode-map (copy-keymap dape-info-variable-map)
   "Local keymap for dape scope buffers.")
 
 (defun dape--info-locals-table-columns-list (alist)
@@ -4232,8 +4234,7 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
   "Major mode for Dape info scope."
   :interactive nil
-  (dape--info-update-with
-    (insert "No scope information available.")))
+  (dape--info-update-with (insert "No scope information available.")))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-scope-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
@@ -4455,6 +4456,19 @@ The search is done backwards from POINT.  The line is marked with
         (forward-line (1- line))
         (forward-char col)))))
 
+(defun dape--repl-make-region-string (str revert-function keymap)
+  "Return STR with local REVERT-FUNCTION and KEYMAP."
+  (cl-loop for (start end props) in (object-intervals str) do
+           (add-text-properties start end
+                                `( keymap ,(make-composed-keymap
+                                            (list (plist-get props 'keymap) keymap))
+                                   font-lock-face ,(plist-get props 'face))
+                                str)
+           finally return
+           (propertize str
+                       'dape--revert-tag (cl-gensym "dape-region-tag")
+                       'dape--revert-fn revert-function)))
+
 (defun dape--repl-variable (variable)
   "Return VARIABLE string representation with CONN."
   (when-let* ((conn (or (dape--live-connection 'stopped t)
@@ -4466,9 +4480,9 @@ The search is done backwards from POINT.  The line is marked with
   (let ((table (make-gdb-table)))
     (setf (gdb-table-right-align table) dape-info-variable-table-aligned)
     (dape--info-scope-add-variable table variable nil '(repl) #'dape--variable-expanded-p)
-    (propertize (gdb-table-string table " ")
-                'dape--revert-tag (cl-gensym "dape-region-tag")
-                'dape--revert-fn (apply-partially #'dape--repl-variable variable))))
+    (dape--repl-make-region-string (gdb-table-string table " ")
+                                   (apply-partially #'dape--repl-variable variable)
+                                   dape-info-variable-map)))
 
 (defun dape--repl-info-string (mode index)
   "Return info buffer content by MODE and `revert-buffer'.
@@ -4480,16 +4494,11 @@ See `dape--info-scope-index' for information on INDEX."
           (dape--request-blocking t))
       (revert-buffer))
     (font-lock-ensure)
-    (cl-loop with str = (buffer-substring (point-min) (point-max))
-             for (start end props) in (object-intervals str) do
-             (put-text-property start end 'font-lock-face (plist-get props 'face) str)
-             finally do
-             (add-text-properties
-              0 (length str)
-              `( dape--revert-tag ,(cl-gensym "dape-region-tag")
-                 dape--revert-fn ,(apply-partially #'dape--repl-info-string mode index))
-              str)
-             finally return str)))
+    (dape--repl-make-region-string
+     (buffer-substring (point-min) (point-max))
+     (apply-partially #'dape--repl-info-string mode index)
+     (when (memq mode '(dape-info-watch-mode dape-info-scope-mode))
+       dape-info-variable-map))))
 
 (defun dape--repl-insert-info-buffer (mode &optional index)
   "Insert content of MODE info buffer into repl.
