@@ -4458,7 +4458,8 @@ The search is done backwards from POINT.  The line is marked with
            (add-text-properties start end
                                 `( keymap ,(make-composed-keymap
                                             (list (plist-get props 'keymap) keymap))
-                                   font-lock-face ,(plist-get props 'face))
+                                   font-lock-face ,(or (plist-get props 'font-lock-face)
+                                                       (plist-get props 'face)))
                                 str)
            finally return
            (propertize str
