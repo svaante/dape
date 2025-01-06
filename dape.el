@@ -3647,21 +3647,17 @@ without log or expression breakpoint"))))))
 
 (dape--buffer-map dape-info-exceptions-line-map dape-info-exceptions-toggle)
 
-(defvar dape--info-breakpoints-font-lock-keywords
-  '(("^ *\\(y\\)"  (1 font-lock-warning-face))
-    ("^ *\\(n\\)"  (1 font-lock-doc-face)))
-  "Keywords for `dape-info-breakpoints-mode'.")
-
 (define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
   "Major mode for Dape info breakpoints."
-  :interactive nil
-  (setq font-lock-defaults '(dape--info-breakpoints-font-lock-keywords)))
+  :interactive nil)
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-breakpoints-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for MAJOR-MODE `dape-info-breakpoints-mode'."
   (dape--info-update-with
-    (let ((table (make-gdb-table)))
+    (let ((table (make-gdb-table))
+          (y (propertize "y" 'font-lock-face 'font-lock-warning-face))
+          (n (propertize "n" 'font-lock-face 'font-lock-doc-face)))
       (cl-loop
        for breakpoint in dape--breakpoints
        for line = (dape--breakpoint-line breakpoint)
@@ -3680,7 +3676,7 @@ without log or expression breakpoint"))))))
         (list
          (if-let ((hits (dape--breakpoint-hits breakpoint)))
              (format "%s" hits)
-           (if verified-p "y" "n"))
+           (if verified-p y n))
          (pcase (dape--breakpoint-type breakpoint)
            ('log        "Log  ")
            ('hits       "Hits ")
@@ -3705,7 +3701,7 @@ without log or expression breakpoint"))))))
        for plist in dape--data-breakpoints do
        (gdb-table-add-row
         table
-        (list "y"
+        (list y
               "Data "
               (format "%s %s %s"
                       (propertize (plist-get plist :name)
@@ -3720,7 +3716,7 @@ without log or expression breakpoint"))))))
        for exception in dape--exceptions do
        (gdb-table-add-row
         table
-        (list (if (plist-get exception :enabled) "y" "n")
+        (list (if (plist-get exception :enabled) y n)
               "Excep"
               (format "%s" (plist-get exception :label)))
         (list 'dape--info-exception exception
