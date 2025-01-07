@@ -444,7 +444,7 @@ Symbol keys (Used by dape):
 - port: Port of the debug adapter.
 - modes: List of modes where the configuration is active in `dape'
   completions.
-- compile: Executes a shell command with `dape-compile-fn'.
+- compile: Executes a shell command with `dape-compile-function'.
 - defer-launch-attach: If launch/attach request should be sent
   after initialize or configurationDone.  If nil launch/attach are
   sent after initialize request else it's sent after
@@ -694,12 +694,14 @@ left-to-right display order of the properties."
 See `dape-breakpoint-load' and `dape-breakpoint-save'."
   :type 'file)
 
-(defcustom dape-compile-fn #'compile
+(define-obsolete-variable-alias 'dape-compile-fn 'dape-compile-function "0.21.0")
+(defcustom dape-compile-function #'compile
   "Function to compile with.
 The function is called with a command string."
   :type 'function)
 
-(defcustom dape-cwd-fn #'dape--default-cwd
+(define-obsolete-variable-alias 'dape-cwd-fn 'dape-cwd-function "0.21.0")
+(defcustom dape-cwd-function #'dape--default-cwd
   "Function to get current working directory.
 The function should return a string representing the absolute
 file path of the current working directory, usually the current
@@ -1052,12 +1054,12 @@ Note requires `dape--source-ensure' if source is by reference."
       default-directory))
 
 (defun dape-cwd ()
-  "Use `dape-cwd-fn' to guess current working as local path."
-  (tramp-file-local-name (funcall dape-cwd-fn)))
+  "Use `dape-cwd-function' to guess current working as local path."
+  (tramp-file-local-name (funcall dape-cwd-function)))
 
 (defun dape-command-cwd ()
-  "Use `dape-cwd-fn' to guess current working directory."
-  (funcall dape-cwd-fn))
+  "Use `dape-cwd-function' to guess current working directory."
+  (funcall dape-cwd-function))
 
 (defun dape-buffer-default ()
   "Return current buffers file name."
@@ -2710,7 +2712,7 @@ Using BUFFER and STR."
   "Start compilation for CONFIG then call FN."
   (let ((default-directory (dape--guess-root config))
         (command (plist-get config 'compile)))
-    (funcall dape-compile-fn command)
+    (funcall dape-compile-function command)
     (with-current-buffer (compilation-find-buffer)
       (setq dape--compile-after-fn fn)
       (add-hook 'compilation-finish-functions #'dape--compile-compilation-finish nil t))))
