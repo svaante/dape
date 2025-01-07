@@ -5375,12 +5375,16 @@ See `eldoc-documentation-functions', for more information."
     "--"
     ["Customize Dape" (lambda () (interactive) (customize-group "dape"))]))
 
+(defvar dape--update-mode-line-debounce-timer (timer-create)
+  "Debounce context for updating the mode line.")
+
 (defun dape--update-state (conn state &optional reason)
   "Update Dape mode line with STATE symbol for adapter CONN."
-  (setf (dape--state conn) state)
-  (setf (dape--state-reason conn) reason)
-  (dape--mode-line-format)
-  (force-mode-line-update t))
+  (setf (dape--state conn) state
+        (dape--state-reason conn) reason)
+  (dape--with-debounce dape--update-mode-line-debounce-timer dape-ui-debounce-time
+    (dape--mode-line-format)
+    (force-mode-line-update t)))
 
 (defvar dape--mode-line-format nil
   "Dape mode line format.")
@@ -5401,6 +5405,15 @@ mouse-1: Display minor mode menu"
                         (define-key map [mode-line down-mouse-1] dape-menu)
                         map))
             ":"
+            (:propertize
+             ,(when-let* ((thread-name (plist-get (dape--current-thread conn) :name)))
+                (concat thread-name " "))
+             face font-lock-constant-face
+             mouse-face mode-line-highlight
+             help-echo "mouse-1: Select thread"
+             keymap ,(let ((map (make-sparse-keymap)))
+                       (define-key map [mode-line down-mouse-1] 'dape-select-thread)
+                       map))
             (:propertize ,(format "%s" (or (and conn (dape--state conn))
                                            'unknown))
                          face font-lock-doc-face)
