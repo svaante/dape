@@ -59,22 +59,6 @@
 (require 'jsonrpc)
 
 
-;;; Obsolete aliases
-(define-obsolete-variable-alias 'dape-buffer-window-arrangment 'dape-buffer-window-arrangement "0.3.0")
-(define-obsolete-variable-alias 'dape-read-memory-default-count 'dape-memory-page-size "0.8.0")
-(define-obsolete-variable-alias 'dape-on-start-hooks 'dape-start-hook "0.13.0")
-(define-obsolete-variable-alias 'dape-on-stopped-hooks 'dape-stopped-hook "0.13.0")
-(define-obsolete-variable-alias 'dape-update-ui-hooks 'dape-update-ui-hook "0.13.0")
-(define-obsolete-variable-alias 'dape-compile-compile-hooks 'dape-compile-hook "0.13.0")
-
-
-;;; Forward declarations
-(defvar hl-line-mode)
-(defvar hl-line-sticky-flag)
-(declare-function global-hl-line-highlight  "hl-line" ())
-(declare-function hl-line-highlight         "hl-line" ())
-
-
 ;;; Custom
 (defgroup dape nil
   "Debug Adapter Protocol for Emacs."
@@ -535,6 +519,7 @@ Example value:
   "Prefix of all dape commands."
   :type 'key-sequence)
 
+(define-obsolete-variable-alias 'dape-buffer-window-arrangment 'dape-buffer-window-arrangement "0.3.0")
 (defcustom dape-buffer-window-arrangement 'left
   "Rules for display dape buffers."
   :type '(choice (const :tag "GUD gdb like" gud)
@@ -579,14 +564,17 @@ variable should be expanded by default."
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
+(define-obsolete-variable-alias 'dape-on-start-hooks 'dape-start-hook "0.13.0")
 (defcustom dape-start-hook '(dape-repl dape-info)
   "Called when session starts."
   :type 'hook)
 
+(define-obsolete-variable-alias 'dape-on-stopped-hooks 'dape-stopped-hook "0.13.0")
 (defcustom dape-stopped-hook '(dape-memory-revert dape--emacs-grab-focus)
   "Called when session stopped."
   :type 'hook)
 
+(define-obsolete-variable-alias 'dape-update-ui-hooks 'dape-update-ui-hook "0.13.0")
 (defcustom dape-update-ui-hook '(dape-info-update)
   "Called when it's sensible to refresh UI."
   :type 'hook)
@@ -603,6 +591,7 @@ a string and MODE is the major mode function to use for buffers of
 this MIME type."
   :type '(alist :key-type string :value-type function))
 
+(define-obsolete-variable-alias 'dape-read-memory-default-count 'dape-memory-page-size "0.8.0")
 (defcustom dape-memory-page-size 1024
   "The bytes read with `dape-read-memory'."
   :type 'natnum)
@@ -717,6 +706,7 @@ file path of the current working directory, usually the current
 project's root.  See `dape--default-cwd'."
   :type 'function)
 
+(define-obsolete-variable-alias 'dape-compile-compile-hooks 'dape-compile-hook "0.13.0")
 (defcustom dape-compile-hook nil
   "Called after dape compilation finishes.
 The hook is run with one argument, the compilation buffer when
@@ -788,6 +778,13 @@ Debug logging has an noticeable effect on performance."
 (defface dape-repl-error-face '((t :inherit compilation-mode-line-fail
                                    :extend t))
   "Face used in repl for non 0 exit codes.")
+
+
+;;; Forward declarations
+(defvar hl-line-mode)
+(defvar hl-line-sticky-flag)
+(declare-function global-hl-line-highlight  "hl-line" ())
+(declare-function hl-line-highlight         "hl-line" ())
 
 
 ;;; Vars
