@@ -920,8 +920,7 @@ If thread is selected, select CONN as well if no previously connection
 has been selected or if current selected connection does not have any
 stopped threads.
 See `dape--connection-selected'."
-  (when (and thread-id
-             (or force (not (dape--thread-id conn))))
+  (when (and thread-id (or force (not (dape--thread-id conn))))
     (setf (dape--thread-id conn) thread-id)
     (unless (and (member dape--connection-selected (dape--live-connections))
                  (dape--stopped-threads dape--connection-selected))
