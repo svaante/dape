@@ -2480,7 +2480,7 @@ CONN is inferred for interactive invocations."
 Expressions within `{}` are interpolated."
   (interactive
    (list
-    (read-string "Log (Expressions within `{}` are interpolated): "
+    (read-string "Log (Expressions within {} are interpolated): "
                  (when-let ((breakpoint
                              (cl-find 'log (dape--breakpoints-at-point)
                                       :key #'dape--breakpoint-type)))
@@ -2540,7 +2540,8 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
            (dape--breakpoint-broadcast-update source)))
 
 (defun dape-select-thread (conn thread-id)
-  "Select current thread for adapter CONN by THREAD-ID."
+  "Select current thread for adapter CONN by THREAD-ID.
+With prefix argument thread is selected by index."
   (interactive
    (let* ((conn (dape--live-connection 'last))
           (collection
@@ -2552,11 +2553,13 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                                    conn
                                    (plist-get thread :id)))))
           (thread-name
-           (completing-read
-            (format "Select thread (current %s): "
-                    (thread-first conn (dape--current-thread)
-                                  (plist-get :name)))
-            collection nil t)))
+           (if (numberp current-prefix-arg)
+               (car (nth (1- current-prefix-arg) collection))
+             (completing-read
+              (format "Select thread (current %s): "
+                      (thread-first conn (dape--current-thread)
+                                    (plist-get :name)))
+              collection nil t))))
      (alist-get thread-name collection nil nil 'equal)))
   (setf (dape--thread-id conn) thread-id)
   (setq dape--connection-selected conn)
@@ -2564,7 +2567,8 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
   (dape--mode-line-format))
 
 (defun dape-select-stack (conn stack-id)
-  "Selected current stack for adapter CONN by STACK-ID."
+  "Selected current stack for adapter CONN by STACK-ID.
+With prefix argument stack is selected by index."
   (interactive
    (let* ((conn (dape--live-connection 'stopped))
           (current-thread (dape--current-thread conn))
@@ -2579,9 +2583,11 @@ When SKIP-UPDATE is non nil, does not notify adapter about removal."
                                            (plist-get stack :id)))
                      (plist-get current-thread :stackFrames))))
           (stack-name
-           (completing-read (format "Select stack (current %s): "
-                                    (plist-get (dape--current-stack-frame conn) :name))
-                            collection nil t)))
+           (if (numberp current-prefix-arg)
+               (car (nth (1- current-prefix-arg) collection))
+             (completing-read (format "Select stack (current %s): "
+                                      (plist-get (dape--current-stack-frame conn) :name))
+                              collection nil t))))
      (list conn (alist-get stack-name collection nil nil 'equal))))
   (setf (dape--stack-id conn) stack-id)
   (dape--update conn nil t))
