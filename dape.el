@@ -2611,9 +2611,9 @@ NO-REMOVE limits usage to only adding watched vars."
   (interactive
    (list (string-trim
           (completing-read
-           "Watch or unwatch symbol: "
+           "Watch or unwatch symbol or expression: "
            (mapcar (lambda (plist) (plist-get plist :name)) dape--watched)
-           nil nil
+           nil nil nil nil
            (or (and (region-active-p)
                     (buffer-substring (region-beginning) (region-end)))
                (thing-at-point 'symbol))))))
