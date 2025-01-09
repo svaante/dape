@@ -103,7 +103,7 @@
               (thread-first config
                             (plist-put :pathBashdbLib ,bashdb-dir)
                             (plist-put :pathBashdb (file-name-concat ,bashdb-dir "bashdb"))
-                            (plist-put :env `(:BASHDB_HOME ,bashdb-dir . ,(plist-get config :env)))))
+                            (plist-put :env `(:BASHDB_HOME ,,bashdb-dir . ,(plist-get config :env)))))
          :type "bashdb"
          :cwd dape-cwd
          :program dape-buffer-default
