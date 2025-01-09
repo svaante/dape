@@ -2,6 +2,12 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.21.0
+- Add current thread name to mode line
+- Add prefix-argument to dape-select-* commands
+- Fix "breakpoint" command faces in REPL
+- Fix bash-debug unresolved bashdb-dir symbol
+
 * Version 0.20.0
 - Add variable mappings to REPL
 - Add index to thread and stack buffer
