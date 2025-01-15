@@ -1202,10 +1202,8 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                          (pcase (cons mode group)
                            (`(dape-repl-mode . ,_) '((side . bottom) (slot . -1)))
                            (`(dape-shell-mode . ,_) '((side . bottom) (slot . 0)))
-                           (`(,_ . 0) `((side . ,dape-buffer-window-arrangement) (slot . -1)))
-                           (`(,_ . 1) `((side . ,dape-buffer-window-arrangement) (slot . 0)))
-                           (`(,_ . 2) `((side . ,dape-buffer-window-arrangement) (slot . 1)))
-                           (_ (error "Unable to display buffer of mode `%s'" mode)))))
+                           (`(,_ . ,index) `((side . ,dape-buffer-window-arrangement)
+                                             (slot . ,(1- index)))))))
                   ('gud
                    (pcase (cons mode group)
                      (`(dape-repl-mode . ,_)
