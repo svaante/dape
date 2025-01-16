@@ -2161,7 +2161,8 @@ Killing the adapter and it's CONN."
         ;; HACK remove duplicated terminated print for dlv
         (unless (eq (dape--state conn) 'terminated)
           (dape--message "Session terminated"))
-        (dape--update-state conn 'terminated)))))
+        (dape--update-state conn 'terminated)
+        (run-hooks 'dape-update-ui-hook)))))
 
 
 ;;; Startup/Setup
