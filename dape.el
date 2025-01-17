@@ -1986,7 +1986,9 @@ Starts a new adapter connection as per request of the debug adapter."
 (cl-defmethod dape-handle-event (conn (_event (eql capabilities)) body)
   "Handle adapter CONNs capabilities events.
 BODY is an plist of adapter capabilities."
-  (setf (dape--capabilities conn) (plist-get body :capabilities))
+  (setf (dape--capabilities conn)
+        ;; Only changed capabilities needs to be included in body
+        (append (plist-get body :capabilities) (dape--capabilities conn)))
   (dape--configure-exceptions conn))
 
 (cl-defmethod dape-handle-event (conn (_event (eql breakpoint)) body)
