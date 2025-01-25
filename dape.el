@@ -2255,7 +2255,6 @@ symbol `dape-connection'."
                           (buffer (process-buffer (process-get server-process 'stderr-pipe)))
                           (content (with-current-buffer buffer (buffer-string)))
                           ((not (string-empty-p content))))
-                (dape--warn "Dumping content of <%s>" (buffer-name buffer))
                 (dape--repl-insert-error (concat content "\n")))
               (delete-process server-process)
               (user-error "Unable to connect to server"))
@@ -2292,22 +2291,7 @@ symbol `dape-connection'."
        ;; Initialization error prints
        (unless (dape--initialized-p conn)
          (dape--warn "Adapter %sconnection shutdown without successfully initializing"
-                     (if (dape--parent conn) "child " ""))
-         ;; Barf the various error buffers
-         (cl-loop
-          with process = (jsonrpc--process conn)
-          with server-process = (dape--server-process conn)
-          with buffers =
-          (list (when process (process-buffer process))
-                (when process (process-get process 'jsonrpc-stderr))
-                (when server-process
-                  (process-buffer (process-get server-process 'stderr-pipe))))
-          for buffer in buffers do
-          (when-let* (((buffer-live-p buffer))
-                      (content (with-current-buffer buffer (buffer-string)))
-                      ((not (string-empty-p content))))
-            (dape--warn "Dumping content of <%s>" (buffer-name buffer))
-            (dape--repl-insert-error (concat content "\n")))))
+                     (if (dape--parent conn) "child " "")))
        (unless (dape--parent conn)
          ;; When connection w/o parent cleanup in source buffer UI
          (dape--stack-frame-cleanup)
