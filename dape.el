@@ -5158,7 +5158,9 @@ nil."
                major-mode (cl-map 'list 'identity modes))
         (and-let* (((not (derived-mode-p 'prog-mode)))
                    (last-hist (car dape-history))
-                   (last-config (cadr (dape--config-from-string last-hist))))
+                   (last-config
+                    (cadr (ignore-errors
+                            (dape--config-from-string last-hist)))))
           (cl-some (lambda (mode)
                      (memql mode (plist-get last-config 'modes)))
                    modes)))))
