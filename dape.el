@@ -3777,7 +3777,8 @@ See `dape-request' for expected CB signature."
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-threads-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
   "Revert buffer function for MAJOR-MODE `dape-info-threads-mode'."
-  (if-let ((conn (dape--live-connection 'last t)))
+  (if-let* ((conn (dape--live-connection 'last t))
+            ((dape--threads conn)))
       (dape--with-request (dape--info-threads-stack-info conn)
         (cl-loop
          initially do (set-marker dape--info-thread-position nil)
