@@ -230,7 +230,6 @@
      command-cwd dape-command-cwd
      command "gdb"
      command-args ("--interpreter=dap")
-     defer-launch-attach t
      :request "launch"
      :program "a.out"
      :args []
@@ -1519,7 +1518,7 @@ timeout period is configurable with `dape-request-timeout'"
           (dape--warn "Initialize failed with %S" error)
           (dape-kill conn))
       (setf (dape--capabilities conn) body)
-      ;; See GDB bug 32090
+      ;; See `defer-launch-attach' in `dape-configs'
       (unless (plist-get (dape--config conn) 'defer-launch-attach)
         (dape--launch-or-attach conn)))))
 
@@ -1989,7 +1988,7 @@ Starts a new adapter connection as per request of the debug adapter."
     (dape--with-request (dape--set-breakpoints conn)
       (dape--with-request (dape--set-data-breakpoints conn)
         (dape--with-request (dape-request conn "configurationDone" nil)
-          ;; See GDB bug 32090
+          ;; See `defer-launch-attach' in `dape-configs'
           (when (plist-get (dape--config conn) 'defer-launch-attach)
             (dape--launch-or-attach conn)))))))
 
