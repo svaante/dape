@@ -3498,11 +3498,16 @@ See `dape-info-buffer-window-groups' for how to customize which
 buffers get displayed and how they are grouped."
   (interactive (list t))
   (let (buffer-displayed-p)
-    (cl-loop for group in dape-info-buffer-window-groups unless
-             (cl-loop for spec in (dape--info-buffer-list) thereis
-                      (get-buffer-window
-                       (apply #'dape--info-buffer-name
-                              (ensure-list spec))))
+    (cl-loop with displayed-buffers =
+             (cl-remove-if-not #'get-buffer-window
+                               (dape--info-buffer-list))
+             for group in dape-info-buffer-window-groups unless
+             (cl-loop for spec in group thereis
+                      (cl-some (lambda (buffer)
+                                 (with-current-buffer buffer
+                                   (apply #'dape--info-buffer-p
+                                          (ensure-list spec))))
+                               displayed-buffers))
              do
              (setq buffer-displayed-p t)
              (dape--display-buffer
