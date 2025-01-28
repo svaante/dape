@@ -2,6 +2,16 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.22.0
+- Add (=dape-info-scope-mode= INDEX) choice to info groups
+- Add =dape-restart= to mode-line menu
+- Remove limit for number on dape info groups for window arrangements
+- Remove stderr dumping on failure
+- Remove =defer-launch-attach= from gdb config as 16.1 includes fix
+- Fix UI update after =terminated= event
+- Fix "No configuration named ..." on history items not in =dape-configs=
+- Fix handling of capabilities event, adding instead of replacing
+
 * Version 0.21.0
 - Add current thread name to mode line
 - Add prefix-argument to dape-select-* commands
