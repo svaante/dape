@@ -4315,14 +4315,15 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 (define-derived-mode dape-info-watch-edit-mode dape-info-watch-mode "Watch Edit"
   "Major mode for editing watch info."
   (set-buffer-modified-p nil)
-  (setq revert-buffer-function #'dape--info-revert)
-  (revert-buffer)
-  (setq buffer-undo-list nil
+  (setq revert-buffer-function #'dape--info-revert
+        buffer-undo-list nil
         buffer-read-only nil
         font-lock-defaults '(dape--info-watch-edit-font-lock-keywords))
   (message "%s" (substitute-command-keys
 	         "Press \\[dape-info-watch-finish-edit] when finished \
-or \\[dape-info-watch-abort-changes] to abort changes")))
+or \\[dape-info-watch-abort-changes] to abort changes"))
+  (dape--info-set-related-buffers)
+  (revert-buffer))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-edit-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
@@ -4336,6 +4337,7 @@ or \\[dape-info-watch-abort-changes] to abort changes")))
   "Abort change and return to `dape-info-watch-mode'."
   (interactive)
   (dape-info-watch-mode)
+  (dape--info-set-related-buffers)
   (revert-buffer))
 
 (defun dape-info-watch-finish-edit ()
