@@ -550,7 +550,9 @@ variable should be expanded by default."
   :type 'natnum)
 
 (defcustom dape-display-source-buffer-action
-  `((display-buffer-reuse-mode-window display-buffer-use-some-window))
+  `((display-buffer-reuse-window
+     display-buffer-reuse-mode-window
+     display-buffer-use-some-window))
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
