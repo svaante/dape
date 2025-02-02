@@ -1735,8 +1735,7 @@ See `dape-request' for expected CB signature."
           (and delayed-stack-trace-p (<= nof current-nof))
           (and (not delayed-stack-trace-p) (> current-nof 0)))
       (dape--request-continue cb))
-     (t
-      (dape--with-request-bind
+     ((dape--with-request-bind
           ((&key stackFrames totalFrames &allow-other-keys) error)
           (dape-request conn
                         "stackTrace"
@@ -2360,7 +2359,7 @@ CONN is inferred for interactive invocations."
                          (dape--live-connection 'parent))))
   (when (dape--stopped-threads conn)
     ;; cpptools crashes on pausing an paused thread
-    (user-error "Thread already is stopped"))
+    (user-error "Thread is stopped"))
   (dape--with-request-bind
       (_body error)
       (dape-request conn "pause" (dape--thread-id-object conn))
@@ -3101,7 +3100,7 @@ The source is either a buffer or a file path."
 (defun dape--breakpoint-update (conn breakpoint update)
   "Update BREAKPOINT with UPDATE plist from CONN."
   (with-slots (id verified type value) breakpoint
-    ;; Update struct
+    ;; Update `dape--breakpoint'
     (setf id (plist-put id conn (plist-get update :id))
           verified (plist-put verified conn
                               (eq (plist-get update :verified) t)))
@@ -3110,10 +3109,10 @@ The source is either a buffer or a file path."
           (line (dape--breakpoint-line breakpoint))
           (new-line (plist-get update :line)))
       ;; XXX Breakpoint overlay might have been killed by another
-      ;;     invocation of `dape--breakpoint-update'
+      ;;     invocation of `dape--breakpoint-update'.  That is why
+      ;;     need to check `line'.
       (when (and (numberp line) (numberp new-line) (not (eq line new-line)))
         (dape--breakpoint-delete-overlay breakpoint)
-        ;; XXX Assume that breakpoints are only moved by line
         (if buffer
             (dape--with-line buffer new-line
               (dape-breakpoint-remove-at-point 'skip-update)
@@ -3121,7 +3120,8 @@ The source is either a buffer or a file path."
               (pulse-momentary-highlight-region
                (line-beginning-position) (line-beginning-position 2) 'next-error))
           (setcdr (dape--breakpoint-path-line breakpoint) new-line))
-        ;; Sync breakpoint state
+        ;; Sync breakpoint state with all connections (even the event
+        ;; originator)
         (dape--breakpoint-broadcast-update (dape--breakpoint-source breakpoint))
         (dape--message "Breakpoint in %s moved from line %s to %s"
                        (if buffer (buffer-name buffer)
@@ -3236,7 +3236,6 @@ See `dape-request' for expected CB signature."
   "Cleanup after `dape--stack-frame-display'."
   (when-let ((buffer (marker-buffer dape--overlay-arrow-position)))
     (with-current-buffer buffer
-      ;; FIXME Should restore `fringe-indicator-alist'
       (dape--remove-eldoc-hook)))
   (when (overlayp dape--stack-position-overlay)
     (delete-overlay dape--stack-position-overlay))
@@ -3246,10 +3245,7 @@ See `dape-request' for expected CB signature."
   "Display FRAME for adapter CONN as if DEEPEST-p.
 Helper for `dape--stack-frame-display'."
   (dape--with-request (dape--source-ensure conn frame)
-    ;; An update event could have fired between call to
-    ;; `dape--stack-frame-cleanup' and callback, we have make sure
-    ;; that overlay is deleted before we are dropping the overlay
-    ;; reference
+    ;; Delete overlay before dropping the reference
     (dape--stack-frame-cleanup)
     (when-let ((marker (dape--object-to-marker conn frame)))
       (with-current-buffer (marker-buffer marker)
@@ -3270,7 +3266,7 @@ Helper for `dape--stack-frame-display'."
                 fringe-indicator-alist
                 (unless deepest-p
                   '((overlay-arrow . hollow-right-triangle))))
-          ;; Finally lets move arrow to point
+          ;; Move `overaly-arrow' arrow to point
           (move-marker dape--overlay-arrow-position
                        (line-beginning-position)))
         (when-let ((window
@@ -3281,18 +3277,16 @@ Helper for `dape--stack-frame-display'."
                     (memq major-mode '(dape-repl-mode)))
             (select-window window))
           (with-selected-window window
-            ;; XXX This code is running within timer context, which
-            ;;     does not play nice with `post-command-hook'.
-            ;;     Since hooks are runn'ed before the point is
-            ;;     actually moved.
+            ;; XXX We are running within timer context, which does not
+            ;;     play nice with `post-command-hook'.  That means
+            ;;     that hooks are called before the point is actually
+            ;;     moved to manually intervene to account for this.
             (goto-char (marker-position marker))
-            ;; Here we are manually intervening to account for this.
             ;; The following logic borrows from gud.el to interact
             ;; with `hl-line'.
             (when (featurep 'hl-line)
-	      (cond
-               (global-hl-line-mode (global-hl-line-highlight))
-	       ((and hl-line-mode hl-line-sticky-flag) (hl-line-highlight))))
+	      (cond (global-hl-line-mode (global-hl-line-highlight))
+	            ((and hl-line-mode hl-line-sticky-flag) (hl-line-highlight))))
             (run-hooks 'dape-display-source-hook)))))))
 
 (defun dape--stack-frame-display (conn)
@@ -3317,7 +3311,7 @@ Buffer is displayed with `dape-display-source-buffer-action'."
                                     (path (dape--path-local conn remote-path)))
                           (file-exists-p path)))
                     return frame))))
-        ;; Check if frame source should be available, otherwise fetch all
+        ;; Check if `displayable-frame' PLIST exist, otherwise fetch all
         (if-let ((frame (displayable-frame)))
             (dape--stack-frame-display-1 conn frame deepest-p)
           (dape--with-request (dape--stack-trace conn thread dape-stack-trace-levels)
@@ -3430,11 +3424,11 @@ FN is expected to update insert buffer contents, update
   ;; Save buffer as `select-window' sets buffer
   (save-current-buffer
     (when (derived-mode-p 'dape-info-parent-mode)
-      ;; Would be nice with replace-buffer-contents
-      ;; But it seams to messes up string properties
+      ;; Would be nice with `replace-buffer-contents', but it messes
+      ;; up string properties
       (let ((line (line-number-at-pos (point) t))
             (old-window (selected-window)))
-        ;; Still don't know any better way of keeping window scroll?
+        ;; Try to keep point and scroll
         (when-let ((window (get-buffer-window)))
           (select-window window))
         (save-window-excursion
@@ -3632,9 +3626,9 @@ without log or expression breakpoint"))))))
        for line = (dape--breakpoint-line breakpoint)
        for verified-plist = (dape--breakpoint-verified breakpoint)
        for verified-p = (or
-                         ;; If no live connection show all as verified
+                         ;; No live connection show all as verified
                          (not (dape--live-connection 'last t))
-                         ;; If actually verified by some connection
+                         ;; Actually verified by any connection
                          (cl-find-if (apply-partially 'plist-get verified-plist)
                                      (dape--live-connections))
                          ;; If hit then must be verified
@@ -3701,7 +3695,7 @@ without log or expression breakpoint"))))))
   "`dape-info-thread-mode' marker for `overlay-arrow-variable-list'.")
 (defvar-local dape--info-threads-skip-other-p nil
   ;; XXX Workaround for some adapters seemingly not being able to
-  ;;     handle parallel stack traces.
+  ;;     handle parallel stack traces
   "If non nil skip fetching thread information for other threads.")
 (defvar dape-info--threads-tt-bench 2
   "Time to Bench.")
@@ -3738,15 +3732,14 @@ See `dape-request' for expected CB signature."
       (let ((start-time (current-time))
             (responses 0))
         (dolist (thread threads)
-          ;; HACK Keep track of requests in flight as `revert-buffer'
-          ;;      might be called at any time, and we want keep
-          ;;      unnecessary chatter at a minimum.
-          ;; NOTE This is hack is still necessary if user sets
-          ;;      `dape-ui-debounce-time' to 0.0.
+          ;; Keep track of requests in flight as `revert-buffer' might
+          ;; be called at any time, and we want keep unnecessary
+          ;; chatter at a minimum.
           (plist-put thread :request-in-flight t)
           (dape--with-request (dape--stack-trace conn thread 1)
             (plist-put thread :request-in-flight nil)
-            ;; Time response, if slow bench that CONN
+            ;; Time response, if slow skip these kind of requests in
+            ;; the future (saving state in buffer local variable)
             (when (and (not dape--info-threads-skip-other-p)
                        (time-less-p (timer-relative-time
                                      start-time dape-info--threads-tt-bench)
@@ -3795,7 +3788,6 @@ See `dape-request' for expected CB signature."
              (if-let ((status (plist-get thread :status)))
                  (format "%s" status)
                "unknown")
-             ;; Include frame information for stopped threads
              (if-let* (((equal (plist-get thread :status) 'stopped))
                        (top-stack (car (plist-get thread :stackFrames))))
                  (concat
@@ -3907,9 +3899,8 @@ current buffer with CONN config."
                           (plist-get current-thread :name))))
          (t
           (insert "No stack information available.")))))
-     (t
-      ;; Only one frame are guaranteed to be available due to
-      ;; `supportsDelayedStackTraceLoading' optimizations.
+     (;; Only one frame are guaranteed to be available due to
+      ;; `supportsDelayedStackTraceLoading' optimizations
       (dape--with-request
           (dape--stack-trace conn current-thread dape-stack-trace-levels)
         ;; If stack trace lookup with `dape-stack-trace-levels' frames changed
@@ -4073,8 +4064,6 @@ current buffer with CONN config."
     (unless (dape--capable-p conn :supportsDataBreakpoints)
       (user-error "Adapter does not support data breakpoints"))
     (dape--with-request-bind
-        ;; TODO Test if canPersist works, have not found an adapter
-        ;;      supporting it.
         ((&key dataId description accessTypes &allow-other-keys) error)
         (dape-request conn "dataBreakpointInfo"
                       (if (numberp dape--info-ref)
@@ -4210,10 +4199,8 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
                         (dape--live-connection 'last t)))
               (frame (dape--current-stack-frame conn))
               (scopes (plist-get frame :scopes))
-              ;; FIXME if scope is out of range here scope list could
-              ;;       have shrunk since last update and current
-              ;;       scope buffer should be killed and replaced if
-              ;;       if visible
+              ;; FIXME Scope list could have shrunk and
+              ;;       `dape--info-var' can be out of bounds
               (scope (nth dape--info-var scopes))
               ;; Check for stopped threads to reduce flickering
               ((dape--stopped-threads conn)))
