@@ -1308,7 +1308,7 @@ See `dape--connection-selected'."
                                     (and (dape--stopped-threads conn)))
                                   ordered)))))
     (unless (or nowarn conn)
-      (user-error "No %sdebug connection live"
+      (user-error "No %sdebug connection"
                   ;; `parent' and `last' does not make sense to the user
                   (if (memq type '(running stopped))
                       (format "%s " type) "")))
