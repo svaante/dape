@@ -1783,7 +1783,6 @@ See `dape-request' for expected CB signature."
                                 (seq-filter 'identity)))
         (dape--request-continue cb)))))
 
-
 (defun dape--variables-recursive (conn object path pred cb)
   "Update variables recursivly.
 Get variable data from CONN and put result on OBJECT until PRED is nil.
