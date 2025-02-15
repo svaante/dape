@@ -648,6 +648,16 @@ left-to-right display order of the properties."
   "Max length of file name in dape info buffers."
   :type 'integer)
 
+(defcustom dape-inlay-hints nil
+  "Inlay variable hints."
+  :type '(choice (const :tag "No inlay hints." nil)
+                 (const :tag "Inlay current line and previous line (same as 2)." t)
+                 (natnum :tag "Number of lines with hints.")))
+
+(defcustom dape-inlay-hints-variable-name-max 25
+  "Max length of variable name in inlay hints."
+  :type 'integer)
+
 (defcustom dape-repl-echo-shell-output nil
   "Echo dape shell output in repl."
   :type 'boolean)
@@ -710,15 +720,16 @@ The hook is run with one argument, the compilation buffer when
 compilation is successful."
   :type 'hook)
 
-(defcustom dape-minibuffer-hint-ignore-properties
-  '( ensure fn modes command command-args command-env command-insert-stderr
-     defer-launch-attach :type :request)
-  "Properties to be hidden in `dape--minibuffer-hint'."
-  :type '(repeat symbol))
-
 (defcustom dape-minibuffer-hint t
   "Show `dape-configs' hints in minibuffer."
   :type 'boolean)
+
+(defcustom dape-minibuffer-hint-ignore-properties
+  '( ensure fn modes command command-args command-env command-insert-stderr
+     defer-launch-attach :type :request)
+  "Properties to be ignored in minibuffer \"Run adapter\" hints.
+See `dape-minibuffer-hint'."
+  :type '(repeat symbol))
 
 (defcustom dape-history-add 'input
   "How to push configuration options onto `dape-history'.
@@ -726,10 +737,10 @@ compilation is successful."
 - input: Store input as is read from minibuffer.
 - evaled: Input is evaluated then checked against base configuration
   in `dape-configs'.  Each options that differ from base are stored.
-- dash-form: Like evaled but stores options in dash form if possible.
-  With dash form characters after - are interpret in sh like format
-  with ENV PROGRAM ARGS.  This is useful for adapters which accepts
-  :env, :program and :args as launch options.
+- evaled-dash-form: Like evaled but stores options in dash form if
+  possible.  With dash form characters after - are interpret in sh
+  like format with ENV PROGRAM ARGS.  This is useful for adapters
+  which accepts :env, :program and :args as launch options.
   Example: \"launch - ENV=value program arg1 arg2\""
   :type '(choice (const :tag "Input" input)
 		 (const :tag "Evaluated input" evaled)
@@ -4694,16 +4705,6 @@ Empty input will rerun last command.\n\n"
 
 
 ;;; Inlay hints
-
-(defcustom dape-inlay-hints nil
-  "Inlay variable hints."
-  :type '(choice (const :tag "No inlay hints." nil)
-                 (const :tag "Inlay current line and previous line (same as 2)." t)
-                 (natnum :tag "Number of lines with hints.")))
-
-(defcustom dape-inlay-hints-variable-name-max 25
-  "Max length of variable name in inlay hints."
-  :type 'integer)
 
 (defface dape-inlay-hint-face '((t (:height 0.8 :inherit shadow)))
   "Face used for inlay-hint overlays.")
