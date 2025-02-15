@@ -648,7 +648,7 @@ left-to-right display order of the properties."
   "Max length of file name in dape info buffers."
   :type 'integer)
 
-(defcustom dape-inlay-hints nil
+(defcustom dape-inlay-hints t
   "Inlay variable hints."
   :type '(choice (const :tag "No inlay hints." nil)
                  (const :tag "Inlay current line and previous line (same as 2)." t)
