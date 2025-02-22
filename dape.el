@@ -2916,8 +2916,8 @@ of memory read."
                          "edit break hit condition" #'dape-mouse-breakpoint-hits))
           (_
            (overlay-put ov 'before-string
-                        (dape--icon dape-breakpoint-margin-string 'breakpoint
-                                    (or disabled-face 'dape-breakpoint-face)))))
+                        (dape--indicator dape-breakpoint-margin-string 'breakpoint
+                                         (or disabled-face 'dape-breakpoint-face)))))
         (setf overlay ov)))))
 
 (dape--mouse-command dape-mouse-breakpoint-toggle
@@ -2980,7 +2980,9 @@ Used as an hook on `find-file-hook'."
 (defvar dape--original-margin nil
   "Bookkeeping for buffer margin width.")
 
-(defun dape--icon (string bitmap face)
+(defun dape--indicator (string bitmap face)
+  "Return indicator string in margin (STRING) or fringe (BITMAP).
+The indicator is `propertize'd with with FACE."
   (if (and (window-system)
            (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
       (propertize " " 'display `(left-fringe ,bitmap ,face))
