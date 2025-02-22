@@ -2827,7 +2827,7 @@ When BACKWARD is non nil move backward instead."
   "Revert all `dape-memory-mode' buffers."
   (dape--with-debounce dape--memory-debounce-timer dape-ui-debounce-time
     (cl-loop for buffer in (buffer-list)
-             when (eq (with-current-buffer buffer major-mode) 'dape-memory-mode)
+             when (eq (buffer-local-value 'major-mode buffer) 'dape-memory-mode)
              do (with-current-buffer buffer (revert-buffer)))))
 
 (defun dape-read-memory (address &optional reuse-buffer)
@@ -2962,7 +2962,7 @@ of memory read."
                                    #'dape--breakpoint-find-file-hook)))
 
 (defun dape--breakpoint-find-file-hook ()
-  "Convert cons breakpoints into overlay breakpoints.
+  "Convert PATH-LINE breakpoints into overlay breakpoints.
 Used as an hook on `find-file-hook'."
   (when (buffer-file-name (current-buffer))
     (cl-loop with breakpoints-in-buffer =
@@ -3057,8 +3057,7 @@ If there are breakpoints at current line remove those breakpoints from
 Handling restoring margin if necessary."
   (let ((buffer (dape--breakpoint-buffer breakpoint)))
     (with-slots (overlay) breakpoint
-      (when overlay
-        (delete-overlay overlay))
+      (when overlay (delete-overlay overlay))
       (setf overlay nil))
     (when (and
            ;; Buffer margin has been touched
@@ -3268,7 +3267,7 @@ Helper for `dape--stack-frame-display'."
                                     dape-display-source-buffer-action)))
           ;; Change selected window if not `dape-repl' buffer is selected
           (unless (with-current-buffer (window-buffer)
-                    (memq major-mode '(dape-repl-mode)))
+                    (memq major-mode '(dape-repl-mode dape-disassemble-mode)))
             (select-window window))
           (with-selected-window window
             ;; XXX We are running within timer context, which does not
