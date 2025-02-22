@@ -562,7 +562,8 @@ variable should be expanded by default."
   :type 'hook)
 
 (define-obsolete-variable-alias 'dape-on-stopped-hooks 'dape-stopped-hook "0.13.0")
-(defcustom dape-stopped-hook '(dape-memory-revert dape--emacs-grab-focus)
+(defcustom dape-stopped-hook '( dape-memory-revert dape-disassemble-revert
+                                dape--emacs-grab-focus)
   "Called when session stopped."
   :type 'hook)
 
@@ -2853,6 +2854,95 @@ of memory read."
         (setq dape--memory-address address)
         (revert-buffer))
       (select-window (display-buffer buffer)))))
+
+
+;;; Disassemble viewer
+
+(defvar-local dape--disassemble-overlay-arrow nil)
+
+(add-to-list 'overlay-arrow-variable-list 'dape--disassemble-overlay-arrow)
+
+(define-derived-mode dape-disassemble-mode asm-mode "Disassemble"
+  :interactive nil
+  (setq-local dape--disassemble-overlay-arrow (make-marker)
+              dape-stepping-granularity 'instruction))
+
+(defvar dape--disassemble-debounce-timer (timer-create)
+  "Debounce context for `dape-disassemble-revert'.")
+
+(defun dape-disassemble-revert ()
+  "Revert all `dape-disassemble-mode' buffers."
+  (dape--with-debounce dape--disassemble-debounce-timer dape-ui-debounce-time
+    (cl-loop for buffer in (buffer-list)
+             when (eq (buffer-local-value 'major-mode buffer)
+                      'dape-disassemble-mode)
+             do (with-current-buffer buffer (revert-buffer)))))
+
+(defun dape-disassemble (memory-reference count)
+  "Disassemble COUNT instructions around MEMORY-REFERENCE."
+  (interactive
+   (list
+    (string-trim
+     (read-string "Address: " nil nil
+                  (when-let ((number (thing-at-point 'number)))
+                    (format "0x%08x" number))))
+    100))
+  (if-let* ((conn (dape--live-connection 'stopped))
+            ((not (dape--capable-p conn :supportsDisassembleRequest))))
+      (user-error "Adapter does not support disassemble")
+    (dape--with-request-bind
+        ((&key ((:instructions instructions)) &allow-other-keys) _)
+        (dape-request conn 'disassemble
+                      `( :memoryReference ,memory-reference
+                         :instructionCount ,count
+                         :offset 0
+                         :instructionOffset ,(- (/ count 2) count)
+                         :resolveSymbols t
+                         ))
+      (with-current-buffer (get-buffer-create "*dape-disassemble*")
+        (dape-disassemble-mode)
+        (erase-buffer)
+        (cl-loop
+         with last-symbol
+         with ps = (plist-get (dape--current-stack-frame conn)
+                              :instructionPointerReference)
+         with source = (plist-get (dape--current-stack-frame conn) :source)
+         with line = (plist-get (dape--current-stack-frame conn) :line)
+         for instruction across instructions
+         for adress = (plist-get instruction :address)
+         for current-instruction-p = (equal adress ps)
+         for current-line-p =
+         (and (equal (plist-get instruction :location) source)
+              (equal (plist-get instruction :line) line))
+         do
+         (when-let* ((symbol (plist-get instruction :symbol))
+                     ((not (equal last-symbol symbol))))
+           (insert
+            (concat "; " (setq last-symbol symbol) " of "
+                    (thread-first instruction
+                                  (plist-get :location)
+                                  (plist-get :name)))
+            ":\n"))
+         (when current-instruction-p
+           (move-marker dape--disassemble-overlay-arrow (point)))
+         (insert
+          (propertize
+           (format "%s:\t%s\n"
+                   (plist-get instruction :address)
+                   (plist-get instruction :instruction))
+           'line-prefix
+           (when (and current-line-p (not current-instruction-p))
+             (dape--indicator "|" 'vertical-bar nil))
+           'dape--disassemble-instruction instruction)))
+        (setq-local revert-buffer-function
+                    (lambda (&rest _)
+                      (dape-disassemble memory-reference count)))
+        (with-selected-window (display-buffer (current-buffer))
+          (goto-char
+           (or (marker-position dape--disassemble-overlay-arrow)
+               (point-min)))
+          (run-hooks 'dape-display-source-hook))))))
+
 
 ;;; Breakpoints
 
@@ -5401,6 +5491,7 @@ mouse-1: Display minor mode menu"
     (define-key map "i" #'dape-info)
     (define-key map "R" #'dape-repl)
     (define-key map "m" #'dape-read-memory)
+    (define-key map "M" #'dape-disassemble)
     (define-key map "l" #'dape-breakpoint-log)
     (define-key map "e" #'dape-breakpoint-expression)
     (define-key map "h" #'dape-breakpoint-hits)
