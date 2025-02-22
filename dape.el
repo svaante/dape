@@ -1401,7 +1401,7 @@ See `dape--connection-selected'."
 
 (cl-defstruct (dape--breakpoint (:constructor dape--breakpoint-make))
   "Breakpoint object storing location and state."
-  overlay path-line type value hits verified id)
+  overlay path-line type value disabled hits verified id)
 
 (cl-defmethod jsonrpc-convert-to-endpoint ((conn dape-connection)
                                            message subtype)
@@ -1568,34 +1568,34 @@ timeout period is configurable with `dape-request-timeout'"
   "Set breakpoints in SOURCE for adapter CONN.
 SOURCE is expected to be buffer or name of file.
 See `dape-request' for expected CB signature."
-  (cl-loop with breakpoints = (thread-last dape--breakpoints
-                                           (seq-group-by #'dape--breakpoint-source)
-                                           (assoc source)
-                                           (cdr))
+  (cl-loop with breakpoints =
+           (alist-get source (seq-group-by #'dape--breakpoint-source
+                                           dape--breakpoints))
            for breakpoint in breakpoints
            for line = (dape--breakpoint-line breakpoint)
-           collect breakpoint into response-breakpoints
-           collect (dape--breakpoint-line breakpoint) into lines
-           collect (let ((source-breakpoint `(:line ,line)))
-                     (pcase (dape--breakpoint-type breakpoint)
-                       ('log
-                        (if (dape--capable-p conn :supportsLogPoints)
-                            (plist-put source-breakpoint
-                                       :logMessage (dape--breakpoint-value breakpoint))
-                          (dape--warn "Adapter does not support `dape-breakpoint-log'")))
-                       ('expression
-                        (if (dape--capable-p conn :supportsConditionalBreakpoints)
-                            (plist-put source-breakpoint
-                                       :condition (dape--breakpoint-value breakpoint))
-                          (dape--warn "Adapter does not support `dape-breakpoint-expression'")))
-                       ('hits
-                        (if (dape--capable-p conn :supportsHitConditionalBreakpoints)
-                            (plist-put source-breakpoint
-                                       :hitCondition (dape--breakpoint-value breakpoint))
-                          (dape--warn "Adapter does not support `dape-breakpoint-hits'"))))
-                     source-breakpoint)
-           into source-breakpoints
-           finally do
+           unless (dape--breakpoint-disabled breakpoint)
+           collect breakpoint into request-breakpoints and
+           collect line into lines and
+           collect
+           (let ((source-breakpoint `(:line ,line)))
+             (pcase (dape--breakpoint-type breakpoint)
+               ('log
+                (if (dape--capable-p conn :supportsLogPoints)
+                    (plist-put source-breakpoint
+                               :logMessage (dape--breakpoint-value breakpoint))
+                  (dape--warn "Adapter does not support `dape-breakpoint-log'")))
+               ('expression
+                (if (dape--capable-p conn :supportsConditionalBreakpoints)
+                    (plist-put source-breakpoint
+                               :condition (dape--breakpoint-value breakpoint))
+                  (dape--warn "Adapter does not support `dape-breakpoint-expression'")))
+               ('hits
+                (if (dape--capable-p conn :supportsHitConditionalBreakpoints)
+                    (plist-put source-breakpoint
+                               :hitCondition (dape--breakpoint-value breakpoint))
+                  (dape--warn "Adapter does not support `dape-breakpoint-hits'"))))
+             source-breakpoint)
+           into source-breakpoints finally do
            (dape--with-request-bind
                ((&key ((:breakpoints updates)) &allow-other-keys) error)
                (dape-request
@@ -1616,7 +1616,7 @@ See `dape-request' for expected CB signature."
              (if error
                  (dape--warn "Failed to set breakpoints in %s; %s" source error)
                (cl-loop for update across updates
-                        for breakpoint in response-breakpoints do
+                        for breakpoint in request-breakpoints do
                         (dape--breakpoint-update conn breakpoint update))
                (dape--request-continue cb error)))))
 
@@ -2886,7 +2886,7 @@ of memory read."
 (defun dape--breakpoint-set-overlay (breakpoint)
   "Create and set overlay on BREAKPOINT."
   (add-hook 'kill-buffer-hook #'dape--breakpoint-buffer-kill nil t)
-  (with-slots (type value overlay) breakpoint
+  (with-slots (type value overlay disabled) breakpoint
     (cl-flet ((after-string (ov label face mouse-1-help mouse-1-def)
                 (overlay-put
                  ov 'after-string
@@ -2899,23 +2899,25 @@ of memory read."
                           'keymap (let ((map (make-sparse-keymap)))
                                     (define-key map [mouse-1] mouse-1-def)
                                     map))))))
-      (let ((ov (apply 'make-overlay (dape--overlay-region))))
+      (let ((ov (apply 'make-overlay (dape--overlay-region)))
+            (disabled-face (when disabled 'shadow)))
         (overlay-put ov 'modification-hooks '(dape--breakpoint-freeze))
         (overlay-put ov 'category 'dape-breakpoint)
         (overlay-put ov 'window t)
         (pcase type
           ('log
-           (after-string ov "Log" 'dape-log-face
+           (after-string ov "Log" (or disabled-face 'dape-log-face)
                          "edit log message" #'dape-mouse-breakpoint-log))
           ('expression
-           (after-string ov "Cond" 'dape-expression-face
+           (after-string ov "Cond" (or disabled-face 'dape-expression-face)
                          "edit break condition" #'dape-mouse-breakpoint-log))
           ('hits
            (after-string ov "Hits" 'dape-hits-face
                          "edit break hit condition" #'dape-mouse-breakpoint-hits))
           (_
-           (dape--overlay-icon ov dape-breakpoint-margin-string
-                               'breakpoint 'dape-breakpoint-face 'in-margin)))
+           (overlay-put ov 'before-string
+                        (dape--icon dape-breakpoint-margin-string 'breakpoint
+                                    (or disabled-face 'dape-breakpoint-face)))))
         (setf overlay ov)))))
 
 (dape--mouse-command dape-mouse-breakpoint-toggle
@@ -2978,38 +2980,15 @@ Used as an hook on `find-file-hook'."
 (defvar dape--original-margin nil
   "Bookkeeping for buffer margin width.")
 
-(defun dape--overlay-icon (overlay string bitmap face &optional in-margin)
-  "Put STRING or BITMAP on OVERLAY with FACE.
-If IN-MARGING put STRING in margin, otherwise put overlay over buffer
-contents."
-  (when-let ((buffer (overlay-buffer overlay)))
-    (let ((before-string
-           (cond
-            ((and (window-system)
-                  (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
-             (propertize " " 'display
-                         `(left-fringe ,bitmap ,face)))
-            (in-margin
-             (with-current-buffer buffer
-               (unless dape--original-margin
-                 (setq-local dape--original-margin left-margin-width)
-                 (setq left-margin-width 2)
-                 (when-let ((window (get-buffer-window)))
-                   (set-window-buffer window buffer))))
-             (propertize " " 'display `((margin left-margin)
-                                        ,(propertize string 'face face))))
-            (t
-             (move-overlay overlay
-                           (overlay-start overlay)
-                           (+ (overlay-start overlay)
-                              (min
-                               (length string)
-                               (with-current-buffer (overlay-buffer overlay)
-                                 (goto-char (overlay-start overlay))
-                                 (- (line-end-position) (overlay-start overlay))))))
-             (overlay-put overlay 'display "")
-             (propertize string 'face face)))))
-      (overlay-put overlay 'before-string before-string))))
+(defun dape--icon (string bitmap face)
+  (if (and (window-system)
+           (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
+      (propertize " " 'display `(left-fringe ,bitmap ,face))
+    (unless dape--original-margin
+      (setq-local dape--original-margin left-margin-width
+                  left-margin-width 2))
+    (propertize " " 'display `((margin left-margin)
+                               ,(propertize string 'face face)))))
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
   "Make sure that OVERLAY region covers line."
@@ -3113,34 +3092,35 @@ The source is either a buffer or a file path."
 
 (defun dape--breakpoint-update (conn breakpoint update)
   "Update BREAKPOINT with UPDATE plist from CONN."
-  (with-slots (id verified type value) breakpoint
-    ;; Update `dape--breakpoint'
-    (setf id (plist-put id conn (plist-get update :id))
-          verified (plist-put verified conn
-                              (eq (plist-get update :verified) t)))
-    ;; Move breakpoints
-    (let ((buffer (dape--breakpoint-buffer breakpoint))
-          (line (dape--breakpoint-line breakpoint))
-          (new-line (plist-get update :line)))
-      ;; XXX Breakpoint overlay might have been killed by another
-      ;;     invocation of `dape--breakpoint-update'.  That is why
-      ;;     need to check `line'.
-      (when (and (numberp line) (numberp new-line) (not (eq line new-line)))
-        (dape--breakpoint-delete-overlay breakpoint)
-        (if buffer
-            (dape--with-line buffer new-line
-              (dape-breakpoint-remove-at-point 'skip-update)
-              (dape--breakpoint-set-overlay breakpoint)
-              (pulse-momentary-highlight-region
-               (line-beginning-position) (line-beginning-position 2) 'next-error))
-          (setcdr (dape--breakpoint-path-line breakpoint) new-line))
-        ;; Sync breakpoint state with all connections (even the event
-        ;; originator)
-        (dape--breakpoint-broadcast-update (dape--breakpoint-source breakpoint))
-        (dape--message "Breakpoint in %s moved from line %s to %s"
-                       (if buffer (buffer-name buffer)
-                         (dape--breakpoint-path breakpoint))
-                       line new-line))))
+  (with-slots (id verified type value disabled) breakpoint
+    (unless disabled
+      ;; Update `dape--breakpoint'
+      (setf id (plist-put id conn (plist-get update :id))
+            verified (plist-put verified conn
+                                (eq (plist-get update :verified) t)))
+      ;; Move breakpoints
+      (let ((buffer (dape--breakpoint-buffer breakpoint))
+            (line (dape--breakpoint-line breakpoint))
+            (new-line (plist-get update :line)))
+        ;; XXX Breakpoint overlay might have been killed by another
+        ;;     invocation of `dape--breakpoint-update'.  That is why
+        ;;     need to check `line'.
+        (when (and (numberp line) (numberp new-line) (not (eq line new-line)))
+          (dape--breakpoint-delete-overlay breakpoint)
+          (if buffer
+              (dape--with-line buffer new-line
+                (dape-breakpoint-remove-at-point 'skip-update)
+                (dape--breakpoint-set-overlay breakpoint)
+                (pulse-momentary-highlight-region
+                 (line-beginning-position) (line-beginning-position 2) 'next-error))
+            (setcdr (dape--breakpoint-path-line breakpoint) new-line))
+          ;; Sync breakpoint state with all connections (even the event
+          ;; originator)
+          (dape--breakpoint-broadcast-update (dape--breakpoint-source breakpoint))
+          (dape--message "Breakpoint in %s moved from line %s to %s"
+                         (if buffer (buffer-name buffer)
+                           (dape--breakpoint-path breakpoint))
+                         line new-line)))))
   (run-hooks 'dape-update-ui-hook))
 
 (defun dape-breakpoint-load (&optional file)
@@ -3562,6 +3542,20 @@ buffers get displayed and how they are grouped."
 
 ;;; Info breakpoints buffer
 
+(dape--command-at-line dape-info-breakpoint-disabled (dape--info-breakpoint)
+  "Enable/disable breakpoint at line in dape info buffer."
+  (let ((breakpoint dape--info-breakpoint))
+    (setf (dape--breakpoint-disabled breakpoint)
+          (not (dape--breakpoint-disabled breakpoint)))
+    (when-let* ((buffer (dape--breakpoint-source breakpoint))
+                (line (dape--breakpoint-line breakpoint))
+                ((bufferp buffer)))
+      (dape--breakpoint-delete-overlay breakpoint)
+      (dape--with-line buffer line (dape--breakpoint-set-overlay breakpoint)))
+    (dape--breakpoint-broadcast-update (dape--breakpoint-source breakpoint)))
+  (revert-buffer)
+  (run-hooks 'dape-update-ui-hook))
+
 (dape--command-at-line dape-info-breakpoint-goto (dape--info-breakpoint)
   "Goto breakpoint at line in dape info buffer."
   (with-selected-window
@@ -3595,7 +3589,7 @@ buffers get displayed and how they are grouped."
 without log or expression breakpoint"))))))
 
 (dape--buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
-  (define-key map "D" 'dape-info-breakpoint-delete)
+  (define-key map "D" 'dape-info-breakpoint-disabled)
   (define-key map "d" 'dape-info-breakpoint-delete)
   (define-key map "e" 'dape-info-breakpoint-log-edit))
 
@@ -3610,7 +3604,6 @@ without log or expression breakpoint"))))))
   (run-hooks 'dape-update-ui-hook))
 
 (dape--buffer-map dape-info-data-breakpoints-line-map nil
-  (define-key map "D" 'dape-info-data-breakpoint-delete)
   (define-key map "d" 'dape-info-data-breakpoint-delete))
 
 (dape--command-at-line dape-info-exceptions-toggle (dape--info-exception)
@@ -3651,9 +3644,10 @@ without log or expression breakpoint"))))))
        (gdb-table-add-row
         table
         (list
-         (if-let ((hits (dape--breakpoint-hits breakpoint)))
-             (format "%s" hits)
-           (if verified-p y n))
+         (cond ((dape--breakpoint-disabled breakpoint) n)
+               ((when-let ((hits (dape--breakpoint-hits breakpoint)))
+                  (format "%s" hits)))
+               (y))
          (pcase (dape--breakpoint-type breakpoint)
            ('log        "Log  ")
            ('hits       "Hits ")
