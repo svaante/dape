@@ -4579,7 +4579,7 @@ Called by `comint-input-sender' in `dape-repl-mode'."
    ((and (string-empty-p input)
          (not (string-empty-p (car (ring-elements comint-input-ring)))))
     (when-let* ((last (car (ring-elements comint-input-ring))))
-      (message "Repeating last input `%s'" last)
+      (message "Using last input `%s'" last)
       (dape--repl-input-sender dummy-process last)))
    ;; Run command from `dape-named-commands'
    ((pcase-let* ((`(,cmd . ,args)
