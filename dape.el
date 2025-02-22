@@ -2897,8 +2897,7 @@ of memory read."
                          :instructionCount ,count
                          :offset 0
                          :instructionOffset ,(- (/ count 2) count)
-                         :resolveSymbols t
-                         ))
+                         :resolveSymbols t))
       (with-current-buffer (get-buffer-create "*dape-disassemble*")
         (dape-disassemble-mode)
         (erase-buffer)
@@ -2931,7 +2930,7 @@ of memory read."
                    (plist-get instruction :address)
                    (plist-get instruction :instruction))
            'line-prefix
-           (when (and current-line-p (not current-instruction-p))
+           (when current-line-p
              (dape--indicator "|" 'vertical-bar nil))
            'dape--disassemble-instruction instruction)))
         (setq-local revert-buffer-function
