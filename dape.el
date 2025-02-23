@@ -551,7 +551,7 @@ variable should be expanded by default."
 
 (defcustom dape-display-source-buffer-action
   `((display-buffer-reuse-window
-     display-buffer-reuse-mode-window
+     display-buffer-same-window
      display-buffer-use-some-window))
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
