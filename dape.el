@@ -2898,49 +2898,56 @@ of memory read."
                          :offset 0
                          :instructionOffset ,(- (/ count 2) count)
                          :resolveSymbols t))
-      (with-current-buffer (get-buffer-create "*dape-disassemble*")
-        (dape-disassemble-mode)
-        (erase-buffer)
-        (cl-loop
-         with last-symbol
-         with ps = (plist-get (dape--current-stack-frame conn)
-                              :instructionPointerReference)
-         with source = (plist-get (dape--current-stack-frame conn) :source)
-         with line = (plist-get (dape--current-stack-frame conn) :line)
-         for instruction across instructions
-         for adress = (plist-get instruction :address)
-         for current-instruction-p = (equal adress ps)
-         for current-line-p =
-         (and (equal (plist-get instruction :location) source)
-              (equal (plist-get instruction :line) line))
-         do
-         (when-let* ((symbol (plist-get instruction :symbol))
-                     ((not (equal last-symbol symbol))))
+      (cl-flet ((address-to-int (address)
+                  (string-to-number (substring address 2) 16)))
+        (with-current-buffer (get-buffer-create "*dape-disassemble*")
+          (dape-disassemble-mode)
+          (erase-buffer)
+          (cl-loop
+           with last-symbol with last-location
+           with ps =
+           (address-to-int (plist-get (dape--current-stack-frame conn)
+                                      :instructionPointerReference))
+           with source = (plist-get (dape--current-stack-frame conn) :source)
+           with line = (plist-get (dape--current-stack-frame conn) :line)
+           for instruction across instructions
+           for address = (address-to-int (plist-get instruction :address))
+           for current-instruction-p = (equal address ps)
+           for location =
+           (setq last-location
+                 ;; Forward fill all location if missing as per spec
+                 (or (plist-get instruction :location) last-location))
+           for current-line-p =
+           (and (equal location source)
+                (equal (plist-get instruction :line) line))
+           do
+           (when-let* ((symbol (plist-get instruction :symbol))
+                       ((not (equal last-symbol symbol))))
+             (insert
+              (concat "; " (setq last-symbol symbol) " of "
+                      (thread-first instruction
+                                    (plist-get :location)
+                                    (plist-get :name)))
+              ":\n"))
+           (when current-instruction-p
+             (move-marker dape--disassemble-overlay-arrow (point)))
            (insert
-            (concat "; " (setq last-symbol symbol) " of "
-                    (thread-first instruction
-                                  (plist-get :location)
-                                  (plist-get :name)))
-            ":\n"))
-         (when current-instruction-p
-           (move-marker dape--disassemble-overlay-arrow (point)))
-         (insert
-          (propertize
-           (format "%s:\t%s\n"
-                   (plist-get instruction :address)
-                   (plist-get instruction :instruction))
-           'line-prefix
-           (when current-line-p
-             (dape--indicator "|" 'vertical-bar nil))
-           'dape--disassemble-instruction instruction)))
-        (setq-local revert-buffer-function
-                    (lambda (&rest _)
-                      (dape-disassemble memory-reference count)))
-        (with-selected-window (display-buffer (current-buffer))
-          (goto-char
-           (or (marker-position dape--disassemble-overlay-arrow)
-               (point-min)))
-          (run-hooks 'dape-display-source-hook))))))
+            (propertize
+             (format "%s:\t%s\n"
+                     (plist-get instruction :address)
+                     (plist-get instruction :instruction))
+             'line-prefix
+             (when current-line-p
+               (dape--indicator "|" 'vertical-bar nil))
+             'dape--disassemble-instruction instruction)))
+          (setq-local revert-buffer-function
+                      (lambda (&rest _)
+                        (dape-disassemble memory-reference count)))
+          (with-selected-window (display-buffer (current-buffer))
+            (goto-char
+             (or (marker-position dape--disassemble-overlay-arrow)
+                 (point-min)))
+            (run-hooks 'dape-display-source-hook)))))))
 
 
 ;;; Breakpoints
