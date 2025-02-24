@@ -1921,7 +1921,8 @@ selected stack frame."
   "Sink for all unsupported requests." nil)
 
 (define-derived-mode dape-shell-mode shell-mode "Shell"
-  "Major mode for interacting with an debugged program.")
+  "Major mode for interacting with an debugged program."
+  (setq-local revert-buffer-function (lambda (&rest _) (dape-restart))))
 
 (cl-defmethod dape-handle-request (conn (_command (eql runInTerminal)) arguments)
   "Handle runInTerminal requests.
