@@ -4746,7 +4746,7 @@ If INPUT is non blank add or remove expression to watch list."
               dape--repl-marker (make-marker)
               comint-prompt-read-only t
               comint-scroll-to-bottom-on-input t
-              ;; HACK ? Always keep prompt at the bottom of the window
+              ;; Always keep prompt at the bottom of the window
               scroll-conservatively 101
               comint-input-sender 'dape--repl-input-sender
               comint-prompt-regexp (concat "^" (regexp-quote dape--repl-prompt))
@@ -4756,8 +4756,7 @@ If INPUT is non blank add or remove expression to watch list."
   ;; Stolen from ielm
   ;; Start a dummy process just to please comint
   (unless (comint-check-proc (current-buffer))
-    (let ((process
-           (start-process "dape-repl" (current-buffer) nil)))
+    (let ((process (start-process "dape-repl" (current-buffer) nil)))
       (add-hook 'kill-buffer-hook (lambda () (delete-process process)) nil t))
     (set-process-query-on-exit-flag (get-buffer-process (current-buffer))
                                     nil)
