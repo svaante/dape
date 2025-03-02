@@ -3365,7 +3365,9 @@ Helper for `dape--stack-frame-display'."
                                      dape-display-source-buffer-action)))
           ;; Change selected window if not `dape-repl' buffer is selected
           (unless (with-current-buffer (window-buffer)
-                    (memq major-mode '(dape-repl-mode dape-disassemble-mode)))
+                    (cl-some #'derived-mode-p '(dape-repl-mode
+                                                dape-info-parent-mode
+                                                dape-disassemble-mode)))
             (select-window window))
           (with-selected-window window
             ;; XXX We are running within timer context, which does not
