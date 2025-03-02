@@ -2882,12 +2882,11 @@ of memory read."
 (defun dape-disassemble (memory-reference count)
   "Disassemble COUNT instructions around MEMORY-REFERENCE."
   (interactive
-   (list
-    (string-trim
-     (read-string "Disassemble around address: " nil nil
-                  (when-let* ((number (thing-at-point 'number)))
-                    (format "0x%08x" number))))
-    100))
+   (list (string-trim
+          (read-string "Disassemble at address: " nil nil
+                       (when-let* ((number (thing-at-point 'number)))
+                         (format "0x%08x" number))))
+         100))
   (if-let* ((conn (dape--live-connection 'stopped))
             ((not (dape--capable-p conn :supportsDisassembleRequest))))
       (user-error "Adapter does not support disassemble")
