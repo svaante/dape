@@ -5425,6 +5425,9 @@ See `eldoc-documentation-functions', for more information."
     ["Memory" dape-read-memory
      :enable (dape--capable-p (dape--live-connection 'last)
                               :supportsReadMemoryRequest)]
+    ["Disassemble" dape-disassemble
+     :enable (dape--capable-p (dape--live-connection 'last)
+                              :supportsDisassembleRequest)]
     "--"
     ["Customize Dape" (lambda () (interactive) (customize-group "dape"))]))
 
