@@ -4596,17 +4596,19 @@ Called by `comint-input-sender' in `dape-repl-mode'."
                  (fn (or (alist-get cmd dape-repl-commands nil nil 'equal)
                          (and dape-repl-use-shorthand
                               (cdr (assoc cmd (dape--repl-shorthand-alist)))))))
-      (when fn
-        (dape--repl-insert-prompt)
-        ;; HACK: Special handing of `dape-quit', `comint-send-input'
-        ;;       expects buffer to be still live after calling
-        ;;       `comint-input-sender'.  Kill buffer with timer instead
-        ;;       to avoid error signal.
-        (cond ((eq 'dape-quit fn)
-               (run-with-timer 0 nil #'call-interactively #'dape-quit))
-              ((commandp fn) (call-interactively fn))
-              ((funcall fn (string-join args " "))))
-        t)))
+      (cond ((eq 'dape-quit fn)
+             ;; HACK: `comint-send-input' expects buffer to be live
+             ;;       on `comint-input-sender' return.
+             (run-with-timer 0 nil #'call-interactively #'dape-quit))
+            ((and (commandp fn) args) nil)
+            ((commandp fn)
+             (dape--repl-insert-prompt)
+             (call-interactively fn)
+             t)
+            (fn
+             (dape--repl-insert-prompt)
+             (apply fn args)
+             t))))
    ;; Evaluate expression
    (t
     (dape--repl-insert-prompt)
@@ -4696,47 +4698,48 @@ Called by `comint-input-sender' in `dape-repl-mode'."
        (goto-char (car bounds))
        (looking-back (regexp-opt trigger-chars) line-start)))))
 
-(defun dape-repl-threads (input)
+(defun dape-repl-threads (&optional index)
   "List threads in *dape-repl* buffer.
-If INPUT string is a number select thread N+1th thread."
-  (when-let* ((index (unless (string-blank-p input) (string-to-number input))))
+If INDEX is non nil parse into number and select n+1th thread."
+  (when-let* ((index (and index (string-to-number index))))
     (cl-loop with n = 0 for conn in (dape--live-connections)
              for thread = (cl-loop for thread in (dape--threads conn)
                                    when (equal (cl-incf n) index) return thread)
              when thread return (dape-select-thread conn (plist-get thread :id))))
   (dape--repl-insert-info-buffer 'dape-info-threads-mode))
 
-(defun dape-repl-stack (input)
+(defun dape-repl-stack (&optional index)
   "List modules in *dape-repl* buffer.
-If INPUT string is a number select stack N+1th thread."
-  (when-let* ((index (unless (string-blank-p input) (string-to-number input)))
+If INDEX is non nil parse into number and select n+1th stack."
+  (when-let* ((index (and index (string-to-number index)))
               (conn (dape--live-connection 'stopped t))
               (frames (plist-get (dape--current-thread conn) :stackFrames)))
     (dape-select-stack conn (plist-get (nth (1- index) frames) :id)))
   (dape--repl-insert-info-buffer 'dape-info-stack-mode))
 
-(defun dape-repl-modules (_)
+(defun dape-repl-modules ()
   "List modules in *dape-repl* buffer."
   (dape--repl-insert-info-buffer 'dape-info-modules-mode))
 
-(defun dape-repl-sources (_)
+(defun dape-repl-sources ()
   "List sources in *dape-repl* buffer."
   (dape--repl-insert-info-buffer 'dape-info-sources-mode))
 
-(defun dape-repl-breakpoints (_)
+(defun dape-repl-breakpoints ()
   "List breakpoints in *dape-repl* buffer."
   (dape--repl-insert-info-buffer 'dape-info-breakpoints-mode))
 
-(defun dape-repl-scope (input)
+(defun dape-repl-scope (&optional index)
   "List variables of scope in *dape-repl* buffer.
-If INPUT string is a number list Nth scope."
-  (dape--repl-insert-info-buffer 'dape-info-scope-mode (string-to-number input)))
+If INDEX is non nil parse into number and show n+1th scope."
+  (dape--repl-insert-info-buffer 'dape-info-scope-mode
+                                 (string-to-number (or index ""))))
 
-(defun dape-repl-watch (input)
+(defun dape-repl-watch (&rest expressions)
   "List watched variables in *dape-repl* buffer.
-If INPUT is non blank add or remove expression to watch list."
-  (unless (string-blank-p input)
-    (dape-watch-dwim input))
+If EXPRESSIONS is non blank add or remove expression to watch list."
+  (when expressions
+    (dape-watch-dwim (string-join expressions " ")))
   (dape--repl-insert-info-buffer 'dape-info-watch-mode))
 
 (define-derived-mode dape-repl-mode comint-mode "REPL"
