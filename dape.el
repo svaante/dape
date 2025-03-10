@@ -2644,7 +2644,7 @@ CONN is inferred by either last stopped or last created connection."
     (or (dape--live-connection 'stopped t) (dape--live-connection 'last))
     (if (region-active-p)
         (buffer-substring (region-beginning) (region-end))
-      (read-string "Evaluate: " (thing-at-point 'symbol)))))
+      (read-string "Evaluate: " nil nil (thing-at-point 'symbol)))))
   (dape--with-request-bind
       ((&whole body &key variablesReference result &allow-other-keys) error)
       (dape--evaluate-expression conn (plist-get (dape--current-stack-frame conn) :id)
