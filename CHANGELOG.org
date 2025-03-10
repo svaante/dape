@@ -2,6 +2,16 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.23.0
+- Add disassemble viewer
+- Add disabling/enabling of source breakpoints
+- Add improved REPL command parsing (e.g., allow p for both =dape-pause= and GDB pause)
+- Add revert-function to dape-shell
+- Add comint filters to shell echo in REPL
+- Change =dape-display-source-buffer-action= default
+- Change enable inlay hints by default
+- Fix header line flicker when switching to watch edit and back
+
 * Version 0.22.0
 - Add (=dape-info-scope-mode= INDEX) choice to info groups
 - Add =dape-restart= to mode-line menu
