@@ -272,12 +272,12 @@
            :cwd dape-cwd
            :program dape-buffer-default
            :console "internalConsole")
-	  (js-debug-node-attach
+          (js-debug-node-attach
            modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
            ,@js-debug
            :type "pwa-node"
-	   :request "attach"
-	   :port 9229)
+           :request "attach"
+           :port 9229)
           (js-debug-chrome
            modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
            ,@js-debug
@@ -352,23 +352,23 @@
                   (unless (and (featurep 'eglot) (eglot-current-server))
                     (user-error "No eglot instance active in buffer %s" (current-buffer)))
                   (unless (seq-contains-p (eglot--server-capable :executeCommandProvider :commands)
-        			          "vscode.java.resolveClasspath")
-        	    (user-error "Jdtls instance does not bundle java-debug-server, please install")))))
+                                          "vscode.java.resolveClasspath")
+                    (user-error "Jdtls instance does not bundle java-debug-server, please install")))))
      fn (lambda (config)
           (with-current-buffer
               (find-file-noselect (dape-config-get config :filePath))
             (if-let* ((server (eglot-current-server)))
-	        (pcase-let ((`[,module-paths ,class-paths]
-			     (eglot-execute-command server
+                (pcase-let ((`[,module-paths ,class-paths]
+                             (eglot-execute-command server
                                                     "vscode.java.resolveClasspath"
-					            (vector (plist-get config :mainClass)
+                                                    (vector (plist-get config :mainClass)
                                                             (plist-get config :projectName))))
                             (port (eglot-execute-command server
-		                                         "vscode.java.startDebugSession" nil)))
-	          (thread-first config
+                                                         "vscode.java.startDebugSession" nil)))
+                  (thread-first config
                                 (plist-put 'port port)
-			        (plist-put :modulePaths module-paths)
-			        (plist-put :classPaths class-paths)))
+                                (plist-put :modulePaths module-paths)
+                                (plist-put :classPaths class-paths)))
               server)))
      ,@(cl-flet ((resolve-main-class (key)
                    (ignore-errors
@@ -555,6 +555,10 @@ variable should be expanded by default."
      display-buffer-use-some-window))
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
+
+(defcustom dape-config-hook '()
+  "Called before dape-configs is evaluated for candidates."
+  :type 'hook)
 
 (define-obsolete-variable-alias 'dape-on-start-hooks 'dape-start-hook "0.13.0")
 (defcustom dape-start-hook '(dape-repl dape-info)
@@ -743,9 +747,10 @@ See `dape-minibuffer-hint'."
   like format with ENV PROGRAM ARGS.  This is useful for adapters
   which accepts :env, :program and :args as launch options.
   Example: \"launch - ENV=value program arg1 arg2\""
-  :type '(choice (const :tag "Input" input)
-		 (const :tag "Evaluated input" evaled)
-		 (const :tag "Evaluated input in dash form" evaled-dash-form)))
+  :type '(choice
+          (const :tag "Input" input)
+          (const :tag "Evaluated input" evaled)
+          (const :tag "Evaluated input in dash form" evaled-dash-form)))
 
 (defcustom dape-ui-debounce-time 0.1
   "Number of seconds to debounce `revert-buffer' for UI buffers."
@@ -778,7 +783,8 @@ Debug logging has an noticeable effect on performance."
   "Face used to display hits breakpoints.")
 
 (defface dape-exception-description-face '((t :inherit (error tooltip)
-                                              :extend t))
+                                              :extend t
+                                              :stipple nil))
   "Face used to display exception descriptions inline.")
 
 (defface dape-source-line-face '((t))
@@ -3378,8 +3384,8 @@ Helper for `dape--stack-frame-display'."
             ;; The following logic borrows from gud.el to interact
             ;; with `hl-line'.
             (when (featurep 'hl-line)
-	      (cond (global-hl-line-mode (global-hl-line-highlight))
-	            ((and hl-line-mode hl-line-sticky-flag) (hl-line-highlight))))
+              (cond (global-hl-line-mode (global-hl-line-highlight))
+                    ((and hl-line-mode hl-line-sticky-flag) (hl-line-highlight))))
             (run-hooks 'dape-display-source-hook)))))))
 
 (defun dape--stack-frame-display (conn)
@@ -3501,10 +3507,10 @@ with HELP-ECHO string, MOUSE-FACE and FACE."
   (propertize name 'help-echo help-echo 'mouse-face mouse-face 'face face
               'keymap
               (gdb-make-header-line-mouse-map
-	       'mouse-1
-	       (lambda (event) (interactive "e")
-		 (save-selected-window
-		   (select-window (posn-window (event-start event)))
+               'mouse-1
+               (lambda (event) (interactive "e")
+                 (save-selected-window
+                   (select-window (posn-window (event-start event)))
                    (let ((buffer (dape--info-get-buffer-create mode id)))
                      (with-current-buffer buffer (revert-buffer))
                      (gdb-set-window-buffer buffer t)))))))
@@ -4414,7 +4420,7 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
         buffer-read-only nil
         font-lock-defaults '(dape--info-watch-edit-font-lock-keywords))
   (message "%s" (substitute-command-keys
-	         "Press \\[dape-info-watch-finish-edit] when finished \
+                 "Press \\[dape-info-watch-finish-edit] when finished \
 or \\[dape-info-watch-abort-changes] to abort changes"))
   (dape--info-set-related-buffers)
   (revert-buffer))
@@ -5294,6 +5300,7 @@ nil."
 Completes from suggested conjurations, a configuration is suggested if
 it's for current `major-mode' and it's available.
 See `modes' and `ensure' in `dape-configs'."
+  (run-hooks 'dape-config-hook)
   (let* ((suggested-configs
           (cl-loop for (key . config) in dape-configs
                    when (and (dape--config-mode-p config)
