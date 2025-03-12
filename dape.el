@@ -556,6 +556,10 @@ variable should be expanded by default."
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
+(defcustom dape-config-hook '()
+  "Called before dape-configs is evaluated for candidates."
+  :type 'hook)
+
 (define-obsolete-variable-alias 'dape-on-start-hooks 'dape-start-hook "0.13.0")
 (defcustom dape-start-hook '(dape-repl dape-info)
   "Called when session starts."
@@ -5295,6 +5299,7 @@ nil."
 Completes from suggested conjurations, a configuration is suggested if
 it's for current `major-mode' and it's available.
 See `modes' and `ensure' in `dape-configs'."
+  (run-hooks 'dape-config-hook)
   (let* ((suggested-configs
           (cl-loop for (key . config) in dape-configs
                    when (and (dape--config-mode-p config)
