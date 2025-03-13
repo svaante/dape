@@ -5069,13 +5069,11 @@ non nil and function uses the minibuffer."
          (and `(,x . ,_) (guard (and (symbolp x) (not (keywordp x))))))
      (if skip-functions
          value
-       (condition-case _
-           ;; Try to eval function, signal on minibuffer
-           (let ((enable-recursive-minibuffers (not skip-interactive)))
-             (if (functionp value)
-                 (funcall-interactively value)
-               (eval value)))
-         (error value))))
+       ;; Try to eval function, signal on minibuffer
+       (let ((enable-recursive-minibuffers (not skip-interactive)))
+         (if (functionp value)
+             (funcall-interactively value)
+           (eval value)))))
     ;; On plist recursively evaluate
     ((pred dape--plistp)
      (dape--config-eval-1 value skip-functions skip-interactive))
