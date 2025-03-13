@@ -1059,18 +1059,21 @@ Note requires `dape--source-ensure' if source is by reference."
       (point-marker))))
 
 (defun dape--default-cwd ()
-  "Try to guess current project absolute file path with `project'."
-  (or (when-let* ((project (project-current)))
-        (expand-file-name (project-root project)))
-      default-directory))
+  "Try to guess current project absolute file path with `project', else nil."
+  (when-let* ((project (project-current)))
+    (expand-file-name (project-root project))))
 
 (defun dape-cwd ()
   "Use `dape-cwd-function' to guess current working as local path."
-  (tramp-file-local-name (funcall dape-cwd-function)))
+  (let ((cwd (funcall dape-cwd-function)))
+    (if cwd
+        (tramp-file-local-name cwd)
+      default-directory)))
 
 (defun dape-command-cwd ()
   "Use `dape-cwd-function' to guess current working directory."
-  (funcall dape-cwd-function))
+  (let ((cwd (funcall dape-cwd-function)))
+    (or cwd default-directory)))
 
 (defun dape-buffer-default ()
   "Return current buffers file name."
