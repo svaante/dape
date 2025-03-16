@@ -2225,6 +2225,7 @@ symbol `dape-connection'."
                (apply #'make-pipe-process
                       :name "dape adapter stderr"
                       :buffer (get-buffer-create " *dape-server stderr*")
+                      :noquery t
                       (when (plist-get config 'command-insert-stderr)
                         `(:filter ,(lambda (_process string)
                                      (dape--repl-insert-error string))))))
@@ -2237,8 +2238,8 @@ symbol `dape-connection'."
                               :command command
                               :filter (lambda (_process string)
                                         (dape--repl-insert string))
-                              :noquery t
                               :file-handler t
+                              :buffer nil
                               :stderr stderr-pipe))
           (process-put server-process 'stderr-pipe stderr-pipe)
           (when dape-debug
@@ -2289,7 +2290,6 @@ symbol `dape-connection'."
                             :command command
                             :connection-type 'pipe
                             :coding 'utf-8-emacs-unix
-                            :noquery t
                             :stderr (get-buffer-create "*dape-connection stderr*")
                             :file-handler t))
         (when dape-debug
@@ -4760,7 +4760,7 @@ If EXPRESSIONS is non blank add or remove expression to watch list."
   ;; Stolen from ielm
   ;; Start a dummy process just to please comint
   (unless (comint-check-proc (current-buffer))
-    (let ((process (start-process "dape-repl" (current-buffer) nil)))
+    (let ((process (start-process "dape repl" (current-buffer) nil)))
       (add-hook 'kill-buffer-hook (lambda () (delete-process process)) nil t))
     (set-process-query-on-exit-flag (get-buffer-process (current-buffer))
                                     nil)
