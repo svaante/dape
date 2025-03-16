@@ -4242,14 +4242,11 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
     (setq name
           (propertize name
                       'font-lock-face 'font-lock-variable-name-face
-                      'face 'font-lock-variable-name-face
                       'mouse-face 'highlight
                       'help-echo "mouse-2: create or remove watch expression"
                       'keymap dape-info-variable-name-map)
           type
-          (propertize type
-                      'font-lock-face 'font-lock-type-face
-                      'face 'font-lock-type-face)
+          (propertize type 'font-lock-face 'font-lock-type-face)
           value
           (propertize value
                       'mouse-face 'highlight
@@ -4526,7 +4523,8 @@ The search is done backwards from POINT.  The line is marked with
                                 `( keymap ,(make-composed-keymap
                                             (list (plist-get props 'keymap) keymap))
                                    font-lock-face ,(or (plist-get props 'font-lock-face)
-                                                       (plist-get props 'face)))
+                                                       (plist-get props 'face))
+                                   face nil)
                                 str)
            finally return
            (propertize str
