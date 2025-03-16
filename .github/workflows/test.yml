@@ -22,7 +22,7 @@ jobs:
     - name: Install emacs
       uses: purcell/setup-emacs@master
       with:
-        version: {{ matrix.version}}
+        version: ${{ matrix.version }}
 
     - name: Install Python
       uses: actions/setup-python@v2
