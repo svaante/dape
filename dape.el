@@ -2610,10 +2610,11 @@ With prefix argument stack is selected by index."
   (interactive (list (dape--live-connection 'stopped) 1))
   (dape-stack-select-up conn (* n -1)))
 
-(defun dape-watch-dwim (expression &optional no-add no-remove)
-  "Add or remove watch for EXPRESSION.
-NO-ADD limits usage to only removal of watched vars.
-NO-REMOVE limits usage to only adding watched vars."
+(defun dape-watch-dwim (expression &optional no-add no-remove display)
+  "Toggle a watch for EXPRESSION in the debugger.
+If NO-ADD is non nil only allow removal of an existing watch.
+If NO-REMOVE is non nil only allow adding a new watch.
+If DISPLAY is non nil display the watch buffer."
   (interactive
    (list (string-trim
           (completing-read
@@ -2622,7 +2623,8 @@ NO-REMOVE limits usage to only adding watched vars."
            nil nil nil nil
            (or (and (region-active-p)
                     (buffer-substring (region-beginning) (region-end)))
-               (thing-at-point 'symbol))))))
+               (thing-at-point 'symbol))))
+         nil nil t))
   (if-let* ((watched
              (cl-find expression dape--watched
                       :key (lambda (plist) (plist-get plist :name))
@@ -2631,7 +2633,7 @@ NO-REMOVE limits usage to only adding watched vars."
         (setq dape--watched (cl-delete watched dape--watched)))
     (unless no-add
       (push (list :name expression) dape--watched)))
-  (when (called-interactively-p 'interactive)
+  (when display
     (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode)))
   (run-hooks 'dape-update-ui-hook))
 
@@ -3136,7 +3138,7 @@ If FROM-RESTART is non nil keep id and verified."
 (cl-defun dape--breakpoint-place (&optional type value)
   "Place breakpoint at current line.
 Valid values for TYPE is nil, `log', `expression' and `hits'.
-If TYPE is none nil VALUE is expected to be an string.
+If TYPE is non nil VALUE is expected to be an string.
 If there are breakpoints at current line remove those breakpoints from
 `dape--breakpoints'.  Updates all breakpoints in all known connections."
   (unless (derived-mode-p 'prog-mode)
@@ -3982,7 +3984,7 @@ current buffer with CONN config."
                   'dape--selected (eq current-stack-frame frame)
                   'mouse-face 'highlight
                   'keymap dape-info-stack-line-map
-                  'help-echo "mouse-2, RET: Select frame"))
+                  'help-echo "mouse-2, RET: select frame"))
            finally do
            (insert (gdb-table-string table " "))
            (when selected-line
@@ -4896,15 +4898,10 @@ Update `dape--inlay-hint-overlays' from SCOPES."
                 (define-key map [mouse-1]
                             (lambda (event)
                               (interactive "e")
-                              (save-selected-window
-                                (let ((start (event-start event)))
-                                  (select-window (posn-window start))
-                                  (save-excursion
-                                    (goto-char (posn-point start))
-                                    (dape-watch-dwim sym nil t))))))
+                              (dape-watch-dwim sym nil t t)))
                 map)
               'help-echo
-              (format "mouse-2: add `%s' to watch" symbol))
+              (format "mouse-1: add `%s' to watch" symbol))
              " "
              (propertize
               (truncate-string-to-width
