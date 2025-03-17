@@ -2883,24 +2883,23 @@ of memory read."
                       'dape-disassemble-mode)
              do (with-current-buffer buffer (revert-buffer)))))
 
-(defun dape-disassemble (memory-reference count)
-  "Disassemble COUNT instructions around MEMORY-REFERENCE."
+(defun dape-disassemble (address)
+  "View disassemble of instructions at ADDRESS."
   (interactive
    (list (string-trim
-          (read-string "Disassemble at address: " nil nil
+          (read-string "Address: " nil nil
                        (when-let* ((number (thing-at-point 'number)))
-                         (format "0x%08x" number))))
-         100))
+                         (format "0x%08x" number))))))
   (if-let* ((conn (dape--live-connection 'stopped))
             ((not (dape--capable-p conn :supportsDisassembleRequest))))
       (user-error "Adapter does not support disassemble")
     (dape--with-request-bind
         ((&key ((:instructions instructions)) &allow-other-keys) _)
         (dape-request conn 'disassemble
-                      `( :memoryReference ,memory-reference
-                         :instructionCount ,count
+                      `( :memoryReference ,address
+                         :instructionCount 100
                          :offset 0
-                         :instructionOffset ,(- (/ count 2) count)
+                         :instructionOffset -50
                          :resolveSymbols t))
       (cl-flet ((address-to-int (address)
                   (string-to-number (substring address 2) 16)))
@@ -2945,8 +2944,7 @@ of memory read."
                (dape--indicator "|" 'vertical-bar nil))
              'dape--disassemble-instruction instruction)))
           (setq-local revert-buffer-function
-                      (lambda (&rest _)
-                        (dape-disassemble memory-reference count)))
+                      (lambda (&rest _) (dape-disassemble address)))
           (with-selected-window (display-buffer (current-buffer))
             (goto-char
              (or (marker-position dape--disassemble-overlay-arrow)
