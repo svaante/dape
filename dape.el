@@ -2835,13 +2835,14 @@ When BACKWARD is non nil move backward instead."
              when (eq (buffer-local-value 'major-mode buffer) 'dape-memory-mode)
              do (with-current-buffer buffer (revert-buffer)))))
 
-(defun dape-read-memory (address &optional reuse-buffer)
-  "Read `dape-memory-page-size' bytes of memory at ADDRESS.
+(define-obsolete-variable-alias 'dape-read-memory 'dape-memory "0.24.0")
+(defun dape-memory (address &optional reuse-buffer)
+  "View and edit memory from ADDRESS in hex dump format.
 If REUSE-BUFFER is non nil reuse the current buffer to display result
 of memory read."
   (interactive
    (list (string-trim
-          (read-string "Read memory from address: " nil nil
+          (read-string "Address: " nil nil
                        (when-let* ((number (thing-at-point 'number)))
                          (format "0x%08x" number))))))
   (let ((conn (dape--live-connection 'stopped)))
@@ -5418,7 +5419,7 @@ See `eldoc-documentation-functions', for more information."
     "--"
     ["REPL" dape-repl]
     ["Info buffers" dape-info]
-    ["Memory" dape-read-memory
+    ["Memory" dape-memory
      :enable (dape--capable-p (dape--live-connection 'last)
                               :supportsReadMemoryRequest)]
     ["Disassemble" dape-disassemble
@@ -5496,7 +5497,7 @@ mouse-1: Display minor mode menu"
     (define-key map "r" #'dape-restart)
     (define-key map "i" #'dape-info)
     (define-key map "R" #'dape-repl)
-    (define-key map "m" #'dape-read-memory)
+    (define-key map "m" #'dape-memory)
     (define-key map "M" #'dape-disassemble)
     (define-key map "l" #'dape-breakpoint-log)
     (define-key map "e" #'dape-breakpoint-expression)
