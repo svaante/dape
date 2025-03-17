@@ -2818,7 +2818,8 @@ Using BUFFER and STR."
 When BACKWARD is non nil move backward instead."
   (interactive nil dape-memory-mode)
   (dape-read-memory (format "0x%08x"
-                            (funcall (if backward '- '+) (dape--memory-address-number)
+                            (funcall (if backward #'- #'+)
+                                     (dape--memory-address-number)
                                      dape-memory-page-size))
                     t))
 
@@ -3957,10 +3958,8 @@ See `dape-request' for expected CB signature."
   "Helper for inserting stack info into stack buffer.
 Create table from CURRENT-STACK-FRAME and STACK-FRAMES and insert into
 current buffer with CONN config."
-  (cl-loop with table = (make-gdb-table)
-           with selected-line
-           for line from 1
-           for frame in stack-frames do
+  (cl-loop with table = (make-gdb-table) with selected-line
+           for line from 1 for frame in stack-frames do
            (when (eq current-stack-frame frame)
              (setq selected-line line))
            (gdb-table-add-row
@@ -4064,8 +4063,7 @@ current buffer with CONN config."
                   (when-let* ((path (plist-get module :path)))
                     (concat " of " (dape--format-file-line path nil)))
                   (when-let* ((address-range (plist-get module :addressRange)))
-                    (concat " at "
-                            address-range nil))
+                    (concat " at " address-range nil))
                   " "))
                 (list
                  'dape--info-module module
