@@ -3944,7 +3944,21 @@ See `dape-request' for expected CB signature."
                      (plist-get dape--info-frame :id))
   (revert-buffer))
 
-(dape--buffer-map dape-info-stack-line-map dape-info-stack-select)
+(dape--command-at-line dape-info-stack-memory (dape--info-frame)
+  "View and edit memory at address of frame."
+  (if-let* ((ref (plist-get dape--info-frame :instructionPointerReference)))
+      (dape-memory ref)
+    (user-error "No address for frame")))
+
+(dape--command-at-line dape-info-stack-disassemble (dape--info-frame)
+  "View disassemble at address of frame."
+  (if-let* ((ref (plist-get dape--info-frame :instructionPointerReference)))
+      (dape-disassemble ref)
+    (user-error "No address for frame")))
+
+(dape--buffer-map dape-info-stack-line-map dape-info-stack-select
+  (define-key map "m" 'dape-info-stack-memory)
+  (define-key map "M" 'dape-info-stack-disassemble))
 
 (define-derived-mode dape-info-stack-mode dape-info-parent-mode "Stack"
   "Major mode for Dape info stack."
