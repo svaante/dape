@@ -586,7 +586,7 @@ this MIME type."
 
 (define-obsolete-variable-alias 'dape-read-memory-default-count 'dape-memory-page-size "0.8.0")
 (defcustom dape-memory-page-size 1024
-  "The bytes read with `dape-read-memory'."
+  "The bytes read with `dape-memory'."
   :type 'natnum)
 
 (defcustom dape-info-buffer-window-groups
@@ -2817,11 +2817,11 @@ Using BUFFER and STR."
   "Move address `dape-memory-page-size' forward.
 When BACKWARD is non nil move backward instead."
   (interactive nil dape-memory-mode)
-  (dape-read-memory (format "0x%08x"
-                            (funcall (if backward #'- #'+)
-                                     (dape--memory-address-number)
-                                     dape-memory-page-size))
-                    t))
+  (dape-memory (format "0x%08x"
+                       (funcall (if backward #'- #'+)
+                                (dape--memory-address-number)
+                                dape-memory-page-size))
+               t))
 
 (defun dape-memory-previous-page ()
   "Move address `dape-memory-page-size' backward."
