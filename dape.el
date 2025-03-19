@@ -3264,14 +3264,20 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
      ";; Load breakpoints with `dape-breakpoint-load'\n\n")
     (cl-loop for breakpoint in dape--breakpoints
              for path = (dape--breakpoint-path breakpoint)
-             for line = (dape--breakpoint-line breakpoint)
              when path collect
-             (list path line
+             (list path
+                   (dape--breakpoint-line breakpoint)
                    (dape--breakpoint-type breakpoint)
                    (dape--breakpoint-value breakpoint))
              into serialized finally do
              (prin1 serialized (current-buffer)))
-    (write-file file)))
+    ;; Skip write if nothing has changed since last save
+    (unless (equal (buffer-string)
+                   (with-temp-buffer
+                     (insert-file-contents file)
+                     (buffer-string)))
+      (write-region (point-min) (point-max) file nil
+                    (unless (called-interactively-p 'interactive) 'quiet)))))
 
 
 ;;; Source buffers
