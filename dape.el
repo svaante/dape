@@ -3232,23 +3232,24 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
   (setq file (or file dape-default-breakpoints-file))
   (when (file-exists-p file)
     (dape-breakpoint-remove-all)
-    (cl-loop with breakpoints =
-             (with-temp-buffer
-               (insert-file-contents file)
-               (goto-char (point-min))
-               (nreverse (read (current-buffer))))
-             for (file line type value) in breakpoints do
-             (cond
-              ((find-buffer-visiting file)
-               (dape--with-line (find-file-noselect file) line
-                 (dape--breakpoint-place type value)))
-              (t
-               (add-hook 'find-file-hook #'dape--breakpoint-find-file-hook)
-               (push (dape--breakpoint-make
-                      :path-line (cons file line) :type type :value value)
-                     dape--breakpoints))))
-    (apply #'dape--breakpoint-broadcast-update
-           (mapcar #'car (seq-group-by #'dape--breakpoint-source dape--breakpoints)))))
+    (let ((breakpoints
+           (with-temp-buffer
+             (insert-file-contents file)
+             (goto-char (point-min))
+             (nreverse (read (current-buffer))))))
+      (cl-loop for (file line type value) in breakpoints do
+               (if (find-buffer-visiting file)
+                   (dape--with-line (find-file-noselect file) line
+                     (dape--breakpoint-place type value))
+                 (add-hook 'find-file-hook #'dape--breakpoint-find-file-hook)
+                 (push (dape--breakpoint-make :path-line (cons file line)
+                                              :type type
+                                              :value value)
+                       dape--breakpoints))))
+    (thread-last dape--breakpoints
+                 (seq-group-by #'dape--breakpoint-source)
+                 (mapcar #'car)
+                 (apply #'dape--breakpoint-broadcast-update))))
 
 (defun dape-breakpoint-save (&optional file)
   "Save breakpoints to FILE.
