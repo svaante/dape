@@ -2945,11 +2945,10 @@ of memory read."
              'dape--disassemble-instruction instruction)))
           (setq-local revert-buffer-function
                       (lambda (&rest _) (dape-disassemble address)))
-          (with-selected-window (display-buffer (current-buffer))
-            (goto-char
-             (or (marker-position dape--disassemble-overlay-arrow)
-                 (point-min)))
-            (run-hooks 'dape-display-source-hook)))))))
+          (select-window (display-buffer (current-buffer)))
+          (goto-char (or (marker-position dape--disassemble-overlay-arrow)
+                         (point-min)))
+          (run-hooks 'dape-display-source-hook))))))
 
 
 ;;; Breakpoints
