@@ -849,11 +849,12 @@ See `cl-destructuring-bind' for bind forms."
   (let ((old-buffer (make-symbol "old-buffer")))
     `(let ((,old-buffer (current-buffer)))
        (,(car fn-args) ,@(cdr fn-args)
-        (cl-function (lambda ,vars
-                       (with-current-buffer (if (buffer-live-p ,old-buffer)
-                                                ,old-buffer
-                                              (current-buffer))
-                         ,@body)))))))
+        (cl-function
+         (lambda ,vars
+           (with-current-buffer (if (buffer-live-p ,old-buffer)
+                                    ,old-buffer
+                                  (current-buffer))
+             ,@body)))))))
 
 (defmacro dape--with-request (fn-args &rest body)
   "Call `dape-request' like FN with ARGS and execute BODY on callback.
@@ -1738,41 +1739,35 @@ See `dape-request' for expected CB signature."
 See `dape-request' for expected CB signature."
   (let ((current-nof (length (plist-get thread :stackFrames)))
         (total-frames (plist-get thread :totalFrames))
+        (value-formatting-p
+         (dape--capable-p conn :supportsValueFormattingOptions))
         (delayed-stack-trace-p
          (dape--capable-p conn :supportsDelayedStackTraceLoading)))
-    (cond
-     ((or (not (equal (plist-get thread :status) 'stopped))
-          (not (integerp (plist-get thread :id)))
-          (eql current-nof total-frames)
-          (and delayed-stack-trace-p (<= nof current-nof))
-          (and (not delayed-stack-trace-p) (> current-nof 0)))
-      (dape--request-continue cb))
-     ((dape--with-request-bind
+    (if (or (not (equal (plist-get thread :status) 'stopped))
+            (not (integerp (plist-get thread :id)))
+            (eql current-nof total-frames)
+            (and delayed-stack-trace-p (<= nof current-nof))
+            (and (not delayed-stack-trace-p) (> current-nof 0)))
+        (dape--request-continue cb)
+      (dape--with-request-bind
           ((&key stackFrames totalFrames &allow-other-keys) error)
-          (dape-request conn
-                        "stackTrace"
-                        `(:threadId
-                          ,(plist-get thread :id)
-                          ,@(when delayed-stack-trace-p
-                              (list
-                               :startFrame current-nof
-                               :levels (- nof current-nof)))
-                          ,@(when (and dape-info-stack-buffer-modules
-                                       (dape--capable-p conn :supportsValueFormattingOptions))
-                              `(:format (:module t)))))
-        (cond
-         ((not delayed-stack-trace-p)
-          (plist-put thread :stackFrames
-                     (append stackFrames nil)))
-         ;; Sanity check delayed stack trace
-         ((length= (plist-get thread :stackFrames) current-nof)
-          (plist-put thread :stackFrames
-                     (append (plist-get thread :stackFrames)
-                             stackFrames
-                             nil))))
-        (plist-put thread :totalFrames
-                   (and (numberp totalFrames) totalFrames))
-        (dape--request-continue cb error))))))
+          (dape-request
+           conn "stackTrace"
+           `( :threadId ,(plist-get thread :id)
+              ,@(when delayed-stack-trace-p
+                  `( :startFrame ,current-nof
+                     :levels ,(- nof current-nof)))
+              ,@(when (and dape-info-stack-buffer-modules value-formatting-p)
+                  `(:format (:module t)))))
+        (cond ((not delayed-stack-trace-p)
+               (plist-put thread :stackFrames (append stackFrames nil)))
+              ;; Sanity check delayed stack trace
+              ((length= (plist-get thread :stackFrames) current-nof)
+               (plist-put thread :stackFrames
+                          (append (plist-get thread :stackFrames) stackFrames
+                                  nil))))
+        (plist-put thread :totalFrames (and (numberp totalFrames) totalFrames))
+        (dape--request-continue cb error)))))
 
 (defun dape--variables (conn object cb)
   "Update OBJECTs variables by adapter CONN.
@@ -1800,25 +1795,23 @@ See `dape-request' for expected CB signature."
 Get variable data from CONN and put result on OBJECT until PRED is nil.
 PRED is called with PATH and OBJECT.
 See `dape-request' for expected CB signature."
-  (let ((objects
-         (cl-loop for variable in (or (plist-get object :scopes)
-                                      (plist-get object :variables))
-                  for name = (plist-get variable :name)
-                  for expensive-p = (eq (plist-get variable :expensive) t)
-                  when (and (not expensive-p) (funcall pred (cons name path)))
-                  collect variable)))
-    (if (not objects)
-        (dape--request-continue cb)
+  (if-let* ((objects
+             (cl-loop
+              for variable in (or (plist-get object :scopes)
+                                  (plist-get object :variables))
+              for name = (plist-get variable :name)
+              for expensive-p = (eq (plist-get variable :expensive) t)
+              when (and (not expensive-p) (funcall pred (cons name path)))
+              collect variable)))
       (let ((responses 0))
         (dolist (object objects)
           (dape--with-request (dape--variables conn object)
             (dape--with-request
-                (dape--variables-recursive conn object
-                                           (cons (plist-get object :name) path)
-                                           pred)
-              (when (length= objects
-                             (setf responses (1+ responses)))
-                (dape--request-continue cb)))))))))
+                (dape--variables-recursive
+                 conn object (cons (plist-get object :name) path) pred)
+              (when (length= objects (cl-incf responses))
+                (dape--request-continue cb))))))
+    (dape--request-continue cb)))
 
 (defun dape--evaluate-expression (conn frame-id expression context cb)
   "Send evaluate request to adapter CONN.
@@ -1909,9 +1902,9 @@ selected stack frame."
          (dolist (frame (plist-get thread :stackFrames))
            (plist-put frame :scopes nil)))))
     (dape--with-request (dape--stack-trace conn current-thread 1)
-      (when display
-        (dape--stack-frame-display conn))
-      (dape--with-request (dape--scopes conn (dape--current-stack-frame conn))
+      (when display (dape--stack-frame-display conn))
+      (dape--with-request
+          (dape--scopes conn (dape--current-stack-frame conn))
         (run-hooks 'dape-update-ui-hook)))))
 
 
@@ -5235,9 +5228,9 @@ If SIGNAL is non nil raises `user-error' on failure otherwise returns
 nil."
   (if-let* ((ensure-fn (plist-get config 'ensure)))
       (let ((default-directory
-             (or (when-let* ((command-cwd (plist-get config 'command-cwd)))
-                   (dape--config-eval-value command-cwd))
-                 default-directory)))
+             (if-let* ((command-cwd (plist-get config 'command-cwd)))
+                 (dape--config-eval-value command-cwd)
+               default-directory)))
         (condition-case err
             (or (funcall ensure-fn config) t)
           (error
@@ -5478,18 +5471,18 @@ mouse-1: Display minor mode menu"
                         (define-key map [mode-line down-mouse-1] dape-menu)
                         map))
             ":"
-            (:propertize
-             ,(when-let* ((thread-name (plist-get (dape--current-thread conn) :name)))
-                (concat thread-name " "))
-             face font-lock-constant-face
-             mouse-face mode-line-highlight
-             help-echo "mouse-1: Select thread"
-             keymap ,(let ((map (make-sparse-keymap)))
-                       (define-key map [mode-line down-mouse-1] 'dape-select-thread)
-                       map))
-            (:propertize ,(format "%s" (or (and conn (dape--state conn))
-                                           'unknown))
-                         face font-lock-doc-face)
+            ( :propertize
+              ,(when-let* ((thread-name (plist-get (dape--current-thread conn) :name)))
+                 (concat thread-name " "))
+              face font-lock-constant-face
+              mouse-face mode-line-highlight
+              help-echo "mouse-1: Select thread"
+              keymap ,(let ((map (make-sparse-keymap)))
+                        (define-key map [mode-line down-mouse-1] 'dape-select-thread)
+                        map))
+            ( :propertize ,(format "%s" (or (and conn (dape--state conn))
+                                            'unknown))
+              face font-lock-doc-face)
             ,@(when-let* ((reason (and conn (dape--state-reason conn))))
                 `("/" (:propertize ,reason face font-lock-doc-face)))
             ,@(when-let* ((conns (dape--live-connections))
