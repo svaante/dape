@@ -735,17 +735,17 @@ See `dape-minibuffer-hint'."
 (defcustom dape-history-add 'input
   "How to push configuration options onto `dape-history'.
 
-- input: Store input as is read from minibuffer.
-- evaled: Input is evaluated then checked against base configuration
-  in `dape-configs'.  Each options that differ from base are stored.
-- evaled-dash-form: Like evaled but stores options in dash form if
-  possible.  With dash form characters after - are interpret in sh
-  like format with ENV PROGRAM ARGS.  This is useful for adapters
-  which accepts :env, :program and :args as launch options.
-  Example: \"launch - ENV=value program arg1 arg2\""
+- input: Store input as it is read from the minibuffer.
+- expanded: Each key in the input is evaluated, and only options that
+  differ from the base configuration in `dape-configs' are stored.
+- shell-like: Like expanded, but stores options in a shell-like
+  format.  Characters after - are interpreted in a shell-style format,
+  with ENV, PROGRAM, and ARGS.  Useful for adapters that accept :env,
+  :program, and :args as launch options.
+  Example: \"launch - ENV=value program arg1 arg2\"."
   :type '(choice (const :tag "Input" input)
-		 (const :tag "Evaluated input" evaled)
-		 (const :tag "Evaluated input in dash form" evaled-dash-form)))
+		 (const :tag "After evaluation of each key" expanded)
+		 (const :tag "Shell like with - separator" shell-like)))
 
 (defcustom dape-ui-debounce-time 0.1
   "Number of seconds to debounce `revert-buffer' for UI buffers."
@@ -5203,20 +5203,19 @@ Where ALIST-KEY exists in `dape-configs'."
                                 value)))
              append (list key value))))
 
-(defun dape--config-to-string (key post-eval-config)
-  "Create string from KEY and POST-EVAL-CONFIG."
-  (pcase-let* ((config-diff (dape--config-diff key post-eval-config))
-               ((map :env :program :args) config-diff)
-               (zap-form-p (and (eq dape-history-add 'evaled-dash-form)
+(defun dape--config-to-string (key expanded-config)
+  "Create string from KEY and EXPANDED-CONFIG."
+  (pcase-let* ((diff (dape--config-diff key expanded-config))
+               ((map :env :program :args) expanded-config)
+               (zap-form-p (and (eq dape-history-add 'shell-like)
                                 (or (stringp program)
                                     (and (consp env) (keywordp (car env))
                                          (not args))))))
     (when zap-form-p
       (cl-loop for key in '(:program :env :args) do
-               (setq config-diff (map-delete config-diff key))))
+               (setq diff (map-delete diff key))))
     (concat (when key (format "%s" key))
-            (when-let* ((config-diff)
-                        (config-str (prin1-to-string config-diff)))
+            (when-let* (diff (config-str (prin1-to-string diff)))
               (format " %s" (substring config-str 1 (1- (length config-str)))))
             (when zap-form-p
               (concat " -"
