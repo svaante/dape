@@ -4160,18 +4160,15 @@ current buffer with CONN config."
 
 (dape--buffer-map dape-info-variable-name-map dape-info-scope-watch-dwim)
 
-(dape--command-at-line dape-info-variable-edit
-  (dape--info-ref dape--info-variable)
+(dape--command-at-line dape-info-variable-edit (dape--info-ref dape--info-variable)
   "Edit variable value at line in dape info buffer."
-  (dape--set-variable (dape--live-connection 'stopped)
-                      dape--info-ref
-                      dape--info-variable
-                      (read-string
-                       (format "Set value of %s `%s' = "
-                               (plist-get dape--info-variable :type)
-                               (plist-get dape--info-variable :name))
-                       (or (plist-get dape--info-variable :value)
-                           (plist-get dape--info-variable :result)))))
+  (dape--set-variable
+   (dape--live-connection 'stopped) dape--info-ref dape--info-variable
+   (read-string (format "Set value of %s `%s' = "
+                        (plist-get dape--info-variable :type)
+                        (plist-get dape--info-variable :name))
+                nil nil (or (plist-get dape--info-variable :value)
+                            (plist-get dape--info-variable :result)))))
 
 (dape--buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
