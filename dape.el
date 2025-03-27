@@ -4610,7 +4610,8 @@ Called by `comint-input-sender' in `dape-repl-mode'."
       (dape--repl-input-sender dummy-process last)))
    ;; Run command from `dape-named-commands'
    ((pcase-let* ((`(,cmd . ,args)
-                  (string-split input split-string-default-separators))
+                  (string-split (substring-no-properties input)
+                                split-string-default-separators))
                  (fn (or (alist-get cmd dape-repl-commands nil nil 'equal)
                          (and dape-repl-use-shorthand
                               (cdr (assoc cmd (dape--repl-shorthand-alist)))))))
@@ -4625,7 +4626,9 @@ Called by `comint-input-sender' in `dape-repl-mode'."
              t)
             (fn
              (dape--repl-insert-prompt)
-             (apply fn args)
+             (condition-case-unless-debug err
+                 (apply fn args)
+               (error (dape--warn "%s" (car err))))
              t))))
    ;; Evaluate expression
    (t
