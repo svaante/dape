@@ -4246,42 +4246,36 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
          (path (cons name path))
          (expanded-p (funcall test-expanded path))
          row)
-    (setq name
-          (propertize name
+    (setq
+     name (propertize name
                       'font-lock-face 'font-lock-variable-name-face
                       'mouse-face 'highlight
                       'help-echo "mouse-2: create or remove watch expression"
                       'keymap dape-info-variable-name-map)
-          type
-          (propertize type 'font-lock-face 'font-lock-type-face)
-          value
-          (propertize value
-                      'mouse-face 'highlight
-                      'help-echo "mouse-2: edit value"
-                      'keymap dape-info-variable-value-map)
-          prefix
-          (cond
-           (no-handles prefix)
-           ((zerop (or (plist-get object :variablesReference) 0))
-            (concat prefix "  "))
-           ((and expanded-p (plist-get object :variables))
-            (concat
-             (propertize (concat prefix "-")
-                         'mouse-face 'highlight
-                         'help-echo "mouse-2: contract"
-                         'keymap dape-info-variable-prefix-map)
-             " "))
-           (t
-            (concat
-             (propertize (concat prefix "+")
-                         'mouse-face 'highlight
-                         'help-echo "mouse-2: expand"
-                         'keymap dape-info-variable-prefix-map)
-             " "))))
-    (setq row (dape--info-locals-table-columns-list
-               `((name  . ,name)
-                 (type  . ,type)
-                 (value . ,value))))
+     type (propertize type 'font-lock-face 'font-lock-type-face)
+     value (propertize value
+                       'mouse-face 'highlight
+                       'help-echo "mouse-2: edit value"
+                       'keymap dape-info-variable-value-map)
+     prefix (cond (no-handles prefix)
+                  ((zerop (or (plist-get object :variablesReference) 0))
+                   (concat prefix "  "))
+                  ((and expanded-p (plist-get object :variables))
+                   (concat
+                    (propertize (concat prefix "-")
+                                'mouse-face 'highlight
+                                'help-echo "mouse-2: contract"
+                                'keymap dape-info-variable-prefix-map)
+                    " "))
+                  ((concat
+                    (propertize (concat prefix "+")
+                                'mouse-face 'highlight
+                                'help-echo "mouse-2: expand"
+                                'keymap dape-info-variable-prefix-map)
+                    " ")))
+     row (dape--info-locals-table-columns-list `((name  . ,name)
+                                                 (type  . ,type)
+                                                 (value . ,value))))
     (setcar row (concat prefix (car row)))
     (gdb-table-add-row table
                        (if dape-info-variable-table-aligned
