@@ -4778,7 +4778,7 @@ If EXPRESSIONS is non blank add or remove expression to watch list."
                         'comint-output-filter)
     (insert
      (format
-      "* Welcome to Dape REPL! *
+      "* Welcome to the Dape REPL *
 Available Dape commands: %s
 Empty input will rerun last command.\n\n"
       (mapconcat (pcase-lambda (`(,str . ,command))
