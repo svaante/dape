@@ -556,6 +556,10 @@ variable should be expanded by default."
   "`display-buffer' action used when displaying source buffer."
   :type 'sexp)
 
+(defcustom dape-config-hook '()
+  "Called before dape-configs is evaluated for candidates."
+  :type 'hook)
+
 (define-obsolete-variable-alias 'dape-on-start-hooks 'dape-start-hook "0.13.0")
 (defcustom dape-start-hook '(dape-repl dape-info)
   "Called when session starts."
@@ -783,7 +787,8 @@ Debug logging has an noticeable effect on performance."
   "Face used to display hits breakpoints.")
 
 (defface dape-exception-description-face '((t :inherit (error tooltip)
-                                              :extend t))
+                                              :extend t
+                                              :stipple nil))
   "Face used to display exception descriptions inline.")
 
 (defface dape-source-line-face '((t))
@@ -1060,18 +1065,21 @@ Note requires `dape--source-ensure' if source is by reference."
       (point-marker))))
 
 (defun dape--default-cwd ()
-  "Try to guess current project absolute file path with `project'."
-  (or (when-let* ((project (project-current)))
-        (expand-file-name (project-root project)))
-      default-directory))
+  "Try to guess current project absolute file path with `project', else nil."
+  (when-let* ((project (project-current)))
+    (expand-file-name (project-root project))))
 
 (defun dape-cwd ()
   "Use `dape-cwd-function' to guess current working as local path."
-  (tramp-file-local-name (funcall dape-cwd-function)))
+  (let ((cwd (funcall dape-cwd-function)))
+    (if cwd
+        (tramp-file-local-name cwd)
+      default-directory)))
 
 (defun dape-command-cwd ()
   "Use `dape-cwd-function' to guess current working directory."
-  (funcall dape-cwd-function))
+  (let ((cwd (funcall dape-cwd-function)))
+    (or cwd default-directory)))
 
 (defun dape-buffer-default ()
   "Return current buffers file name."
@@ -5068,13 +5076,11 @@ non nil and function uses the minibuffer."
          (and `(,x . ,_) (guard (and (symbolp x) (not (keywordp x))))))
      (if skip-functions
          value
-       (condition-case _
-           ;; Try to eval function, signal on minibuffer
-           (let ((enable-recursive-minibuffers (not skip-interactive)))
-             (if (functionp value)
-                 (funcall-interactively value)
-               (eval value)))
-         (error value))))
+       ;; Try to eval function, signal on minibuffer
+       (let ((enable-recursive-minibuffers (not skip-interactive)))
+         (if (functionp value)
+             (funcall-interactively value)
+           (eval value)))))
     ;; On plist recursively evaluate
     ((pred dape--plistp)
      (dape--config-eval-1 value skip-functions skip-interactive))
@@ -5297,6 +5303,7 @@ nil."
 Completes from suggested conjurations, a configuration is suggested if
 it's for current `major-mode' and it's available.
 See `modes' and `ensure' in `dape-configs'."
+  (run-hooks 'dape-config-hook)
   (let* ((suggested-configs
           (cl-loop for (key . config) in dape-configs
                    when (and (dape--config-mode-p config)
