@@ -623,7 +623,12 @@ column.  A value of 0 means there is no limit.
 
 Additionally, the order the element in the ALIST determines the
 left-to-right display order of the properties."
-  :type '(alist :key-type symbol :value-type integer))
+  :type '(alist :key-type
+                (choice (const :tag "Name" name)
+                        (const :tag "Value" value)
+                        (const :tag "Type" type))
+                :value-type (choice (const :tag "Full" 0)
+                                    (natnum :tag "Width"))))
 
 (defcustom dape-info-thread-buffer-locations t
   "Show file information or library names in threads buffer."
