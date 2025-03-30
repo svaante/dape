@@ -5419,7 +5419,7 @@ See `eldoc-documentation-functions', for more information."
     ["Step in" dape-step-in :enable (dape--live-connection 'stopped)]
     ["Step out" dape-step-out :enable (dape--live-connection 'stopped)]
     ["Pause" dape-pause :enable (not (dape--live-connection 'stopped t))]
-    ["Restart" dape-request]
+    ["Restart" dape-restart]
     ["Quit" dape-quit]
     "--"
     ["REPL" dape-repl]
