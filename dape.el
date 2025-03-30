@@ -3727,72 +3727,70 @@ without log or expression breakpoint"))))))
     (let ((table (make-gdb-table))
           (y (propertize "y" 'font-lock-face 'font-lock-warning-face))
           (n (propertize "n" 'font-lock-face 'font-lock-doc-face)))
-      (cl-loop
-       for breakpoint in dape--breakpoints
-       for line = (dape--breakpoint-line breakpoint)
-       for verified-plist = (dape--breakpoint-verified breakpoint)
-       for verified-p = (or
-                         ;; No live connection show all as verified
-                         (not (dape--live-connection 'last t))
-                         ;; Actually verified by any connection
-                         (cl-find-if (apply-partially 'plist-get verified-plist)
-                                     (dape--live-connections))
-                         ;; If hit then must be verified
-                         (dape--breakpoint-hits breakpoint))
-       do
-       (gdb-table-add-row
-        table
-        (list
-         (cond ((dape--breakpoint-disabled breakpoint) n)
-               ((when-let* ((hits (dape--breakpoint-hits breakpoint)))
-                  (format "%s" hits)))
-               (y))
-         (pcase (dape--breakpoint-type breakpoint)
-           ('log        "Log  ")
-           ('hits       "Hits ")
-           ('expression "Cond ")
-           (_           "Break"))
-         (cond
-          ((when-let* ((buffer (dape--breakpoint-buffer breakpoint)))
-             (concat
-              (if-let* ((file (buffer-file-name buffer)))
-                  (dape--format-file-line file line)
-                (format "%s:%d" (buffer-name buffer) line))
-              (dape--with-line buffer line
-                (concat " " (string-trim (or (thing-at-point 'line) "")))))))
-          ((when-let* ((path (dape--breakpoint-path breakpoint)))
-             (dape--format-file-line path line)))))
-        `( dape--info-breakpoint ,breakpoint
-           keymap ,dape-info-breakpoints-line-map
-           mouse-face highlight
-           help-echo "mouse-2, RET: visit breakpoint"
-           ,@(unless verified-p '(font-lock-face shadow)))))
-      (cl-loop
-       for plist in dape--data-breakpoints do
-       (gdb-table-add-row
-        table
-        (list y
-              "Data "
-              (format "%s %s %s"
-                      (propertize (plist-get plist :name)
-                                  'font-lock-face
-                                  'font-lock-variable-name-face)
-                      (plist-get plist :accessType)
-                      (when-let* ((data-id (plist-get plist :dataId)))
-                        (format "(%s)" data-id))))
-        (list 'dape--info-data-breakpoint plist
-              'keymap dape-info-data-breakpoints-line-map)))
-      (cl-loop
-       for exception in dape--exceptions do
-       (gdb-table-add-row
-        table
-        (list (if (plist-get exception :enabled) y n)
-              "Excep"
-              (format "%s" (plist-get exception :label)))
-        (list 'dape--info-exception exception
-              'mouse-face 'highlight
-              'keymap dape-info-exceptions-line-map
-              'help-echo "mouse-2, RET: toggle exception")))
+      (cl-loop for plist in dape--data-breakpoints do
+               (gdb-table-add-row
+                table
+                (list
+                 y "Data "
+                 (format "%s %s %s"
+                         (propertize (plist-get plist :name)
+                                     'font-lock-face
+                                     'font-lock-variable-name-face)
+                         (plist-get plist :accessType)
+                         (when-let* ((data-id (plist-get plist :dataId)))
+                           (format "(%s)" data-id))))
+                (list 'dape--info-data-breakpoint plist
+                      'keymap dape-info-data-breakpoints-line-map)))
+      (cl-loop for breakpoint in dape--breakpoints
+               for line = (dape--breakpoint-line breakpoint)
+               for verified-plist = (dape--breakpoint-verified breakpoint)
+               for verified-p =
+               (or
+                ;; No live connection show all as verified
+                (not (dape--live-connection 'last t))
+                ;; Actually verified by any connection
+                (cl-find-if (apply-partially 'plist-get verified-plist)
+                            (dape--live-connections))
+                ;; If hit then must be verified
+                (dape--breakpoint-hits breakpoint))
+               do
+               (gdb-table-add-row
+                table
+                (list
+                 (cond ((dape--breakpoint-disabled breakpoint) n)
+                       ((when-let* ((hits (dape--breakpoint-hits breakpoint)))
+                          (format "%s" hits)))
+                       (y))
+                 (pcase (dape--breakpoint-type breakpoint)
+                   ('log        "Log  ")
+                   ('hits       "Hits ")
+                   ('expression "Cond ")
+                   (_           "Break"))
+                 (cond
+                  ((when-let* ((buffer (dape--breakpoint-buffer breakpoint)))
+                     (concat
+                      (if-let* ((file (buffer-file-name buffer)))
+                          (dape--format-file-line file line)
+                        (format "%s:%d" (buffer-name buffer) line))
+                      (dape--with-line buffer line
+                        (concat " " (string-trim (or (thing-at-point 'line) "")))))))
+                  ((when-let* ((path (dape--breakpoint-path breakpoint)))
+                     (dape--format-file-line path line)))))
+                `( dape--info-breakpoint ,breakpoint
+                   keymap ,dape-info-breakpoints-line-map
+                   mouse-face highlight
+                   help-echo "mouse-2, RET: visit breakpoint"
+                   ,@(unless verified-p '(font-lock-face shadow)))))
+      (cl-loop for exception in dape--exceptions do
+               (gdb-table-add-row
+                table
+                (list (if (plist-get exception :enabled) y n)
+                      "Excep"
+                      (format "%s" (plist-get exception :label)))
+                (list 'dape--info-exception exception
+                      'mouse-face 'highlight
+                      'keymap dape-info-exceptions-line-map
+                      'help-echo "mouse-2, RET: toggle exception")))
       (insert (gdb-table-string table " ")))))
 
 
