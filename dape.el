@@ -1504,25 +1504,23 @@ timeout period is configurable with `dape-request-timeout'"
   "Initialize CONN."
   (dape--with-request-bind
       (body error)
-      (dape-request conn
-                    "initialize"
-                    (list :clientID "dape"
-                          :adapterID (plist-get (dape--config conn)
-                                                :type)
-                          :pathFormat "path"
-                          :linesStartAt1 t
-                          :columnsStartAt1 t
-                          ;;:locale "en-US"
-                          ;;:supportsVariableType t
-                          ;;:supportsVariablePaging t
-                          :supportsRunInTerminalRequest t
-                          ;;:supportsMemoryReferences t
-                          ;;:supportsInvalidatedEvent t
-                          ;;:supportsMemoryEvent t
-                          :supportsArgsCanBeInterpretedByShell t
-                          :supportsProgressReporting t
-                          :supportsStartDebuggingRequest t
-                          ))
+      (dape-request conn :initialize
+                    `( :clientID "dape"
+                       :adapterID ,(plist-get (dape--config conn) :type)
+                       :pathFormat "path"
+                       :linesStartAt1 t
+                       :columnsStartAt1 t
+                       ;;:locale "en-US"
+                       ;;:supportsVariableType t
+                       ;;:supportsVariablePaging t
+                       :supportsRunInTerminalRequest t
+                       ;;:supportsMemoryReferences t
+                       ;;:supportsInvalidatedEvent t
+                       ;;:supportsMemoryEvent t
+                       :supportsArgsCanBeInterpretedByShell t
+                       :supportsProgressReporting t
+                       :supportsStartDebuggingRequest t
+                       ))
     (if error
         (progn
           (dape--warn "Initialize failed with %S" error)
@@ -1565,7 +1563,7 @@ timeout period is configurable with `dape-request-timeout'"
   (dape--with-request-bind
       (_body error)
       (dape-request conn
-                    (or (plist-get (dape--config conn) :request) "launch")
+                    (or (plist-get (dape--config conn) :request) :launch)
                     (dape--launch-or-attach-arguments conn))
     (when error
       (dape--warn "%s" error)
@@ -1606,7 +1604,7 @@ See `dape-request' for expected CB signature."
            (dape--with-request-bind
                ((&key ((:breakpoints updates)) &allow-other-keys) error)
                (dape-request
-                conn "setBreakpoints"
+                conn :setBreakpoints
                 (list
                  :source
                  (pcase source
@@ -1634,7 +1632,7 @@ See `dape-request' for expected CB signature."
   (if (not dape--exceptions)
       (dape--request-continue cb)
     (dape-request
-     conn "setExceptionBreakpoints"
+     conn :setExceptionBreakpoints
      `(:filters
        ,(cl-map 'vector
                 (lambda (exception)
@@ -1691,7 +1689,7 @@ See `dape-request' for expected CB signature."
   (if (dape--capable-p conn :supportsDataBreakpoints)
       (dape--with-request-bind
           ((&key breakpoints &allow-other-keys) error)
-          (dape-request conn "setDataBreakpoints"
+          (dape-request conn :setDataBreakpoints
                         (list
                          :breakpoints
                          (cl-loop
@@ -1723,9 +1721,8 @@ See `dape-request' for expected CB signature."
 (defun dape--update-threads (conn cb)
   "Update threads for CONN in-place if possible.
 See `dape-request' for expected CB signature."
-  (dape--with-request-bind
-      ((&key threads &allow-other-keys) error)
-      (dape-request conn "threads" nil)
+  (dape--with-request-bind ((&key threads &allow-other-keys) error)
+      (dape-request conn :threads nil)
     (setf (dape--threads conn)
           (mapcar
            (lambda (new-thread)
@@ -1757,7 +1754,7 @@ See `dape-request' for expected CB signature."
       (dape--with-request-bind
           ((&key stackFrames totalFrames &allow-other-keys) error)
           (dape-request
-           conn "stackTrace"
+           conn :stackTrace
            `( :threadId ,(plist-get thread :id)
               ,@(when delayed-stack-trace-p
                   `( :startFrame ,current-nof
@@ -1785,8 +1782,7 @@ See `dape-request' for expected CB signature."
         (dape--request-continue cb)
       (dape--with-request-bind
           ((&key variables &allow-other-keys) _error)
-          (dape-request conn
-                        "variables"
+          (dape-request conn :variables
                         (list :variablesReference variables-reference))
         (plist-put object
                    :variables
@@ -1823,7 +1819,7 @@ See `dape-request' for expected CB signature."
 FRAME-ID specifies which frame the EXPRESSION is evaluated in and
 CONTEXT which the result is going to be displayed in.
 See `dape-request' for expected CB signature."
-  (dape-request conn "evaluate"
+  (dape-request conn :evaluate
                 (append (when (dape--stopped-threads conn)
                           (list :frameId frame-id))
                         (list :expression expression
@@ -1841,12 +1837,11 @@ Runs the appropriate hooks on non error response."
          (numberp variable-reference))
     (dape--with-request-bind
         (body error)
-        (dape-request conn
-                      "setVariable"
-                      (list
-                       :variablesReference variable-reference
-                       :name (plist-get variable :name)
-                       :value value))
+        (dape-request
+         conn :setVariable
+         (list :variablesReference variable-reference
+               :name (plist-get variable :name)
+               :value value))
       (if error
           (message "%s" error)
         ;; Would make more sense to update all variables after
@@ -1863,12 +1858,12 @@ Runs the appropriate hooks on non error response."
              (plist-get variable :name)))
     (dape--with-request-bind
         (_body error)
-        (dape-request conn
-                      "setExpression"
-                      (list :frameId (plist-get (dape--current-stack-frame conn) :id)
-                            :expression (or (plist-get variable :evaluateName)
-                                            (plist-get variable :name))
-                            :value value))
+        (dape-request
+         conn :setExpression
+         (list :frameId (plist-get (dape--current-stack-frame conn) :id)
+               :expression (or (plist-get variable :evaluateName)
+                               (plist-get variable :name))
+               :value value))
       (if error
           (message "%s" error)
         ;; Update all variables
@@ -1882,7 +1877,7 @@ See `dape-request' for expected CB signature."
             ((not (plist-get stack-frame :scopes))))
       (dape--with-request-bind
           ((&key scopes &allow-other-keys) error)
-          (dape-request conn "scopes" (list :frameId id))
+          (dape-request conn :scopes (list :frameId id))
         (plist-put stack-frame :scopes (append scopes nil))
         (dape--request-continue cb error))
     (dape--request-continue cb)))
@@ -1992,7 +1987,7 @@ Starts a new adapter connection as per request of the debug adapter."
   (dape--with-request (dape--configure-exceptions conn)
     (dape--with-request (dape--set-breakpoints conn)
       (dape--with-request (dape--set-data-breakpoints conn)
-        (dape--with-request (dape-request conn "configurationDone" nil)
+        (dape--with-request (dape-request conn :configurationDone nil)
           ;; See `defer-launch-attach' in `dape-configs'
           (when (plist-get (dape--config conn) 'defer-launch-attach)
             (dape--launch-or-attach conn)))))))
@@ -2355,7 +2350,7 @@ CONN is inferred for interactive invocations."
       (user-error "Unable to derive thread to continued"))
     (dape--with-request-bind
         ((&key (allThreadsContinued t) &allow-other-keys) error)
-        (dape-request conn "continue" body)
+        (dape-request conn :continue body)
       (if error
           (error "Failed to continue: %s" error)
         ;; From specification [continued] event:
@@ -2376,7 +2371,7 @@ CONN is inferred for interactive invocations."
     (user-error "Thread is stopped"))
   (dape--with-request-bind
       (_body error)
-      (dape-request conn "pause" (dape--thread-id-object conn))
+      (dape-request conn :pause (dape--thread-id-object conn))
     (when error
       (error "Failed to pause: %s" error))))
 
@@ -2400,7 +2395,7 @@ SKIP-COMPILE is used internally for recursive calls."
             (dape--sources conn) nil
             (dape--restart-in-progress-p conn) t)
       (dape--with-request
-          (dape-request conn "restart"
+          (dape-request conn :restart
                         `(:arguments ,(dape--launch-or-attach-arguments conn)))
         (setf (dape--restart-in-progress-p conn) nil))))
    ;; Use old connection
@@ -2421,7 +2416,7 @@ terminate.  CONN is inferred for interactive invocations."
          (not with-disconnect)
          (dape--capable-p conn :supportsTerminateRequest))
     (dape--with-request-bind (_body error)
-        (dape-request conn "terminate" nil)
+        (dape-request conn :terminate nil)
       ;; We have to give up trying to kill the debuggee in an correct
       ;; way if the request timeout, otherwise we might force the
       ;; user to kill the process in some other way.
@@ -2431,7 +2426,7 @@ terminate.  CONN is inferred for interactive invocations."
         (dape--request-continue cb))))
    ((and conn (jsonrpc-running-p conn))
     (dape--with-request
-        (dape-request conn "disconnect"
+        (dape-request conn :disconnect
                       `( :restart :json-false
                          ,@(when (dape--capable-p conn :supportTerminateDebuggee)
                              '(:terminateDebuggee t))))
@@ -2447,8 +2442,7 @@ connection.  CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'parent)))
   (dape--kill-buffers 'skip-process-buffers)
   (dape--with-request
-      (dape-request conn "disconnect"
-                    (list :terminateDebuggee :json-false))
+      (dape-request conn :disconnect '(:terminateDebuggee :json-false))
     (jsonrpc-shutdown conn)
     (dape--kill-buffers)))
 
@@ -2746,7 +2740,7 @@ Using BUFFER and STR."
       (user-error "`dape--memory-address' not set"))
     (dape--with-request-bind
         ((&key address data &allow-other-keys) error)
-        (dape-request conn "readMemory"
+        (dape-request conn :readMemory
                       (list :memoryReference dape--memory-address
                             :count dape-memory-page-size))
       (cond
@@ -2788,7 +2782,7 @@ Using BUFFER and STR."
       (dehexlify-buffer)
       (dape--with-request-bind
           (_body error)
-          (dape-request conn "writeMemory"
+          (dape-request conn :writeMemory
                         (list :memoryReference address
                               :data (base64-encode-string (buffer-string) t)))
         (if error
@@ -2893,7 +2887,7 @@ of memory read."
       (user-error "Adapter does not support disassemble")
     (dape--with-request-bind
         ((&key ((:instructions instructions)) &allow-other-keys) _)
-        (dape-request conn 'disassemble
+        (dape-request conn :disassemble
                       `( :memoryReference ,address
                          :instructionCount 100
                          :offset 0
@@ -3293,7 +3287,7 @@ See `dape-request' for expected CB signature."
      ((and (numberp refrence) (< 0 refrence) refrence)
       (dape--with-request-bind
           ((&key content mimeType &allow-other-keys) error)
-          (dape-request conn "source"
+          (dape-request conn :source
                         (list :source source :sourceReference refrence))
         (cond (error (dape--warn "%s" error))
               (content
@@ -4186,7 +4180,7 @@ current buffer with CONN config."
       (user-error "Adapter does not support data breakpoints"))
     (dape--with-request-bind
         ((&key dataId description accessTypes &allow-other-keys) error)
-        (dape-request conn "dataBreakpointInfo"
+        (dape-request conn :dataBreakpointInfo
                       (if (numberp dape--info-ref)
                           (list :variablesReference dape--info-ref
                                 :name name)
@@ -4670,7 +4664,7 @@ Called by `comint-input-sender' in `dape-repl-mode'."
           (dape--with-request-bind
               ((&key targets &allow-other-keys) _error)
               (dape-request conn
-                            "completions"
+                            :completions
                             (append
                              (when (dape--stopped-threads conn)
                                (list :frameId
