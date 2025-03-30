@@ -4816,10 +4816,12 @@ Empty input will rerun last command.\n\n"
 (defface dape-inlay-hint-highlight-face '((t (:height 0.8 :inherit (bold highlight))))
   "Face used for highlighting parts of inlay-hint overlays.")
 
-(defvar dape--inlay-hint-overlays nil)
-(defvar dape--inlay-hint-debounce-timer (timer-create))
-(defvar dape--inlay-hints-symbols-fn #'dape--inlay-hint-symbols)
-(defvar dape--inlay-hint-seperator (propertize " | " 'face 'dape-inlay-hint-face))
+(defvar dape--inlay-hint-overlays nil "List of all hint overlays.")
+(defvar dape--inlay-hint-debounce-timer (timer-create) "Debounce timer.")
+(defvar dape--inlay-hints-symbols-fn #'dape--inlay-hint-symbols
+  "Function returning variable names.")
+(defvar dape--inlay-hint-seperator (propertize " | " 'face 'dape-inlay-hint-face)
+  "Hint delimiter.")
 
 (defun dape--inlay-hint-symbols (beg end)
   "Return list of variable candidates from BEG to END."
