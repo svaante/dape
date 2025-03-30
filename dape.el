@@ -1259,8 +1259,8 @@ FN is executed on mouse-2 and \\r, BODY is executed with `map' bound."
   (declare (indent defun))
   `(defvar ,name
      (let ((map (make-sparse-keymap)))
-       (define-key map "\r" ',fn)
-       (define-key map [mouse-2] ',fn)
+       (define-key map "\r" #',fn)
+       (define-key map [mouse-2] #',fn)
        (define-key map [follow-link] 'mouse-face)
        ,@body
        map)))
@@ -1697,7 +1697,7 @@ See `dape-request' for expected CB signature."
                           collect (list :dataId (plist-get plist :dataId)
                                         :accessType (plist-get plist :accessType))
                           into breakpoints
-                          finally return (apply 'vector breakpoints))))
+                          finally return (apply #'vector breakpoints))))
         (when error
           (message "Failed to setup data breakpoints: %s" error))
         (cl-loop
@@ -1787,8 +1787,8 @@ See `dape-request' for expected CB signature."
         (plist-put object
                    :variables
                    (thread-last variables
-                                (cl-map 'list 'identity)
-                                (seq-filter 'identity)))
+                                (cl-map 'list #'identity)
+                                (seq-filter #'identity)))
         (dape--request-continue cb)))))
 
 (defun dape--variables-recursive (conn object path pred cb)
@@ -2109,10 +2109,10 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
     (when (equal reason "exception")
       ;; Output exception info in overlay and REPL
       (let* ((texts
-              (seq-filter 'stringp
+              (seq-filter #'stringp
                           (list (plist-get body :text)
                                 (plist-get body :description))))
-             (str (concat (mapconcat 'identity texts ":\n\t") "\n")))
+             (str (concat (mapconcat #'identity texts ":\n\t") "\n")))
         (setf (dape--exception-description conn) str)
         (dape--repl-insert-error str)))
     ;; Update breakpoints hits
@@ -2237,7 +2237,7 @@ symbol `dape-connection'."
           (process-put server-process 'stderr-pipe stderr-pipe)
           (when dape-debug
             (dape--message "Adapter server started with %S"
-                           (mapconcat 'identity command " "))))
+                           (mapconcat #'identity command " "))))
         ;; FIXME Why do I need this?
         (when (file-remote-p default-directory)
           (sleep-for 0.300)))
@@ -2287,7 +2287,7 @@ symbol `dape-connection'."
                             :file-handler t))
         (when dape-debug
           (dape--message "Adapter started with %S"
-                         (mapconcat 'identity command " "))))))
+                         (mapconcat #'identity command " "))))))
     (make-instance
      'dape-connection
      :name "dape-connection"
@@ -2552,7 +2552,7 @@ With prefix argument thread is selected by index."
                       (thread-first conn (dape--current-thread)
                                     (plist-get :name)))
               collection nil t))))
-     (alist-get thread-name collection nil nil 'equal)))
+     (alist-get thread-name collection nil nil #'equal)))
   (setf (dape--thread-id conn) thread-id)
   (setq dape--connection-selected conn)
   (dape--update conn nil t)
@@ -2580,7 +2580,7 @@ With prefix argument stack is selected by index."
              (completing-read (format "Select stack (current %s): "
                                       (plist-get (dape--current-stack-frame conn) :name))
                               collection nil t))))
-     (list conn (alist-get stack-name collection nil nil 'equal))))
+     (list conn (alist-get stack-name collection nil nil #'equal))))
   (setf (dape--stack-id conn) stack-id)
   (dape--update conn nil t))
 
@@ -2988,7 +2988,7 @@ of memory read."
                           'keymap (let ((map (make-sparse-keymap)))
                                     (define-key map [mouse-1] mouse-1-def)
                                     map))))))
-      (let ((ov (apply 'make-overlay (dape--overlay-region)))
+      (let ((ov (apply #'make-overlay (dape--overlay-region)))
             (disabled-face (when disabled 'shadow)))
         (overlay-put ov 'modification-hooks '(dape--breakpoint-freeze))
         (overlay-put ov 'category 'dape-breakpoint)
@@ -3027,14 +3027,14 @@ of memory read."
 
 (defvar dape-breakpoint-global-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [left-fringe mouse-1] 'dape-mouse-breakpoint-toggle)
-    (define-key map [left-margin mouse-1] 'dape-mouse-breakpoint-toggle)
+    (define-key map [left-fringe mouse-1] #'dape-mouse-breakpoint-toggle)
+    (define-key map [left-margin mouse-1] #'dape-mouse-breakpoint-toggle)
     ;; TODO Would be nice if mouse-2 would open an menu for any
     ;;      breakpoint type (expression, log and hit).
-    (define-key map [left-fringe mouse-2] 'dape-mouse-breakpoint-expression)
-    (define-key map [left-margin mouse-2] 'dape-mouse-breakpoint-expression)
-    (define-key map [left-fringe mouse-3] 'dape-mouse-breakpoint-log)
-    (define-key map [left-margin mouse-3] 'dape-mouse-breakpoint-log)
+    (define-key map [left-fringe mouse-2] #'dape-mouse-breakpoint-expression)
+    (define-key map [left-margin mouse-2] #'dape-mouse-breakpoint-expression)
+    (define-key map [left-fringe mouse-3] #'dape-mouse-breakpoint-log)
+    (define-key map [left-margin mouse-3] #'dape-mouse-breakpoint-log)
     map)
   "Keymap for `dape-breakpoint-global-mode'.")
 
@@ -3057,7 +3057,7 @@ Used as an hook on `find-file-hook'."
     (cl-loop with breakpoints-in-buffer =
              (alist-get (buffer-file-name)
                         (seq-group-by #'dape--breakpoint-path dape--breakpoints)
-                        nil nil 'equal)
+                        nil nil #'equal)
              for breakpoint in breakpoints-in-buffer
              for line = (dape--breakpoint-line breakpoint)
              unless (dape--breakpoint-buffer breakpoint) do
@@ -3083,7 +3083,7 @@ The indicator is `propertize'd with with FACE."
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
   "Make sure that OVERLAY region covers line."
-  (apply 'move-overlay overlay (dape--overlay-region)))
+  (apply #'move-overlay overlay (dape--overlay-region)))
 
 (defun dape--breakpoints-reset (&optional from-restart)
   "Reset breakpoints hits.
@@ -3104,7 +3104,7 @@ If FROM-RESTART is non nil keep id and verified."
 
 (defun dape--breakpoint-broadcast-update (&rest sources)
   "Broadcast breakpoints in SOURCES to all connections."
-  (cl-loop with sources = (cl-remove-duplicates sources :test 'equal)
+  (cl-loop with sources = (cl-remove-duplicates sources :test #'equal)
            for source in sources when source do
            (cl-loop for conn in (dape--live-connections)
                     when (dape--initialized-p conn) do
@@ -3300,7 +3300,7 @@ See `dape-request' for expected CB signature."
                  (with-current-buffer buffer
                    (when mimeType
                      (if-let* ((mode
-                                (alist-get mimeType dape-mime-mode-alist nil nil 'equal)))
+                                (alist-get mimeType dape-mime-mode-alist nil nil #'equal)))
                          (unless (eq major-mode mode)
                            (funcall mode))
                        (message "Unknown mime type %s, see `dape-mime-mode-alist'"
@@ -3459,7 +3459,7 @@ REVERSED selects previous."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "<backtab>")
                 (lambda () (interactive) (dape--info-buffer-tab t)))
-    (define-key map "\t" 'dape--info-buffer-tab)
+    (define-key map "\t" #'dape--info-buffer-tab)
     map)
   "Keymap for `dape-info-parent-mode'.")
 
@@ -3488,7 +3488,7 @@ Each buffers store its own debounce context."
               cursor-in-non-selected-windows nil
               revert-buffer-function #'dape--info-revert
               dape--info-debounce-timer (timer-create))
-  (add-hook 'window-buffer-change-functions 'dape--info-buffer-change-fn
+  (add-hook 'window-buffer-change-functions #'dape--info-buffer-change-fn
             nil 'local)
   (when dape-info-hide-mode-line (setq-local mode-line-format nil))
   (buffer-disable-undo))
@@ -3688,9 +3688,9 @@ buffers get displayed and how they are grouped."
 without log or expression breakpoint"))))))
 
 (dape--buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
-  (define-key map "D" 'dape-info-breakpoint-disabled)
-  (define-key map "d" 'dape-info-breakpoint-delete)
-  (define-key map "e" 'dape-info-breakpoint-log-edit))
+  (define-key map "D" #'dape-info-breakpoint-disabled)
+  (define-key map "d" #'dape-info-breakpoint-delete)
+  (define-key map "e" #'dape-info-breakpoint-log-edit))
 
 (dape--command-at-line dape-info-data-breakpoint-delete (dape--info-data-breakpoint)
   "Delete data breakpoint at line in info buffer."
@@ -3703,7 +3703,7 @@ without log or expression breakpoint"))))))
   (run-hooks 'dape-update-ui-hook))
 
 (dape--buffer-map dape-info-data-breakpoints-line-map nil
-  (define-key map "d" 'dape-info-data-breakpoint-delete))
+  (define-key map "d" #'dape-info-data-breakpoint-delete))
 
 (dape--command-at-line dape-info-exceptions-toggle (dape--info-exception)
   "Toggle exception at line in dape info buffer."
@@ -3953,8 +3953,8 @@ See `dape-request' for expected CB signature."
     (user-error "No address for frame")))
 
 (dape--buffer-map dape-info-stack-line-map dape-info-stack-select
-  (define-key map "m" 'dape-info-stack-memory)
-  (define-key map "M" 'dape-info-stack-disassemble))
+  (define-key map "m" #'dape-info-stack-memory)
+  (define-key map "M" #'dape-info-stack-disassemble))
 
 (define-derived-mode dape-info-stack-mode dape-info-parent-mode "Stack"
   "Major mode for Dape info stack."
@@ -4201,14 +4201,15 @@ current buffer with CONN config."
 
 (defvar dape-info-variable-map
   (let ((map (make-sparse-keymap)))
-    (define-key map "e" 'dape-info-scope-toggle)
-    (define-key map "W" 'dape-info-scope-watch-dwim)
-    (define-key map "=" 'dape-info-variable-edit)
-    (define-key map "b" 'dape-info-scope-data-breakpoint)
+    (define-key map "e" #'dape-info-scope-toggle)
+    (define-key map "W" #'dape-info-scope-watch-dwim)
+    (define-key map "=" #'dape-info-variable-edit)
+    (define-key map "b" #'dape-info-scope-data-breakpoint)
     map)
   "Keymap for buffers or regions displaying variables.")
 
-(defvar dape-info-scope-mode-map (copy-keymap dape-info-variable-map)
+(defvar dape-info-scope-mode-map
+  (make-composed-keymap nil dape-info-variable-map)
   "Local keymap for dape scope buffers.")
 
 (defun dape--info-locals-table-columns-list (alist)
@@ -4277,7 +4278,7 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
     (gdb-table-add-row table
                        (if dape-info-variable-table-aligned
                            row
-                         (list (mapconcat 'identity row " ")))
+                         (list (mapconcat #'identity row " ")))
                        (list 'dape--info-variable object
                              'dape--info-path path
                              ;; `dape--command-at-line' expects non nil
@@ -4333,8 +4334,8 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 ;;; Info watch buffer
 
 (defvar dape-info-watch-mode-map
-  (let ((map (copy-keymap dape-info-scope-mode-map)))
-    (define-key map "\C-x\C-q" 'dape-info-watch-edit-mode)
+  (let ((map (make-composed-keymap nil dape-info-scope-mode-map)))
+    (define-key map "\C-x\C-q" #'dape-info-watch-edit-mode)
     map)
   "Local keymap for dape watch buffer.")
 
@@ -4398,8 +4399,8 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 (defvar dape-info-watch-edit-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map text-mode-map)
-    (define-key map "\C-c\C-c" 'dape-info-watch-finish-edit)
-    (define-key map "\C-c\C-k" 'dape-info-watch-abort-changes)
+    (define-key map "\C-c\C-c" #'dape-info-watch-finish-edit)
+    (define-key map "\C-c\C-k" #'dape-info-watch-abort-changes)
     map)
   "Local keymap for dape watch buffer in edit mode.")
 
@@ -4592,7 +4593,7 @@ Called by `comint-input-sender' in `dape-repl-mode'."
    ((pcase-let* ((`(,cmd . ,args)
                   (string-split (substring-no-properties input)
                                 split-string-default-separators))
-                 (fn (or (alist-get cmd dape-repl-commands nil nil 'equal)
+                 (fn (or (alist-get cmd dape-repl-commands nil nil #'equal)
                          (and dape-repl-use-shorthand
                               (cdr (assoc cmd (dape--repl-shorthand-alist)))))))
       (cond ((eq 'dape-quit fn)
@@ -4761,7 +4762,7 @@ If EXPRESSIONS is non blank add or remove expression to watch list."
     (set-process-query-on-exit-flag (get-buffer-process (current-buffer))
                                     nil)
     (set-process-filter (get-buffer-process (current-buffer))
-                        'comint-output-filter)
+                        #'comint-output-filter)
     (insert
      (format
       "* Welcome to the Dape REPL *
@@ -4892,8 +4893,8 @@ Update `dape--inlay-hint-overlays' from SCOPES."
               (let ((map (make-sparse-keymap))
                     (sym symbol))
                 (define-key map [mouse-1]
-                            (lambda (event)
-                              (interactive "e")
+                            (lambda ()
+                              (interactive)
                               (dape-watch-dwim sym nil t t)))
                 map)
               'help-echo
@@ -4908,7 +4909,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
                       'dape-inlay-hint-face)))
             into after-string finally do
             (when after-string
-              (thread-last (mapconcat 'identity after-string
+              (thread-last (mapconcat #'identity after-string
                                       dape--inlay-hint-seperator)
                            (format "  %s")
                            (overlay-put inlay-hint 'after-string))))))
@@ -5030,7 +5031,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
                         " " 'face 'dape-minibuffer-hint-separator-face
                         'display '(space :align-to right))
                        "\n"
-                       (mapconcat 'identity hint-rows "\n")))))
+                       (mapconcat #'identity hint-rows "\n")))))
       (move-overlay dape--minibuffer-hint-overlay
                     (point-max) (point-max) (current-buffer)))))
 
@@ -5062,7 +5063,7 @@ non nil and function uses the minibuffer."
            (let ((enable-recursive-minibuffers (not skip-interactive)))
              (if (functionp value)
                  (funcall-interactively value)
-               (eval value)))
+               (eval value t)))
          (error value))))
     ;; On plist recursively evaluate
     ((pred dape--plistp)
@@ -5149,7 +5150,7 @@ Where ALIST-KEY exists in `dape-configs'."
                (setq read-config
                      (append (nreverse
                               (append (when program `(:program ,program))
-                                      (when args `(:args ,(apply 'vector args)))
+                                      (when args `(:args ,(apply #'vector args)))
                                       (when env `(:env ,env))))
                              read-config))
                ;; Stop and eat rest of buffer
@@ -5226,10 +5227,10 @@ nil."
   "Return non nil if CONFIG is for current major mode."
   (let ((modes (plist-get config 'modes)))
     (or (not modes)
-        (apply 'provided-mode-derived-p
+        (apply #'provided-mode-derived-p
                major-mode (cl-map 'list 'identity modes))
-        (and-let* (((not (derived-mode-p 'prog-mode)))
-                   (last-hist (car dape-history))
+        (when-let* (((not (derived-mode-p 'prog-mode)))
+                    (last-hist (car dape-history))
                    (last-config
                     (cadr (ignore-errors
                             (dape--config-from-string last-hist)))))
@@ -5330,7 +5331,7 @@ See `modes' and `ensure' in `dape-configs'."
                                     'dape-configs dape--minibuffer-last-buffer))
           (set-syntax-table emacs-lisp-mode-syntax-table)
           (add-hook 'completion-at-point-functions
-                    'comint-filename-completion nil t)
+                    #'comint-filename-completion nil t)
           (add-hook 'completion-at-point-functions
                     #'dape--config-completion-at-point nil t)
           (add-hook 'after-change-functions
@@ -5424,7 +5425,7 @@ See `eldoc-documentation-functions', for more information."
      :enable (dape--capable-p (dape--live-connection 'last)
                               :supportsDisassembleRequest)]
     "--"
-    ["Customize Dape" (lambda () (interactive) (customize-group "dape"))]))
+    ["Customize Dape" ,(lambda () (interactive) (customize-group "dape"))]))
 
 (defvar dape--update-mode-line-debounce-timer (timer-create)
   "Debounce context for updating the mode line.")
@@ -5463,7 +5464,7 @@ mouse-1: Display minor mode menu"
               mouse-face mode-line-highlight
               help-echo "mouse-1: Select thread"
               keymap ,(let ((map (make-sparse-keymap)))
-                        (define-key map [mode-line down-mouse-1] 'dape-select-thread)
+                        (define-key map [mode-line down-mouse-1] #'dape-select-thread)
                         map))
             ( :propertize ,(format "%s" (or (and conn (dape--state conn))
                                             'unknown))
@@ -5472,7 +5473,7 @@ mouse-1: Display minor mode menu"
                 `("/" (:propertize ,reason face font-lock-doc-face)))
             ,@(when-let* ((conns (dape--live-connections))
                           (nof-conns
-                           (length (cl-remove-if-not 'dape--threads conns)))
+                           (length (cl-remove-if-not #'dape--threads conns)))
                           ((> nof-conns 1)))
                 `(( :propertize ,(format "(%s)" nof-conns)
                     face shadow
