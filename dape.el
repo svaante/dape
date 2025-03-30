@@ -4620,11 +4620,15 @@ Called by `comint-input-sender' in `dape-repl-mode'."
 
 (defun dape--repl-completion-at-point ()
   "Completion at point function for *dape-repl* buffer."
-  (let* ((bounds (or (bounds-of-thing-at-point 'word)
-                     (cons (point) (point))))
-         (trigger-chars
-          (when-let* ((conn (or (dape--live-connection 'stopped t)
-                                (dape--live-connection 'last t))))
+  (when-let* ((conn (or (dape--live-connection 'stopped t)
+                        (dape--live-connection 'last t)))
+              ((dape--capable-p conn :supportsCompletionsRequest)))
+    (let* ((line-start (comint-line-beginning-position))
+           (str (buffer-substring-no-properties line-start (point-max)))
+           (column (1+ (- (point) line-start)))
+           (bounds (or (bounds-of-thing-at-point 'word)
+                       (cons (point) (point))))
+           (trigger-chars
             (or (thread-first conn
                               (dape--capabilities)
                               ;; completionTriggerCharacters is an
@@ -4632,72 +4636,62 @@ Called by `comint-input-sender' in `dape-repl-mode'."
                               ;; completion on.
                               (plist-get :completionTriggerCharacters)
                               (append nil))
-                '("."))))
-         (collection
-          ;; Add `dape-repl-commands' only if completion starts at
-          ;; beginning of prompt line.
-          (when (eql (comint-line-beginning-position)
-                     (car bounds))
-            (mapcar (lambda (cmd)
-                      (cons (car cmd)
-                            (format " %s"
-                                    (propertize (symbol-name (cdr cmd))
-                                                'face 'font-lock-builtin-face))))
-                    (append dape-repl-commands
-                            (when dape-repl-use-shorthand
-                              (dape--repl-shorthand-alist))))))
-         (line-start (comint-line-beginning-position))
-         (str (buffer-substring-no-properties line-start (point-max)))
-         ;; Point in `str'
-         (column (1+ (- (point) line-start)))
-         done)
-    (list
-     (car bounds)
-     (cdr bounds)
-     (completion-table-dynamic
-      (lambda (_str)
-        (when-let* ((conn (or (dape--live-connection 'stopped t)
-                              (dape--live-connection 'last t)))
-                    ((dape--capable-p conn :supportsCompletionsRequest)))
-          (dape--with-request-bind
-              ((&key targets &allow-other-keys) _error)
-              (dape-request conn
-                            :completions
-                            (append
-                             (when (dape--stopped-threads conn)
-                               (list :frameId
-                                     (plist-get (dape--current-stack-frame conn) :id)))
-                             (list
-                              :text str
-                              :column column)))
-            (setq collection
-                  (append
-                   collection
-                   (mapcar
-                    (lambda (target)
-                      (cons
-                       (or (plist-get target :text)
-                           (plist-get target :label))
-                       (concat (when-let* ((type (plist-get target :type)))
-                                 (format " %s" (propertize type 'face 'font-lock-type-face)))
-                               (when-let* ((detail (plist-get target :detail)))
-                                 (format " %s" (propertize detail 'face 'font-lock-doc-face))))))
-                    targets)))
-            (setf done t))
-          (while-no-input
-            (while (not done)
-              (accept-process-output nil 0 1))))
-        collection))
-     :annotation-function
-     (lambda (str)
-       (when-let* ((annotation
-                    (alist-get (substring-no-properties str) collection
-                               nil nil 'equal)))
-         annotation))
-     :company-prefix-length
-     (save-excursion
-       (goto-char (car bounds))
-       (looking-back (regexp-opt trigger-chars) line-start)))))
+                '(".")))
+           (collection
+            (when (and (derived-mode-p 'dape-repl-mode)
+                       ;; Add `dape-repl-commands' if completion
+                       ;; starts at beginning of prompt line.
+                       (eql (comint-line-beginning-position) (car bounds)))
+              (cl-loop
+               with alist = (append dape-repl-commands
+                                    (when dape-repl-use-shorthand
+                                      (dape--repl-shorthand-alist)))
+               for (name . cmd) in alist
+               for anno = (propertize (symbol-name cmd)
+                                      'face 'font-lock-builtin-face)
+               collect `( ,name . ,(concat " " anno)))))
+           done)
+      (dape--with-request-bind
+          ((&key targets &allow-other-keys) _error)
+          (dape-request
+           conn :completions
+           `( :text ,str
+              :column ,column
+              ,@(when (dape--stopped-threads conn)
+                  `(:frameId
+                    ,(plist-get (dape--current-stack-frame conn) :id)))))
+        (setf collection
+              (append
+               collection
+               (mapcar
+                (lambda (target)
+                  (cons
+                   (substring
+                    (or (plist-get target :text) (plist-get target :label))
+                    (when-let* ((start (plist-get target :start))
+                                (offset (- (car bounds) line-start))
+                                ((< start offset)))
+                      ;; XXX Adapter receives line for full context,
+                      ;;     but completion region is 'word, which
+                      ;;     forces us to cut into candidate to start
+                      ;;     at word boundary.
+                      (- offset start)))
+                   (concat
+                    (when-let* ((type (plist-get target :type)))
+                      (concat " " (propertize type 'face 'font-lock-type-face)))
+                    (when-let* ((detail (plist-get target :detail)))
+                      (concat " " (propertize detail 'face 'font-lock-doc-face))))))
+                targets))
+              done t))
+      (while-no-input
+        (while (not done) (accept-process-output nil 0 1)))
+      (list (car bounds) (cdr bounds) collection
+            :annotation-function
+            (lambda (str) (cdr (assoc (substring-no-properties str) collection)))
+            :company-prefix-length
+            (save-excursion
+              (goto-char (car bounds))
+              (looking-back (regexp-opt trigger-chars) line-start))))))
 
 (defun dape-repl-threads (&optional index)
   "List threads in *dape-repl* buffer.
@@ -4757,7 +4751,8 @@ If EXPRESSIONS is non blank add or remove expression to watch list."
               comint-prompt-regexp (concat "^" (regexp-quote dape--repl-prompt))
               comint-process-echoes nil)
   (add-to-list 'overlay-arrow-variable-list 'dape--repl-marker)
-  (add-hook 'completion-at-point-functions #'dape--repl-completion-at-point nil t)
+  (add-hook 'completion-at-point-functions
+            #'dape--repl-completion-at-point nil t)
   ;; Stolen from ielm
   ;; Start a dummy process just to please comint
   (unless (comint-check-proc (current-buffer))
