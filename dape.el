@@ -1188,20 +1188,16 @@ as is."
 (defun dape--kill-buffers (&optional skip-process-buffers)
   "Kill all dape buffers.
 On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
-  (thread-last (buffer-list)
-               (seq-filter (lambda (buffer)
-                             (unless (and skip-process-buffers
-                                          (get-buffer-process buffer))
-                               (string-match-p "\\*dape-.+\\*"
-                                               (buffer-name buffer)))))
-               (seq-do (lambda (buffer)
-                         (condition-case err
-                             (let ((window (get-buffer-window buffer)))
-                               (kill-buffer buffer)
-                               (when (window-live-p window)
-                                 (delete-window window)))
-                           (error
-                            (message (error-message-string err))))))))
+  (cl-loop for buffer in (buffer-list)
+           when (and (not (and skip-process-buffers
+                               (get-buffer-process buffer)))
+                     (string-match-p "\\*dape-.+\\*" (buffer-name buffer)))
+           do (condition-case err
+                  (let ((window (get-buffer-window buffer)))
+                    (kill-buffer buffer)
+                    (when (window-live-p window)
+                      (delete-window window)))
+                (error (message (error-message-string err))))))
 
 (defun dape--display-buffer (buffer)
   "Display BUFFER according to `dape-buffer-window-arrangement'."
