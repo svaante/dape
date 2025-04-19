@@ -2199,15 +2199,16 @@ symbol `dape-connection'."
         (process-environment (cl-copy-list process-environment))
         (retries 30)
         process server-process)
-    (cl-loop for (key value) on (plist-get config 'command-env) by 'cddr
-             do (setenv (pcase key
-                          ((pred keywordp) (substring (format "%s" key) 1))
-                          ((or (pred symbolp) (pred stringp)) (format "%s" key))
-                          (_ (user-error "Bad type for `command-env' key %S" key)))
-                        (format "%s" value)))
+    ;; Initialize `process-environment' from `command-env'
+    (cl-loop for (key value) on (plist-get config 'command-env) by 'cddr do
+             (setenv (pcase key
+                       ((pred keywordp) (substring (format "%s" key) 1))
+                       ((or (pred symbolp) (pred stringp)) (format "%s" key))
+                       (_ (user-error "Bad type for `command-env' key %S" key)))
+                     (format "%s" value)))
     (cond
-     ;; Socket type connection
-     ((plist-get config 'port)
+     (;; Socket type connection
+      (plist-get config 'port)
       ;; Start server
       (when (plist-get config 'command)
         (let ((stderr-pipe
@@ -2268,8 +2269,8 @@ symbol `dape-connection'."
             (dape--message "%s to adapter established at %s:%s"
                            (if parent "Child connection" "Connection")
                            host (plist-get config 'port))))))
-     ;; Pipe type connection
-     (t
+     (;; Pipe type connection
+      t
       (let ((command
              (cons (plist-get config 'command)
                    (cl-map 'list 'identity
