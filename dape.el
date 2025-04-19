@@ -2212,13 +2212,13 @@ symbol `dape-connection'."
       ;; Start server
       (when (plist-get config 'command)
         (let ((stderr-pipe
-               (apply #'make-pipe-process
-                      :name "dape adapter stderr"
-                      :buffer (get-buffer-create " *dape-server stderr*")
-                      :noquery t
-                      (when (plist-get config 'command-insert-stderr)
-                        `(:filter ,(lambda (_process string)
-                                     (dape--repl-insert-error string))))))
+               (with-current-buffer (get-buffer-create " *dape-adapter stderr*")
+                 (when (plist-get config 'command-insert-stderr)
+                   (add-hook 'after-change-functions
+                             (lambda (beg end _pre-change-len)
+                               (dape--repl-insert-error (buffer-substring beg end)))
+                             nil t))
+                 (current-buffer)))
               (command
                (cons (plist-get config 'command)
                      (cl-map 'list 'identity
@@ -2232,6 +2232,11 @@ symbol `dape-connection'."
                               :buffer nil
                               :stderr stderr-pipe))
           (process-put server-process 'stderr-pipe stderr-pipe)
+          ;; XXX Tramp does not allow pipe process as :stderr, but
+          ;;     `make-process' creates one for us with an unwanted
+          ;;      sentinel (`internal-default-process-sentinel').
+          (when-let* ((pipe-process (get-buffer-process stderr-pipe)))
+            (set-process-sentinel pipe-process #'ignore))
           (when dape-debug
             (dape--message "Adapter server started with %S"
                            (mapconcat #'identity command " "))))
@@ -2259,7 +2264,7 @@ symbol `dape-connection'."
               (dape--message "Connection is configurable by `host' and `port' keys")
               ;; Barf server stderr
               (when-let* (server-process
-                          (buffer (process-buffer (process-get server-process 'stderr-pipe)))
+                          (buffer (process-get server-process 'stderr-pipe))
                           (content (with-current-buffer buffer (buffer-string)))
                           ((not (string-empty-p content))))
                 (dape--repl-insert-error (concat content "\n")))
@@ -2303,7 +2308,6 @@ symbol `dape-connection'."
          (dape--stack-frame-cleanup)
          ;; Cleanup server process
          (when-let* ((server-process (dape--server-process conn)))
-           (delete-process (process-get server-process 'stderr-pipe))
            (delete-process server-process)
            (while (process-live-p server-process)
              (accept-process-output nil nil 0.1))))
