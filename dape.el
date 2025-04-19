@@ -3955,7 +3955,8 @@ See `dape-request' for expected CB signature."
 
 (dape--buffer-map dape-info-stack-line-map dape-info-stack-select
   (define-key map "m" #'dape-info-stack-memory)
-  (define-key map "M" #'dape-info-stack-disassemble))
+  (define-key map "M" #'dape-info-stack-disassemble)
+  (define-key map "D" #'dape-info-stack-disassemble))
 
 (define-derived-mode dape-info-stack-mode dape-info-parent-mode "Stack"
   "Major mode for Dape info stack."
