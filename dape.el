@@ -3078,7 +3078,9 @@ The indicator is `propertize'd with with FACE."
       (propertize " " 'display `(left-fringe ,bitmap ,face))
     (unless dape--original-margin
       (setq-local dape--original-margin left-margin-width
-                  left-margin-width 2))
+                  left-margin-width 2)
+      (set-window-margins (selected-window)
+                          left-margin-width right-margin-width))
     (propertize " " 'display `((margin left-margin)
                                ,(propertize string 'face face)))))
 
@@ -3161,6 +3163,8 @@ Handling restoring margin if necessary."
       ;; Reset margin
       (setq-local left-margin-width dape--original-margin
                   dape--original-margin nil)
+      (set-window-margins (selected-window)
+                          left-margin-width right-margin-width)
       (when-let* ((window (get-buffer-window buffer)))
         (set-window-buffer window buffer)))))
 
