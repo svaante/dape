@@ -3067,7 +3067,7 @@ Used as an hook on `find-file-hook'."
              (run-hooks 'dape-update-ui-hook)))
   (dape--breakpoint-maybe-remove-ff-hook))
 
-(defvar dape--original-margin nil
+(defvar-local dape--original-margin nil
   "Bookkeeping for buffer margin width.")
 
 (defun dape--indicator (string bitmap face)
@@ -3076,11 +3076,10 @@ The indicator is `propertize'd with with FACE."
   (if (and (window-system)
            (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
       (propertize " " 'display `(left-fringe ,bitmap ,face))
-    (unless dape--original-margin
-      (setq-local dape--original-margin left-margin-width
-                  left-margin-width 2)
-      (set-window-margins (selected-window)
-                          left-margin-width right-margin-width))
+    (setq-local dape--original-margin (or dape--original-margin
+                                          left-margin-width)
+                left-margin-width 2)
+    (set-window-margins (selected-window) left-margin-width)
     (propertize " " 'display `((margin left-margin)
                                ,(propertize string 'face face)))))
 
