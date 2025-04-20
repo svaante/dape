@@ -4598,7 +4598,7 @@ Called by `comint-input-sender' in `dape-repl-mode'."
       (dape--repl-input-sender dummy-process last)))
    ;; Run command from `dape-named-commands'
    ((pcase-let* ((`(,cmd . ,args)
-                  (string-split (substring-no-properties input)
+                  (split-string (substring-no-properties input)
                                 split-string-default-separators))
                  (fn (or (alist-get cmd dape-repl-commands nil nil #'equal)
                          (and dape-repl-use-shorthand
