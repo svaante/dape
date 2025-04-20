@@ -4588,6 +4588,7 @@ See `dape--repl-info-string' for information on INDEX."
 (defun dape--repl-input-sender (dummy-process input)
   "Send INPUT to DUMMY-PROCESS.
 Called by `comint-input-sender' in `dape-repl-mode'."
+  (setq input (string-trim-right input "[\n\r]+"))
   (cond
    ;; Run previous input
    ((and (string-empty-p input)
