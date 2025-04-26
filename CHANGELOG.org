@@ -2,6 +2,21 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.24.0
+- Add check for writing to breakpoints file if nothing has changed
+- Change move data breakpoints to top in breakpoints info
+- Change rename dape-memory command
+- Fix margin breakpoint not showing after breakpoint remove all
+- Fix adapter socket creating under tramp
+- Fix REPL completion region bounds mismatch with word
+- Fix Restart in mode line menu
+- Fix using future history for dape-info-variable-edit
+- Fix disassembly window selection when invoking from info buffers
+- Fix dape-history-add when using shell-like + default values
+- Fix respect font-lock-mode in info and repl buffers
+- Fix help echo and watch buffer displaying on hint mouse-1
+- Fix processes naming, noquery and associated buffers
+
 * Version 0.23.0
 - Add disassemble viewer
 - Add disabling/enabling of source breakpoints
