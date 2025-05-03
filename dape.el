@@ -3267,10 +3267,11 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
              into serialized finally do
              (prin1 serialized (current-buffer)))
     ;; Skip write if nothing has changed since last save
-    (unless (equal (buffer-string)
+    (unless (and (file-exists-p file)
+                 (equal (buffer-string)
                    (with-temp-buffer
                      (insert-file-contents file)
-                     (buffer-string)))
+                     (buffer-string))))
       (write-region (point-min) (point-max) file nil
                     (unless (called-interactively-p 'interactive) 'quiet)))))
 
