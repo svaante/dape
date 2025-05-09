@@ -2,6 +2,9 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.24.1
+- Fix saving of breakpoints when target file does not already exist
+
 * Version 0.24.0
 - Add check for writing to breakpoints file if nothing has changed
 - Change move data breakpoints to top in breakpoints info
