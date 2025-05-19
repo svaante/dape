@@ -563,7 +563,7 @@ variable should be expanded by default."
 
 (define-obsolete-variable-alias 'dape-on-stopped-hooks 'dape-stopped-hook "0.13.0")
 (defcustom dape-stopped-hook '( dape-memory-revert dape-disassemble-revert
-                                dape--emacs-grab-focus)
+                                dape--emacs-grab-focus dape-arrived-at-cursor)
   "Called when session stopped."
   :type 'hook)
 
@@ -3275,6 +3275,76 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
       (write-region (point-min) (point-max) file nil
                     (unless (called-interactively-p 'interactive) 'quiet)))))
 
+(setq dape--cursor-breakpoint nil)
+(defvar dape--restore-p nil)
+(defvar dape-saved-breakpoints nil
+  "List of serialized breakpoints disabled by dape-disable-breakpoints.
+Each entry is (FILE LINE TYPE VALUE).")
+
+(defun dape-disable-breakpoints ()
+  "Serialize every current breakpoint into `dape-saved-breakpoints'
+and remove them from the debugger.  Does nothing if a snapshot is
+already stored."
+  (unless dape-saved-breakpoints          ; don’t overwrite if called twice
+    ;; Collect the same 4-tuple that `dape-breakpoint-save` writes
+    (setq dape-saved-breakpoints
+          (cl-loop for bp in dape--breakpoints
+                   for path = (dape--breakpoint-path bp)
+                   when path collect
+                   (list path
+                         (dape--breakpoint-line  bp)
+                         (dape--breakpoint-type  bp)
+                         (dape--breakpoint-value bp))))
+    (dape-breakpoint-remove-all)))         ; clear from adapter + UI
+
+(defun dape-restore-breakpoints ()
+  "Re-add the breakpoints stored in `dape-saved-breakpoints', then clear
+the snapshot variable."
+  (when dape-saved-breakpoints
+    (dape-breakpoint-remove-all)           ; start from a clean slate
+
+    ;; Recreate every breakpoint (straight from `dape-breakpoint-load`)
+    (cl-loop for (file line type value) in dape-saved-breakpoints do
+             (if (find-buffer-visiting file)
+                 ;; Buffer already open – place overlay immediately
+                 (dape--with-line (find-file-noselect file) line
+                   (dape--breakpoint-place type value))
+               ;; Buffer not open yet – push bare struct and set hook
+               (add-hook 'find-file-hook #'dape--breakpoint-find-file-hook)
+               (push (dape--breakpoint-make :path-line (cons file line)
+                                            :type type
+                                            :value value)
+                     dape--breakpoints)))
+
+    ;; Tell every source buffer + adapter to refresh (again, same as load)
+    (thread-last dape--breakpoints
+                 (seq-group-by #'dape--breakpoint-source)
+                 (mapcar #'car)
+                 (apply #'dape--breakpoint-broadcast-update))
+
+    (setq dape-saved-breakpoints nil)))   ; snapshot consumed
+
+(defun dape-run-to-cursor ()
+  (interactive)
+  (dape-disable-breakpoints)
+  (setq dape--restore-p t)
+  (when (null (dape--breakpoints-at-point))
+    (dape--breakpoint-place)
+    (setq dape--cursor-breakpoint (car dape--breakpoints)))
+  (call-interactively 'dape-continue)
+  )
+
+(defun dape-arrived-at-cursor ()
+  (when dape--cursor-breakpoint
+    (dape--breakpoint-remove dape--cursor-breakpoint)
+    (setq dape--cursor-breakpoint nil)
+    )
+  (when dape--restore-p
+    (dape-restore-breakpoints)
+    (setq dape--restore-p nil))
+  ;;    (set-transient-map dape-global-map t) ;; this works
+  )
+
 
 ;;; Source buffers
 
@@ -5511,6 +5581,7 @@ mouse-1: Display minor mode menu"
     (define-key map "h" #'dape-breakpoint-hits)
     (define-key map "b" #'dape-breakpoint-toggle)
     (define-key map "B" #'dape-breakpoint-remove-all)
+    (define-key map "f" #'dape-run-to-cursor)
     (define-key map "t" #'dape-select-thread)
     (define-key map "S" #'dape-select-stack)
     (define-key map ">" #'dape-stack-select-down)
@@ -5533,6 +5604,7 @@ mouse-1: Display minor mode menu"
                dape-breakpoint-hits
                dape-breakpoint-toggle
                dape-breakpoint-remove-all
+               dape-run-to-cursor
                dape-stack-select-up
                dape-stack-select-down
                dape-select-stack
