@@ -589,6 +589,48 @@ this MIME type."
   "The bytes read with `dape-memory'."
   :type 'natnum)
 
+(defcustom dape-show-buttons-in-mode-line t
+  "Display debugging buttons in dape `mode-line'."
+  :type 'boolean)
+
+(defcustom dape-mode-line-buttons-icons
+  '((continue . "▶️")
+    (next . "⏩")
+    (step-in . "⤵️")
+    (step-out . "⤴️")
+    (pause . "⏸️")
+    (restart . "🔁")
+    (quit . "✖️"))
+  "Alist with icons strings to display in the mode-line.
+Available icons are: `continue', `next', `step-in', `step-out',
+`pause', `restart' and `quit'"
+  :type '(alist
+          :key-type
+          (choice
+           (const :tag "Continue" continue)
+           (const :tag "Next" next)
+           (const :tag "Step in" step-in)
+           (const :tag "Step out" step-out)
+           (const :tag "Pause" pause)
+           (const :tag "Restart" restart)
+           (const :tag "Quit" quit))
+          :value-type string))
+
+(defcustom dape-mode-line-buttons-format
+  '( " " continue " " next " " step-in " " step-out " "
+     pause " " restart " " quit)
+  "Mode line construct for formatting Dape debugging buttons."
+  :type '(repeat
+          (choice
+           (const :tag "Continue" continue)
+           (const :tag "Next" next)
+           (const :tag "Step in" step-in)
+           (const :tag "Step out" step-out)
+           (const :tag "Pause" pause)
+           (const :tag "Restart" restart)
+           (const :tag "Quit" quit)
+           string)))
+
 (defcustom dape-info-buffer-window-groups
   '((dape-info-scope-mode dape-info-watch-mode)
     (dape-info-stack-mode dape-info-modules-mode dape-info-sources-mode)
@@ -5451,6 +5493,17 @@ See `eldoc-documentation-functions', for more information."
 
 (put 'dape--mode-line-format 'risky-local-variable t)
 
+(defun dape--mode-line-create-button (icon action help-echo)
+  (if-let* ((str (alist-get icon dape-mode-line-buttons-icons)))
+      (list
+       :propertize str
+       'mouse-face 'highlight
+       'help-echo (concat "mouse-1: " help-echo)
+       'keymap
+       (let ((map (make-sparse-keymap)))
+         (define-key map [mode-line mouse-1] action)
+         map))))
+
 (defun dape--mode-line-format ()
   "Update variable `dape--mode-line-format' format."
   (let ((conn (or (dape--live-connection 'last t)
@@ -5464,6 +5517,29 @@ mouse-1: Display minor mode menu"
               keymap ,(let ((map (make-sparse-keymap)))
                         (define-key map [mode-line down-mouse-1] dape-menu)
                         map))
+            ,@(when dape-show-buttons-in-mode-line
+                (cl-loop
+                 for icon in dape-mode-line-buttons-format
+                 collect
+                 (if (stringp icon)
+                     icon
+                   (apply #'dape--mode-line-create-button
+                          icon
+                          (pcase icon
+                            ('continue
+                             '(dape-continue "Continue"))
+                            ('next
+                             '(dape-next "Next"))
+                            ('step-in
+                             '(dape-step-in "Step in"))
+                            ('step-out
+                             '(dape-step-out "Step out"))
+                            ('pause
+                             '(dape-pause "Pause"))
+                            ('restart
+                             '(dape-restart "Restart"))
+                            ('quit
+                             '(dape-quit "Quit")))))))
             ":"
             ( :propertize
               ,(when-let* ((thread-name (plist-get (dape--current-thread conn) :name)))
