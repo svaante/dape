@@ -825,6 +825,20 @@ Debug logging has an noticeable effect on performance."
 If valid connection, this connection will be of highest priority when
 querying for connections with `dape--live-connection'.")
 
+(defvar dape-tool-bar-map
+  (let ((map (make-sparse-keymap)))
+    (dolist (x '((dape-continue "gud/go" "Continue")
+                 (dape-next "gud/next" "Next")
+                 (dape-step-in "gud/step" "Step in")
+                 (dape-step-out "gud/finish" "Step out")
+                 (dape-pause "mpc/pause" "Pause")
+                 (dape-restart "refresh" "Restart")
+                 (dape-quit "gud/stop" "Quit"))
+	       map)
+      (tool-bar-local-item
+       (nth 1 x) (car x) (car x) map
+       :help (nth 2 x)))))
+
 (define-minor-mode dape-active-mode
   "On when dape debugging session is active.
 Non interactive global minor mode."
@@ -4758,7 +4772,8 @@ If EXPRESSIONS is non blank add or remove expression to watch list."
               scroll-conservatively 101
               comint-input-sender 'dape--repl-input-sender
               comint-prompt-regexp (concat "^" (regexp-quote dape--repl-prompt))
-              comint-process-echoes nil)
+              comint-process-echoes nil
+              tool-bar-map dape-tool-bar-map)
   (add-to-list 'overlay-arrow-variable-list 'dape--repl-marker)
   (add-hook 'completion-at-point-functions
             #'dape--repl-completion-at-point nil t)
@@ -4802,6 +4817,20 @@ Empty input will rerun last command.\n\n"
     (let ((window (dape--display-buffer (current-buffer))))
       (when (called-interactively-p 'interactive)
         (select-window window)))))
+
+
+;;; Tool bar config
+
+(defun dape-update-tool-bar ()
+  (if (not dape-active-mode)
+      (dolist (buffer (buffer-list))
+        (with-current-buffer buffer
+          (when (eq tool-bar-map dape-tool-bar-map)
+            (kill-local-variable 'tool-bar-map))))
+    (unless (eq tool-bar-map dape-tool-bar-map)
+      (setq-local tool-bar-map dape-tool-bar-map))))
+
+(add-hook 'dape-active-mode-hook #'dape-update-tool-bar)
 
 
 ;;; Inlay hints
