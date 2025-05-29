@@ -200,7 +200,7 @@
      command-insert-stderr t
      port :autoport
      :request "launch"
-     :type "debug"
+     :type "go"
      :cwd "."
      :program ".")
     (flutter
