@@ -1189,10 +1189,10 @@ as is."
   "Kill all dape buffers.
 On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
   (cl-loop for buffer in (buffer-list)
-           when (and (bufferp buffer)
-                     (not (and skip-process-buffers
+           when (and (not (and skip-process-buffers
                                (get-buffer-process buffer)))
-                     (string-match-p "\\*dape-.+\\*" (buffer-name buffer)))
+                     (when-let* ((name (buffer-name buffer)))
+                       (string-match-p "\\*dape-.+\\*" name)))
            do (condition-case err
                   (let ((window (get-buffer-window buffer)))
                     (kill-buffer buffer)
