@@ -3129,7 +3129,7 @@ If FROM-RESTART is non nil keep id and verified."
            else do
            (dape--breakpoint-remove breakpoint)))
 
-(cl-defun dape--breakpoint-place (&optional type value)
+(defun dape--breakpoint-place (&optional type value)
   "Place breakpoint at current line.
 Valid values for TYPE is nil, `log', `expression' and `hits'.
 If TYPE is non nil VALUE is expected to be an string.
@@ -3142,9 +3142,10 @@ If there are breakpoints at current line remove those breakpoints from
   ;; Create breakpoint
   (let ((breakpoint (dape--breakpoint-make :type type :value value)))
     (dape--breakpoint-set-overlay breakpoint)
-    (push breakpoint dape--breakpoints))
-  ;; Push breakpoint to adapter
-  (dape--breakpoint-broadcast-update (current-buffer)))
+    (push breakpoint dape--breakpoints)
+    ;; ...and push to adapter
+    (dape--breakpoint-broadcast-update (current-buffer))
+    breakpoint))
 
 (defun dape--breakpoint-delete-overlay (breakpoint)
   "Delete of BREAKPOINT overlay.
@@ -3167,6 +3168,22 @@ Handling restoring margin if necessary."
                           left-margin-width right-margin-width)
       (when-let* ((window (get-buffer-window buffer)))
         (set-window-buffer window buffer)))))
+
+(defun dape--breakpoint-disable (breakpoint disabled)
+  "Swap BREAKPOINT overlay to DISABLED state."
+  (setf (dape--breakpoint-disabled breakpoint) disabled)
+  (when-let* ((buffer (dape--breakpoint-source breakpoint))
+              (line (dape--breakpoint-line breakpoint))
+              ((bufferp buffer)))
+    (dape--breakpoint-delete-overlay breakpoint)
+    (dape--with-line buffer line (dape--breakpoint-set-overlay breakpoint))))
+
+(defun dape--breakpoints-update ()
+  "Broadcast breakpoint state in all breakpoint sources."
+  (thread-last dape--breakpoints
+               (seq-group-by #'dape--breakpoint-source)
+               (mapcar #'car)
+               (apply #'dape--breakpoint-broadcast-update)))
 
 (defun dape--breakpoint-remove (breakpoint &optional skip-update)
   "Remove BREAKPOINT breakpoint from buffer and session.
@@ -3242,10 +3259,7 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
                                               :type type
                                               :value value)
                        dape--breakpoints))))
-    (thread-last dape--breakpoints
-                 (seq-group-by #'dape--breakpoint-source)
-                 (mapcar #'car)
-                 (apply #'dape--breakpoint-broadcast-update))))
+    (dape--breakpoints-update)))
 
 (defun dape-breakpoint-save (&optional file)
   "Save breakpoints to FILE.
@@ -3647,17 +3661,11 @@ buffers get displayed and how they are grouped."
 
 ;;; Info breakpoints buffer
 
-(dape--command-at-line dape-info-breakpoint-disabled (dape--info-breakpoint)
+(dape--command-at-line dape-info-breakpoint-disable (dape--info-breakpoint)
   "Enable/disable breakpoint at line in dape info buffer."
-  (let ((breakpoint dape--info-breakpoint))
-    (setf (dape--breakpoint-disabled breakpoint)
-          (not (dape--breakpoint-disabled breakpoint)))
-    (when-let* ((buffer (dape--breakpoint-source breakpoint))
-                (line (dape--breakpoint-line breakpoint))
-                ((bufferp buffer)))
-      (dape--breakpoint-delete-overlay breakpoint)
-      (dape--with-line buffer line (dape--breakpoint-set-overlay breakpoint)))
-    (dape--breakpoint-broadcast-update (dape--breakpoint-source breakpoint)))
+  (dape--breakpoint-disable
+   dape--info-breakpoint (not (dape--breakpoint-disabled dape--info-breakpoint)))
+  (dape--breakpoint-broadcast-update (dape--breakpoint-source dape--info-breakpoint))
   (revert-buffer)
   (run-hooks 'dape-update-ui-hook))
 
@@ -3694,7 +3702,7 @@ buffers get displayed and how they are grouped."
 without log or expression breakpoint"))))))
 
 (dape--buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
-  (define-key map "D" #'dape-info-breakpoint-disabled)
+  (define-key map "D" #'dape-info-breakpoint-disable)
   (define-key map "d" #'dape-info-breakpoint-delete)
   (define-key map "e" #'dape-info-breakpoint-log-edit))
 
