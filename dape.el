@@ -4224,7 +4224,7 @@ current buffer with CONN config."
   "Keymap for buffers or regions displaying variables.")
 
 (defvar dape-info-scope-mode-map
-  (make-composed-keymap nil dape-info-variable-map)
+  (make-composed-keymap dape-info-variable-map dape-info-parent-mode-map)
   "Local keymap for dape scope buffers.")
 
 (defun dape--info-locals-table-columns-list (alist)
