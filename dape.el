@@ -2374,7 +2374,7 @@ SKIP-COMPILE is used internally for recursive calls."
   (interactive (list (dape--live-connection 'last t)))
   (dape--stack-frame-cleanup)
   (cond
-   ;; Use restart if adapter supports it
+   ;; Restart if adapter supports it
    ((and conn (dape--capable-p conn :supportsRestartRequest))
     (if (and (not skip-compile) (plist-get (dape--config conn) 'compile))
         (dape--compile (dape--config conn)
@@ -2386,11 +2386,12 @@ SKIP-COMPILE is used internally for recursive calls."
             (dape--modules conn) nil
             (dape--sources conn) nil
             (dape--restart-in-progress-p conn) t)
+      (dape-active-mode -1)
       (dape--with-request
           (dape-request conn :restart
                         `(:arguments ,(dape--launch-or-attach-arguments conn)))
         (setf (dape--restart-in-progress-p conn) nil))))
-   ;; Use old connection
+   ;; Use previous connections configuration
    (dape--connection (dape (dape--config dape--connection)))
    ;; Use history
    (dape-history
@@ -4943,7 +4944,6 @@ Update `dape--inlay-hint-overlays' from SCOPES."
     (setq dape--inlay-hint-overlays nil)))
 
 (add-hook 'dape-update-ui-hook #'dape-inlay-hints-update)
-;; TODO Create hook for UI cleanup (restart, quit and disconnect)
 (add-hook 'dape-active-mode-hook #'dape--inlay-hints-clean-up)
 
 
