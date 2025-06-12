@@ -171,7 +171,7 @@
                            (unless (zerop (process-file-shell-command
                                            (format "%s -c \"import debugpy.adapter\"" python)))
                              (user-error "%s module debugpy is not installed" python))))
-                command (progn (require 'python) python-interpreter)
+                command "python"
                 command-args ("-m" "debugpy.adapter" "--host" "0.0.0.0" "--port" :autoport)
                 port :autoport
                 :request "launch"
