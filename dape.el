@@ -2992,7 +2992,7 @@ of memory read."
                          "edit log message" #'dape-mouse-breakpoint-log))
           ('expression
            (after-string ov "Cond" (or disabled-face 'dape-expression-face)
-                         "edit break condition" #'dape-mouse-breakpoint-log))
+                         "edit break condition" #'dape-mouse-breakpoint-expression))
           ('hits
            (after-string ov "Hits" 'dape-hits-face
                          "edit break hit condition" #'dape-mouse-breakpoint-hits))
