@@ -3538,7 +3538,8 @@ FN is expected to update insert buffer contents, update
             (funcall fn))
           (ignore-errors
             (goto-char (point-min))
-            (forward-line (1- line)))
+            (forward-line (1- line))
+            (beginning-of-line))
           (dape--info-set-related-buffers))
         (when old-window
           (select-window old-window))))))
