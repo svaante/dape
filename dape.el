@@ -2317,19 +2317,19 @@ symbol `dape-connection'."
   "Step one line (skip functions)
 CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'stopped)))
-  (dape--next-like-command conn "next"))
+  (dape--next-like-command conn :next))
 
 (defun dape-step-in (conn)
   "Step into function/method.  If not possible behaves like `dape-next'.
 CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'stopped)))
-  (dape--next-like-command conn "stepIn"))
+  (dape--next-like-command conn :stepIn))
 
 (defun dape-step-out (conn)
   "Step out of function/method.  If not possible behaves like `dape-next'.
 CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'stopped)))
-  (dape--next-like-command conn "stepOut"))
+  (dape--next-like-command conn :stepOut))
 
 (defun dape-continue (conn)
   "Resumes execution.
