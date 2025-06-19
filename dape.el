@@ -525,7 +525,7 @@ Example value:
                  (const :tag "Right side" right)
                  (const :tag "Use `display-buffer-base-action'" nil)))
 
-(defcustom dape-variable-auto-expand-alist '((hover . 1) (repl . 1) (watch . 1))
+(defcustom dape-variable-auto-expand-alist '((hover . 1) (repl . 0) (watch . 1))
   "Default expansion depth for displaying variables.
 Each entry consists of a context (such as `hover', `repl', or
 `watch') paired with a number indicating how many levels deep the
