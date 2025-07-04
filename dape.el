@@ -2652,7 +2652,7 @@ CONN is inferred by either last stopped or last created connection."
       (dape--repl-insert (concat result "\n"))))))
 
 (defun dape-restart-frame (conn stack-id)
-  "Restart frame for adapter CONN by STACK-ID."
+  "Restart frame STACK-ID for adapter CONN."
   (interactive
    (let ((conn (dape--live-connection 'stopped t)))
      (call-interactively #'dape-select-stack)
