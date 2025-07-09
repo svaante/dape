@@ -271,6 +271,14 @@
            :cwd dape-cwd
            :program dape-buffer-default
            :console "internalConsole")
+          (js-debug-tsx
+           modes (typescript-mode typescript-ts-mode)
+           ,@js-debug
+           :type "pwa-node"
+           :runtimeExecutable "tsx"
+           :cwd dape-cwd
+           :program dape-buffer-default
+           :console "internalConsole")
 	  (js-debug-node-attach
            modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
            ,@js-debug
