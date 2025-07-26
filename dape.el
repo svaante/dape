@@ -2651,6 +2651,21 @@ CONN is inferred by either last stopped or last created connection."
       (dape--update conn 'variables nil)
       (dape--repl-insert (concat result "\n"))))))
 
+(defun dape-restart-frame (conn stack-id)
+  "Restart frame STACK-ID for adapter CONN."
+  (interactive
+   (let ((conn (dape--live-connection 'stopped t)))
+     (call-interactively #'dape-select-stack)
+     (list conn (dape--stack-id conn))))
+  (let* ((current-frame (progn (dape-select-stack conn stack-id)
+			       (dape--current-stack-frame conn)))
+	 (frame-id (plist-get current-frame :id)))
+    (if (dape--capable-p conn :supportsRestartFrame)
+	(dape--with-request-bind (_body error)
+	    (dape-request conn :restartFrame `(:frameId ,frame-id))
+	  (if error (dape--warn "Failed to restart stack frame: %s" error)
+	    (dape--repl-insert "Stack frame restarted\n"))))))
+
 ;;;###autoload
 (defun dape (config &optional skip-compile)
   "Start a debugging session using CONFIG.
