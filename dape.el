@@ -939,15 +939,17 @@ Run step like COMMAND on CONN.  If ARG is set run COMMAND ARG times."
         ;; continues, e.g. launch or continue.
         (dape-handle-event conn 'continued nil)))))
 
-(defun dape--maybe-select-thread (conn thread-id force)
+(defun dape--maybe-select-thread (conn thread-id &optional force)
   "Maybe set selected THREAD-ID and CONN.
-If FORCE is non nil force thread selection.
-If thread is selected, select CONN as well if no previously connection
-has been selected or if current selected connection does not have any
-stopped threads.
+If FORCE is non nil, force selection of the thread.
+If the thread is selected, also select CONN if no connection has been
+selected yet, or if the currently selected connection has no stopped
+threads.
 See `dape--connection-selected'."
   (when (and thread-id (or force (not (dape--thread-id conn))))
     (setf (dape--thread-id conn) thread-id)
+    ;; Update selected connection if the current one is not live or
+    ;; has no stopped threads.
     (unless (and (member dape--connection-selected (dape--live-connections))
                  (dape--stopped-threads dape--connection-selected))
       (setq dape--connection-selected conn))))
@@ -1738,6 +1740,9 @@ See `dape-request' for expected CB signature."
                  (plist-put old-thread :name (plist-get new-thread :name))
                new-thread))
            (append threads nil)))
+    (dape--maybe-select-thread conn
+                               (cl-some (lambda (thread) (plist-get thread :id))
+                                        (dape--threads conn)))
     (dape--request-continue cb error)))
 
 (defun dape--stack-trace (conn thread nof cb)
@@ -2074,12 +2079,12 @@ Stores `dape--thread-id' and updates/adds thread in
 `dape--thread' from BODY."
   (cl-destructuring-bind (&key threadId reason &allow-other-keys)
       body
+    (dape--maybe-select-thread conn threadId)
     (when (equal reason "started")
       ;; For adapters that does not send an continued request use
       ;; thread started as an way to switch from `initialized' to
       ;; running.
-      (dape--update-state conn 'running)
-      (dape--maybe-select-thread conn (plist-get body :threadId) nil))
+      (dape--update-state conn 'running))
     (let ((update-handle
            ;; Need to store handle before threads request to guard
            ;; against an overwriting thread status if event is firing
@@ -2148,7 +2153,7 @@ Sets `dape--thread-id' from BODY if not set."
       body
     (dape--update-state conn 'running)
     (dape--stack-frame-cleanup)
-    (dape--maybe-select-thread conn threadId nil)
+    (dape--maybe-select-thread conn threadId)
     (dape--threads-set-status conn threadId (eq allThreadsContinued t) 'running
                               (dape--threads-make-update-handle conn))
     (run-hooks 'dape-update-ui-hook)))
