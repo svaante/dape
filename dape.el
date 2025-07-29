@@ -3301,9 +3301,9 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
     ;; Skip write if nothing has changed since last save
     (unless (and (file-exists-p file)
                  (equal (buffer-string)
-                   (with-temp-buffer
-                     (insert-file-contents file)
-                     (buffer-string))))
+                        (with-temp-buffer
+                          (insert-file-contents file)
+                          (buffer-string))))
       (write-region (point-min) (point-max) file nil
                     (unless (called-interactively-p 'interactive) 'quiet)))))
 
@@ -5263,9 +5263,9 @@ nil."
                major-mode (cl-map 'list 'identity modes))
         (when-let* (((not (derived-mode-p 'prog-mode)))
                     (last-hist (car dape-history))
-                   (last-config
-                    (cadr (ignore-errors
-                            (dape--config-from-string last-hist)))))
+                    (last-config
+                     (cadr (ignore-errors
+                             (dape--config-from-string last-hist)))))
           (cl-some (lambda (mode)
                      (memql mode (plist-get last-config 'modes)))
                    modes)))))
