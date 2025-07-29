@@ -2796,11 +2796,13 @@ Using BUFFER and STR."
             (goto-char (point-min))
             (while (re-search-forward "^[0-9a-f]+" nil t)
               (let ((address
-                     (format "%08x" (+ address (string-to-number (match-string 0) 16)))))
+                     (thread-last (string-to-number (match-string 0) 16)
+                                  (+ address)
+                                  (format "%08x"))))
                 (delete-region (match-beginning 0) (match-end 0))
                 ;; `hexl' does not support address over 8 hex chars
                 (insert (append (substring address (- (length address) 8)))))))
-          (replace-buffer-contents temp-buffer)
+          (replace-region-contents (point-min) (point-max) temp-buffer)
           (when buffer-empty-p (hexl-goto-address 0))
           (kill-buffer temp-buffer))
         (set-buffer-modified-p nil)
@@ -4574,7 +4576,7 @@ The search is done backwards from POINT.  The line is marked with
                                 str)
            finally return
            (propertize str
-                       'dape--revert-tag (cl-gensym "dape-region-tag")
+                       'dape--revert-tag (gensym "dape-region-tag")
                        'dape--revert-fn revert-function)))
 
 (defun dape--repl-variable (variable)
