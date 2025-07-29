@@ -3474,7 +3474,7 @@ See `dape-info-buffer-window-groups'."
                          group))
               dape-info-buffer-window-groups))
 
-(defun dape--info-buffer-tab (&optional reversed)
+(defun dape-info-buffer-tab (&optional reversed)
   "Select next related buffer in `dape-info' buffers.
 REVERSED selects previous."
   (interactive)
@@ -3494,8 +3494,8 @@ REVERSED selects previous."
 (defvar dape-info-parent-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "<backtab>")
-                (lambda () (interactive) (dape--info-buffer-tab t)))
-    (define-key map "\t" #'dape--info-buffer-tab)
+                (lambda () (interactive) (dape-info-buffer-tab t)))
+    (define-key map "\t" #'dape-info-buffer-tab)
     map)
   "Keymap for `dape-info-parent-mode'.")
 
