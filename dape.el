@@ -3453,7 +3453,7 @@ Buffer is displayed with `dape-display-source-buffer-action'."
 ;;; Info Buffers
 
 (defvar-local dape--info-buffer-related nil "List of related buffers.")
-(defvar-local dape--info-var nil "Generic storage for info buffers.")
+(defvar-local dape--info-buffer-index nil "Per mode buffer index.")
 
 (defvar dape--info-buffers nil "List containing `dape-info' buffers.")
 
@@ -3462,10 +3462,10 @@ Buffer is displayed with `dape-display-source-buffer-action'."
   (setq dape--info-buffers
         (cl-delete-if-not #'buffer-live-p dape--info-buffers)))
 
-(defun dape--info-buffer-p (mode &optional var)
-  "Is buffer of MODE with VAR."
+(defun dape--info-buffer-p (mode &optional index)
+  "Is buffer of MODE with INDEX."
   (and (derived-mode-p mode)
-       (or (not var) (equal dape--info-var var))))
+       (or (not index) (equal dape--info-buffer-index index))))
 
 (defun dape--info-window-group ()
   "Return current buffer's info group.
@@ -3483,15 +3483,15 @@ REVERSED selects previous."
   (unless dape--info-buffer-related
     (user-error "No related buffers for current buffer"))
   (pcase-let* ((order-fn (if reversed 'reverse 'identity))
-               (`(,mode ,var)
+               (`(,mode ,index)
                 (or (thread-last dape--info-buffer-related
                                  (append  dape--info-buffer-related)
                                  (funcall order-fn)
-                                 (seq-drop-while (pcase-lambda (`(,mode ,var))
-                                                   (not (dape--info-buffer-p mode var))))
+                                 (seq-drop-while (pcase-lambda (`(,mode ,index))
+                                                   (not (dape--info-buffer-p mode index))))
                                  (cadr))
                     (car dape--info-buffer-related))))
-    (gdb-set-window-buffer (dape--info-get-buffer-create mode var) t)))
+    (gdb-set-window-buffer (dape--info-get-buffer-create mode index) t)))
 
 (defvar dape-info-parent-mode-map
   (let ((map (make-sparse-keymap)))
@@ -3531,10 +3531,10 @@ Each buffers store its own debounce context."
   (when dape-info-hide-mode-line (setq-local mode-line-format nil))
   (buffer-disable-undo))
 
-(defun dape--info-header (name mode id help-echo mouse-face face)
+(defun dape--info-header (name mode index help-echo mouse-face face)
   "Helper to create buffer header.
 Creates header with string NAME, mouse map to select buffer
-identified with MODE and ID (see `dape--info-var')
+identified with MODE and INDEX (see `dape--info-buffer-index')
 with HELP-ECHO string, MOUSE-FACE and FACE."
   (propertize name 'help-echo help-echo 'mouse-face mouse-face 'face face
               'keymap
@@ -3543,7 +3543,7 @@ with HELP-ECHO string, MOUSE-FACE and FACE."
 	       (lambda (event) (interactive "e")
 		 (save-selected-window
 		   (select-window (posn-window (event-start event)))
-                   (let ((buffer (dape--info-get-buffer-create mode id)))
+                   (let ((buffer (dape--info-get-buffer-create mode index)))
                      (with-current-buffer buffer (revert-buffer))
                      (gdb-set-window-buffer buffer t)))))))
 
@@ -3580,21 +3580,21 @@ See `dape--info-call-update-with'."
   (declare (indent 0))
   `(dape--info-call-update-with (lambda () ,@body)))
 
-(defun dape--info-get-live-buffer (mode &optional var)
-  "Get live dape info buffer with MODE and VAR."
+(defun dape--info-get-live-buffer (mode &optional index)
+  "Get live dape info buffer with MODE and INDEX."
   (seq-find (lambda (buffer)
               (with-current-buffer buffer
-                (dape--info-buffer-p mode var)))
+                (dape--info-buffer-p mode index)))
             (dape--info-buffer-list)))
 
-(defun dape--info-get-buffer-create (mode &optional var)
-  "Get or create info buffer with MODE and VAR."
+(defun dape--info-get-buffer-create (mode &optional index)
+  "Get or create info buffer with MODE and INDEX."
   (with-current-buffer
-      (or (dape--info-get-live-buffer mode var)
-          (get-buffer-create (dape--info-buffer-name mode var)))
+      (or (dape--info-get-live-buffer mode index)
+          (get-buffer-create (dape--info-buffer-name mode index)))
     (unless (eq major-mode mode)
       (funcall mode)
-      (when var (setq dape--info-var var))
+      (when index (setq dape--info-buffer-index index))
       (dape--info-set-related-buffers)
       (push (current-buffer) dape--info-buffers))
     (current-buffer)))
@@ -3645,10 +3645,10 @@ buffers get displayed and how they are grouped."
     (dape-info-scope-mode       . "Scope"))
   "Lookup for `dape-info-parent-mode' derived modes names.")
 
-(defun dape--info-buffer-name (mode &optional var)
-  "Return buffer name for MODE and VAR."
+(defun dape--info-buffer-name (mode &optional index)
+  "Return buffer name for MODE and INDEX."
   (concat (format "*dape-info %s*" (alist-get mode dape--info-buffer-name-alist))
-          (when (and var (> var 0)) (format "<%s>" var))))
+          (when (and index (> index 0)) (format "<%s>" index))))
 
 (defun dape--info-set-related-buffers ()
   "Set related buffers and `header-line-format'."
@@ -3656,20 +3656,20 @@ buffers get displayed and how they are grouped."
          (scopes (plist-get (dape--current-stack-frame conn) :scopes)))
     (when (or (not dape--info-buffer-related) scopes)
       (cl-loop for spec in (dape--info-window-group)
-               for (mode var) = (ensure-list spec) append
-               (cond ((and (eq 'dape-info-scope-mode mode) (not var))
-                      (cl-loop for scope in scopes for var upfrom 0 collect
-                               `(dape-info-scope-mode ,var ,(plist-get scope :name))))
-                     ((and (eq 'dape-info-scope-mode mode) var)
-                      (when-let* ((scope (nth var scopes)))
-                        `((dape-info-scope-mode ,var ,(plist-get scope :name)))))
+               for (mode index) = (ensure-list spec) append
+               (cond ((and (eq 'dape-info-scope-mode mode) (not index))
+                      (cl-loop for scope in scopes for index upfrom 0 collect
+                               `(dape-info-scope-mode ,index ,(plist-get scope :name))))
+                     ((and (eq 'dape-info-scope-mode mode) index)
+                      (when-let* ((scope (nth index scopes)))
+                        `((dape-info-scope-mode ,index ,(plist-get scope :name)))))
                      (`((,mode nil ,(alist-get mode dape--info-buffer-name-alist)))))
                into related
                finally (setq dape--info-buffer-related related))
-      (cl-loop for (mode var name) in dape--info-buffer-related append
-               `(,(if (dape--info-buffer-p mode var)
-                      (dape--info-header name mode var nil nil 'mode-line)
-                    (dape--info-header name mode var "mouse-1: select"
+      (cl-loop for (mode index name) in dape--info-buffer-related append
+               `(,(if (dape--info-buffer-p mode index)
+                      (dape--info-header name mode index nil nil 'mode-line)
+                    (dape--info-header name mode index "mouse-1: select"
                                        'mode-line-highlight
                                        'mode-line-inactive))
                  " ")
@@ -4328,7 +4328,7 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
   "Major mode for Dape info scope."
   :interactive nil
-  (setq dape--info-var 0)
+  (setq dape--info-buffer-index 0)
   (dape--info-update-with (insert "No scope information available.")))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-scope-mode))
@@ -4339,14 +4339,14 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
               (frame (dape--current-stack-frame conn))
               (scopes (plist-get frame :scopes))
               ;; FIXME Scope list could have shrunk and
-              ;; `dape--info-var' can be out of bounds.
-              (scope (nth dape--info-var scopes))
+              ;; `dape--info-buffer-index' can be out of bounds.
+              (scope (nth dape--info-buffer-index scopes))
               ;; Check for stopped threads to reduce flickering
               ((dape--stopped-threads conn)))
     (dape--with-request (dape--variables conn scope)
       (dape--with-request
           (dape--variables-recursive conn scope
-                                     (list dape--info-var)
+                                     (list dape--info-buffer-index)
                                      #'dape--variable-expanded-p)
         (when (and scope scopes (dape--stopped-threads conn))
           (dape--info-update-with
@@ -4360,7 +4360,7 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
              (dape--info-scope-add-variable table
                                             object
                                             (plist-get scope :variablesReference)
-                                            (list dape--info-var)
+                                            (list dape--info-buffer-index)
                                             #'dape--variable-expanded-p)
              finally (insert (gdb-table-string table " ")))))))))
 
@@ -4581,11 +4581,11 @@ The search is done backwards from POINT.  The line is marked with
                                    dape-info-variable-map)))
 
 (defun dape--repl-info-string (mode index)
-  "Return info buffer content by MODE and `revert-buffer'.
-See `dape--info-var' for information on INDEX."
+  "Return info MODE buffer content as string.
+See `dape--info-buffer-index' for information on INDEX."
   (with-temp-buffer
     (funcall mode)
-    (setq dape--info-var index)
+    (setq dape--info-buffer-index index)
     (let ((dape-ui-debounce-time 0)
           (dape--request-blocking t))
       (revert-buffer))
