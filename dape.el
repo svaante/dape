@@ -2081,7 +2081,7 @@ Logs and sets state based on BODY contents."
   (let ((start-method
          (format "%sed" (or (plist-get body :startMethod) "start"))))
     (dape--update-state conn (intern start-method))
-    (dape--message "Process %s %s" start-method (plist-get body :name))))
+    (dape--message "%s %s" (capitalize start-method) (plist-get body :name))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql thread)) body)
   "Handle adapter CONNs thread events.
