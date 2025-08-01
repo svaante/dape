@@ -4976,6 +4976,41 @@ Update `dape--inlay-hint-overlays' from SCOPES."
 (add-hook 'dape-active-mode-hook #'dape--inlay-hints-clean-up)
 
 
+;;; Run until point
+
+(defvar dape--until-breakpoints nil)
+
+(defun dape-until (conn)
+  "Run until point.
+CONN is inferred for interactive invocations."
+  (interactive (list (or (dape--live-connection 'stopped t)
+                         (dape--live-connection 'last))))
+  (let (;; Block to ensure breakpoints changes before continue
+        (dape--request-blocking t))
+    ;; Disable all non disabled breakpoints temporarily
+    (cl-loop for breakpoint in dape--breakpoints
+             unless (dape--breakpoint-disabled breakpoint)
+             do (dape--breakpoint-disable breakpoint 'until)
+             finally do (dape--breakpoints-update))
+    ;; Bookkeeping - store run to point breakpoint
+    (push (dape-breakpoint-toggle) dape--until-breakpoints))
+  (when (dape--stopped-threads conn)
+    (dape-continue conn)))
+
+(defun dape--until-reset ()
+  "Reset until state."
+  (cl-loop for breakpoint in dape--breakpoints
+           when (eq (dape--breakpoint-disabled breakpoint) 'until)
+           do (dape--breakpoint-disable breakpoint nil)
+           finally do (dape--breakpoints-update))
+  (cl-loop for breakpoint in dape--until-breakpoints
+           when breakpoint do (dape--breakpoint-remove breakpoint)
+           finally do (setq dape--until-breakpoints nil)))
+
+(add-hook 'dape-active-mode-hook #'dape--until-reset)
+(add-hook 'dape-stopped-hook #'dape--until-reset)
+
+
 ;;; Minibuffer config hints
 
 (defface dape-minibuffer-hint-separator-face '((t :inherit shadow
@@ -5527,6 +5562,7 @@ mouse-1: Display minor mode menu"
     (define-key map "o" #'dape-step-out)
     (define-key map "r" #'dape-restart)
     (define-key map "f" #'dape-restart-frame)
+    (define-key map "u" #'dape-until)
     (define-key map "i" #'dape-info)
     (define-key map "R" #'dape-repl)
     (define-key map "m" #'dape-memory)
@@ -5554,6 +5590,7 @@ mouse-1: Display minor mode menu"
                dape-step-out
                dape-restart
                dape-restart-frame
+               dape-until
                dape-breakpoint-log
                dape-breakpoint-expression
                dape-breakpoint-hits
