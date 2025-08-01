@@ -2684,16 +2684,16 @@ CONN is inferred by either last stopped or last created connection."
   "Restart frame STACK-ID for adapter CONN."
   (interactive
    (let ((conn (dape--live-connection 'stopped t)))
-     (call-interactively #'dape-select-stack)
      (list conn (dape--stack-id conn))))
-  (let* ((current-frame (progn (dape-select-stack conn stack-id)
-			       (dape--current-stack-frame conn)))
+  (unless (dape--capable-p conn :supportsRestartFrame)
+    (user-error "Adapter not capable of restarting frame"))
+  (dape-select-stack conn stack-id)
+  (let* ((current-frame (dape--current-stack-frame conn))
 	 (frame-id (plist-get current-frame :id)))
-    (if (dape--capable-p conn :supportsRestartFrame)
-	(dape--with-request-bind (_body error)
-	    (dape-request conn :restartFrame `(:frameId ,frame-id))
-	  (if error (dape--warn "Failed to restart stack frame: %s" error)
-	    (dape--repl-insert "Stack frame restarted\n"))))))
+    (dape--with-request-bind (_body error)
+	(dape-request conn :restartFrame `(:frameId ,frame-id))
+      (when error
+        (dape--warn "Failed to restart stack frame: %s" error)))))
 
 ;;;###autoload
 (defun dape (config &optional skip-compile)
@@ -5555,6 +5555,7 @@ mouse-1: Display minor mode menu"
     (define-key map "s" #'dape-step-in)
     (define-key map "o" #'dape-step-out)
     (define-key map "r" #'dape-restart)
+    (define-key map "f" #'dape-restart-frame)
     (define-key map "i" #'dape-info)
     (define-key map "R" #'dape-repl)
     (define-key map "m" #'dape-memory)
@@ -5581,6 +5582,7 @@ mouse-1: Display minor mode menu"
                dape-step-in
                dape-step-out
                dape-restart
+               dape-restart-frame
                dape-breakpoint-log
                dape-breakpoint-expression
                dape-breakpoint-hits
