@@ -1215,7 +1215,7 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
            when (and (not (and skip-process-buffers
                                (get-buffer-process buffer)))
                      (when-let* ((name (buffer-name buffer)))
-                       (string-match-p "\\*dape-.+\\*" name)))
+                       (string-match-p "\\*dape-.+\\*\\(<[0-9]+>\\)?$" name)))
            do (condition-case err
                   (let ((window (get-buffer-window buffer)))
                     (kill-buffer buffer)
