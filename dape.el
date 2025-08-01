@@ -1259,16 +1259,18 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
            (goto-char (posn-point start))
            (call-interactively ',command))))))
 
-(defmacro dape--buffer-map (name fn &rest body)
-  "Helper macro to create info buffer map with NAME.
-FN is executed on mouse-2 and \\r, BODY is executed with `map' bound."
+(defmacro dape--buffer-map (name fn &rest bindings)
+  "Helper macro to create a keymap named NAME for an info buffer.
+FN is bound to RET, mouse 2 and BINDINGS is a plist of (KEY FN) pairs
+which is bound on map."
   (declare (indent defun))
   `(defvar ,name
      (let ((map (make-sparse-keymap)))
        (define-key map "\r" #',fn)
        (define-key map [mouse-2] #',fn)
        (define-key map [follow-link] 'mouse-face)
-       ,@body
+       ,@(cl-loop for (key f) on bindings by 'cddr
+                  collect `(define-key map ,key ,f))
        map)))
 
 (defmacro dape--command-at-line (name properties doc &rest body)
@@ -1286,10 +1288,10 @@ them then executes BODY."
          ,@(mapcar (lambda (property)
                      `(setq ,property (get-text-property (point) ',property)))
                    properties))
-       (if (and ,@properties)
+       (if (or ,@properties)
            (progn
              ,@body)
-         (error "Not recognized as %s line" ',name)))))
+         (user-error "Command `%s' not available at point" ',name)))))
 
 (defun dape--emacs-grab-focus ()
   "If `display-graphic-p' focus Emacs."
@@ -3687,19 +3689,37 @@ buffers get displayed and how they are grouped."
   (revert-buffer)
   (run-hooks 'dape-update-ui-hook))
 
-(dape--command-at-line dape-info-breakpoint-goto (dape--info-breakpoint)
-  "Goto breakpoint at line in dape info buffer."
-  (with-selected-window
-      (display-buffer
-       (or (dape--breakpoint-buffer dape--info-breakpoint)
-           (find-file-noselect (dape--breakpoint-path dape--info-breakpoint)))
-       dape-display-source-buffer-action)
-    (goto-char (point-min))
-    (forward-line (1- (dape--breakpoint-line dape--info-breakpoint)))))
+(dape--command-at-line dape-info-breakpoint-dwim (dape--info-breakpoint
+                                                  dape--info-exception)
+  "Toggle exception or goto breakpoint in info buffer."
+  (cond (dape--info-breakpoint
+         (with-selected-window
+             (display-buffer
+              (or (dape--breakpoint-buffer dape--info-breakpoint)
+                  (find-file-noselect (dape--breakpoint-path dape--info-breakpoint)))
+              dape-display-source-buffer-action)
+           (goto-char (point-min))
+           (forward-line (1- (dape--breakpoint-line dape--info-breakpoint)))))
+        (dape--info-exception
+         (plist-put dape--info-exception :enabled
+                    (not (plist-get dape--info-exception :enabled)))
+         (dolist (conn (dape--live-connections))
+           (dape--set-exception-breakpoints conn))
+         (revert-buffer)
+         (run-hooks 'dape-update-ui-hook))))
 
-(dape--command-at-line dape-info-breakpoint-delete (dape--info-breakpoint)
-  "Delete breakpoint at line in dape info buffer."
-  (dape--breakpoint-remove dape--info-breakpoint)
+
+(dape--command-at-line dape-info-breakpoint-delete (dape--info-breakpoint
+                                                    dape--info-data-breakpoint)
+  "Delete breakpoint at line in info buffer."
+  (cond (dape--info-breakpoint
+         (dape--breakpoint-remove dape--info-breakpoint))
+        (dape--info-data-breakpoint
+         (setq dape--data-breakpoints
+               (delq dape--info-data-breakpoint
+                     dape--data-breakpoints))
+         (when-let* ((conn (dape--live-connection 'stopped t)))
+           (dape--with-request (dape--set-data-breakpoints conn)))))
   (revert-buffer)
   (run-hooks 'dape-update-ui-hook))
 
@@ -3719,34 +3739,10 @@ buffers get displayed and how they are grouped."
                           (_ (user-error "Unable to edit breakpoint on line \
 without log or expression breakpoint"))))))
 
-(dape--buffer-map dape-info-breakpoints-line-map dape-info-breakpoint-goto
-  (define-key map "D" #'dape-info-breakpoint-disable)
-  (define-key map "d" #'dape-info-breakpoint-delete)
-  (define-key map "e" #'dape-info-breakpoint-log-edit))
-
-(dape--command-at-line dape-info-data-breakpoint-delete (dape--info-data-breakpoint)
-  "Delete data breakpoint at line in info buffer."
-  (setq dape--data-breakpoints
-        (delq dape--info-data-breakpoint
-              dape--data-breakpoints))
-  (when-let* ((conn (dape--live-connection 'stopped t)))
-    (dape--with-request (dape--set-data-breakpoints conn)))
-  (revert-buffer)
-  (run-hooks 'dape-update-ui-hook))
-
-(dape--buffer-map dape-info-data-breakpoints-line-map nil
-  (define-key map "d" #'dape-info-data-breakpoint-delete))
-
-(dape--command-at-line dape-info-exceptions-toggle (dape--info-exception)
-  "Toggle exception at line in dape info buffer."
-  (plist-put dape--info-exception :enabled
-             (not (plist-get dape--info-exception :enabled)))
-  (dolist (conn (dape--live-connections))
-    (dape--set-exception-breakpoints conn))
-  (revert-buffer)
-  (run-hooks 'dape-update-ui-hook))
-
-(dape--buffer-map dape-info-exceptions-line-map dape-info-exceptions-toggle)
+(dape--buffer-map dape-info-breakpoints-mode-map dape-info-breakpoint-dwim
+  "D" #'dape-info-breakpoint-disable
+  "d" #'dape-info-breakpoint-delete
+  "e" #'dape-info-breakpoint-log-edit)
 
 (define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
   "Major mode for Dape info breakpoints."
@@ -3771,8 +3767,7 @@ without log or expression breakpoint"))))))
                          (plist-get plist :accessType)
                          (when-let* ((data-id (plist-get plist :dataId)))
                            (format "(%s)" data-id))))
-                (list 'dape--info-data-breakpoint plist
-                      'keymap dape-info-data-breakpoints-line-map)))
+                (list 'dape--info-data-breakpoint plist)))
       (cl-loop for breakpoint in dape--breakpoints
                for line = (dape--breakpoint-line breakpoint)
                for verified-plist = (dape--breakpoint-verified breakpoint)
@@ -3811,7 +3806,6 @@ without log or expression breakpoint"))))))
                   (when-let* ((path (dape--breakpoint-path breakpoint)))
                     (dape--format-file-line path line))))
                 `( dape--info-breakpoint ,breakpoint
-                   keymap ,dape-info-breakpoints-line-map
                    mouse-face highlight
                    help-echo "mouse-2, RET: visit breakpoint"
                    ,@(unless verified-p '(font-lock-face shadow)))))
@@ -3823,7 +3817,6 @@ without log or expression breakpoint"))))))
                       (format "%s" (plist-get exception :label)))
                 (list 'dape--info-exception exception
                       'mouse-face 'highlight
-                      'keymap dape-info-exceptions-line-map
                       'help-echo "mouse-2, RET: toggle exception")))
       (insert (gdb-table-string table " ")))))
 
@@ -3850,7 +3843,7 @@ without log or expression breakpoint"))))))
             (" \\(started\\)"  (1 font-lock-string-face))))
   "Keywords for `dape-info-threads-mode'.")
 
-(dape--buffer-map dape-info-threads-line-map dape-info-select-thread
+(dape--buffer-map dape-info-threads-mode-map dape-info-select-thread
   ;; TODO Add bindings for individual threads.
   )
 
@@ -3946,7 +3939,6 @@ See `dape-request' for expected CB signature."
                  'dape--info-thread thread
                  'dape--selected (eq current-thread thread)
                  'mouse-face 'highlight
-                 'keymap dape-info-threads-line-map
                  'help-echo "mouse-2, RET: select thread")))
          finally do
          (dape--info-update-with
@@ -3985,10 +3977,10 @@ See `dape-request' for expected CB signature."
       (dape-disassemble ref)
     (user-error "No address for frame")))
 
-(dape--buffer-map dape-info-stack-line-map dape-info-stack-select
-  (define-key map "m" #'dape-info-stack-memory)
-  (define-key map "M" #'dape-info-stack-disassemble)
-  (define-key map "D" #'dape-info-stack-disassemble))
+(dape--buffer-map dape-info-stack-mode-map dape-info-stack-select
+  "m" #'dape-info-stack-memory
+  "M" #'dape-info-stack-disassemble
+  "D" #'dape-info-stack-disassemble)
 
 (define-derived-mode dape-info-stack-mode dape-info-parent-mode "Stack"
   "Major mode for Dape info stack."
@@ -4025,7 +4017,6 @@ current buffer with CONN config."
             (list 'dape--info-frame frame
                   'dape--selected (eq current-stack-frame frame)
                   'mouse-face 'highlight
-                  'keymap dape-info-stack-line-map
                   'help-echo "mouse-2, RET: select frame"))
            finally do
            (insert (gdb-table-string table " "))
@@ -4078,7 +4069,7 @@ current buffer with CONN config."
           (pop-to-buffer (marker-buffer marker))
         (user-error "Unable to open module")))))
 
-(dape--buffer-map dape-info-module-line-map dape-info-modules-goto)
+(dape--buffer-map dape-info-module-mode-map dape-info-modules-goto)
 
 (define-derived-mode dape-info-modules-mode dape-info-parent-mode "Modules"
   "Major mode for Dape info modules."
@@ -4108,11 +4099,9 @@ current buffer with CONN config."
                   (when-let* ((address-range (plist-get module :addressRange)))
                     (concat " at " address-range nil))
                   " "))
-                (list
-                 'dape--info-module module
-                 'mouse-face 'highlight
-                 'help-echo (format "mouse-2: goto module")
-                 'keymap dape-info-module-line-map))
+                (list 'dape--info-module module
+                      'mouse-face 'highlight
+                      'help-echo (format "mouse-2: goto module")))
                finally (insert (gdb-table-string table " "))))))
 
 
@@ -4128,7 +4117,7 @@ current buffer with CONN config."
           (pop-to-buffer (marker-buffer marker))
         (user-error "Unable to get source")))))
 
-(dape--buffer-map dape-info-sources-line-map dape-info-sources-goto)
+(dape--buffer-map dape-info-sources-mode-map dape-info-sources-goto)
 
 (define-derived-mode dape-info-sources-mode dape-info-parent-mode "Sources"
   "Major mode for Dape info sources."
@@ -4151,7 +4140,6 @@ current buffer with CONN config."
                 table (list (concat (plist-get source :name) " "))
                 (list 'dape--info-source source
                       'mouse-face 'highlight
-                      'keymap dape-info-sources-line-map
                       'help-echo "mouse-2, RET: goto source"))
                finally (insert (gdb-table-string table " "))))))
 
@@ -4593,8 +4581,7 @@ See `dape--info-buffer-index' for information on INDEX."
     (dape--repl-make-region-string
      (buffer-substring (point-min) (point-max))
      (apply-partially #'dape--repl-info-string mode index)
-     (when (memq mode '(dape-info-watch-mode dape-info-scope-mode))
-       dape-info-variable-map))))
+     (symbol-value (derived-mode-map-name mode)))))
 
 (defun dape--repl-insert-info-buffer (mode &optional index)
   "Insert content of MODE info buffer into repl.
