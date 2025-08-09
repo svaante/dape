@@ -3994,7 +3994,7 @@ See `dape-request' for expected CB signature."
 (dape--command-at-line dape-info-stack-disassemble (dape--info-frame)
   "View disassemble at address of frame."
   (if-let* ((address (plist-get dape--info-frame :instructionPointerReference)))
-      (dape-disassemble address t)
+      (dape-disassemble address)
     (user-error "No address for frame")))
 
 (dape--buffer-map dape-info-stack-mode-map dape-info-stack-select
