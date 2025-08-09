@@ -5003,7 +5003,7 @@ This is a helper function for `dape-inlay-hints-update'."
   "Run until point.
 CONN is inferred for interactive invocations."
   (interactive (list (or (dape--live-connection 'stopped t)
-                         (dape--live-connection 'parent t))))
+                         (dape--live-connection 'parent))))
   (if (cl-member 'until (dape--breakpoints-at-point)
                  :key #'dape--breakpoint-type)
       (dape-breakpoint-remove-at-point)
