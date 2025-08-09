@@ -3016,16 +3016,16 @@ of memory read."
                                     (define-key map [mouse-1] mouse-1-def)
                                     map))))))
       (let ((ov (apply #'make-overlay (dape--overlay-region)))
-            (disabled-face (when disabled 'shadow)))
+            (disabled-face-p (when disabled 'shadow)))
         (overlay-put ov 'modification-hooks '(dape--breakpoint-freeze))
         (overlay-put ov 'category 'dape-breakpoint)
         (overlay-put ov 'window t)
         (pcase type
           ('log
-           (after-string ov "Log" (or disabled-face 'dape-log-face)
+           (after-string ov "Log" (or disabled-face-p 'dape-log-face)
                          "edit log message" #'dape-mouse-breakpoint-log))
           ('expression
-           (after-string ov "Cond" (or disabled-face 'dape-expression-face)
+           (after-string ov "Cond" (or disabled-face-p 'dape-expression-face)
                          "edit break condition" #'dape-mouse-breakpoint-expression))
           ('hits
            (after-string ov "Hits" 'dape-hits-face
@@ -3033,7 +3033,9 @@ of memory read."
           (_
            (overlay-put ov 'before-string
                         (dape--indicator dape-breakpoint-margin-string 'breakpoint
-                                         (or disabled-face 'dape-breakpoint-face)))))
+                                         (or (and (eq type 'until) 'font-lock-doc-face)
+                                             disabled-face-p
+                                             'dape-breakpoint-face)))))
         (setf overlay ov)))))
 
 (dape--mouse-command dape-mouse-breakpoint-toggle
@@ -3795,6 +3797,7 @@ without log or expression breakpoint"))))))
                    ('log        "Log  ")
                    ('hits       "Hits ")
                    ('expression "Cond ")
+                   ('until      "Until")
                    (_           "Break"))
                  (or
                   ;; If buffer live, display part of the line
@@ -3976,8 +3979,8 @@ See `dape-request' for expected CB signature."
 
 (dape--command-at-line dape-info-stack-disassemble (dape--info-frame)
   "View disassemble at address of frame."
-  (if-let* ((ref (plist-get dape--info-frame :instructionPointerReference)))
-      (dape-disassemble ref)
+  (if-let* ((address (plist-get dape--info-frame :instructionPointerReference)))
+      (dape-disassemble address t)
     (user-error "No address for frame")))
 
 (dape--buffer-map dape-info-stack-mode-map dape-info-stack-select
@@ -4980,34 +4983,37 @@ Update `dape--inlay-hint-overlays' from SCOPES."
 
 ;;; Run until point
 
-(defvar dape--until-breakpoints nil)
-
 (defun dape-until (conn)
   "Run until point.
 CONN is inferred for interactive invocations."
   (interactive (list (or (dape--live-connection 'stopped t)
-                         (dape--live-connection 'last))))
-  (let (;; Block to ensure breakpoints changes before continue
-        (dape--request-blocking t))
-    ;; Disable all non disabled breakpoints temporarily
-    (cl-loop for breakpoint in dape--breakpoints
-             unless (dape--breakpoint-disabled breakpoint)
-             do (dape--breakpoint-disable breakpoint 'until)
-             finally do (dape--breakpoints-update))
-    ;; Bookkeeping - store run to point breakpoint
-    (push (dape-breakpoint-toggle) dape--until-breakpoints))
-  (when (dape--stopped-threads conn)
-    (dape-continue conn)))
+                         (dape--live-connection 'parent t))))
+  (if (cl-member 'until (dape--breakpoints-at-point)
+                 :key #'dape--breakpoint-type)
+      (dape-breakpoint-remove-at-point)
+    (let (;; Block to ensure breakpoints changes before continue
+          (dape--request-blocking t))
+      ;; Disable all non disabled breakpoints temporarily
+      (cl-loop for breakpoint in dape--breakpoints
+               unless (or (dape--breakpoint-disabled breakpoint)
+                          (eq (dape--breakpoint-type breakpoint) 'until))
+               do (dape--breakpoint-disable breakpoint 'until)
+               finally do (dape--breakpoints-update))
+      (when-let* ((breakpoint (dape--breakpoint-place 'until)))
+        ;; Bookkeeping - store until breakpoint
+        (when (dape--stopped-threads conn)
+          (dape-continue conn))))))
 
 (defun dape--until-reset ()
   "Reset until state."
   (cl-loop for breakpoint in dape--breakpoints
+           ;; Remove all `until' breakpoints
+           when (eq (dape--breakpoint-type breakpoint) 'until)
+           do (dape--breakpoint-remove breakpoint)
+           ;; ..and re-enable breakpoints disabled
            when (eq (dape--breakpoint-disabled breakpoint) 'until)
            do (dape--breakpoint-disable breakpoint nil)
-           finally do (dape--breakpoints-update))
-  (cl-loop for breakpoint in dape--until-breakpoints
-           when breakpoint do (dape--breakpoint-remove breakpoint)
-           finally do (setq dape--until-breakpoints nil)))
+           finally (dape--breakpoints-update)))
 
 (add-hook 'dape-active-mode-hook #'dape--until-reset)
 (add-hook 'dape-stopped-hook #'dape--until-reset)
