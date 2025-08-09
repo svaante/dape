@@ -2654,7 +2654,7 @@ CONN is inferred by either last stopped or last created connection."
     (cond
      (error
       (if (string-empty-p error)
-          (dape--warn "Failed to evaluate %S" (substring-no-properties expression))
+          (dape--warn "Failed to evaluate `%s'" (substring-no-properties expression))
         (dape--repl-insert-error (concat (string-trim-right error) "\n"))))
      ((and (get-buffer "*dape-repl*")
            (numberp variablesReference)
@@ -4919,7 +4919,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
             when value collect
             (concat
              (propertize
-              (format "%s:" symbol)
+              (format "%s :" symbol)
               'face 'dape-inlay-hint-face
               'mouse-face 'highlight
               'keymap
