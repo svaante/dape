@@ -2610,29 +2610,31 @@ With prefix argument stack is selected by index."
   (interactive (list (dape--live-connection 'stopped) 1))
   (dape-stack-select-up conn (* n -1)))
 
-(defun dape-watch-dwim (expression &optional no-add no-remove display)
-  "Toggle a watch for EXPRESSION in the debugger.
+(defun dape-watch-dwim (expressions &optional no-add no-remove display)
+  "Toggle a watch for EXPRESSIONS in the debugger.
 If NO-ADD is non nil only allow removal of an existing watch.
 If NO-REMOVE is non nil only allow adding a new watch.
 If DISPLAY is non nil display the watch buffer."
   (interactive
-   (list (string-trim
-          (completing-read
-           "Watch or unwatch symbol or expression: "
+   (list (mapcar
+          #'string-trim
+          (completing-read-multiple
+           "Watch or unwatch symbol(s) or expression: "
            (mapcar (lambda (plist) (plist-get plist :name)) dape--watched)
            nil nil nil nil
            (or (and (region-active-p)
                     (buffer-substring (region-beginning) (region-end)))
                (thing-at-point 'symbol))))
          nil nil t))
-  (if-let* ((watched
-             (cl-find expression dape--watched
-                      :key (lambda (plist) (plist-get plist :name))
-                      :test #'equal)))
-      (unless no-remove
-        (setq dape--watched (cl-delete watched dape--watched)))
-    (unless no-add
-      (push (list :name expression) dape--watched)))
+  (dolist (expression expressions)
+    (if-let* ((watched
+               (cl-find expression dape--watched
+                        :key (lambda (plist) (plist-get plist :name))
+                        :test #'equal)))
+        (unless no-remove
+          (setq dape--watched (cl-delete watched dape--watched)))
+      (unless no-add
+        (push (list :name expression) dape--watched))))
   (when display
     (dape--display-buffer (dape--info-get-buffer-create 'dape-info-watch-mode)))
   (run-hooks 'dape-update-ui-hook))
@@ -4172,8 +4174,8 @@ current buffer with CONN config."
 
 (dape--command-at-line dape-info-scope-watch-dwim (dape--info-variable)
   "Watch variable or remove from watch at line in dape info buffer."
-  (dape-watch-dwim (or (plist-get dape--info-variable :evaluateName)
-                       (plist-get dape--info-variable :name))
+  (dape-watch-dwim `(,(or (plist-get dape--info-variable :evaluateName)
+                          (plist-get dape--info-variable :name)))
                    (eq major-mode 'dape-info-watch-mode)
                    (eq major-mode 'dape-info-scope-mode))
   (revert-buffer))
@@ -4758,7 +4760,7 @@ If INDEX is non nil parse into number and show n+1th scope."
   "List watched variables in *dape-repl* buffer.
 If EXPRESSIONS is non blank add or remove expression to watch list."
   (when expressions
-    (dape-watch-dwim (string-join expressions " ")))
+    (dape-watch-dwim `(,(string-join expressions " "))))
   (dape--repl-insert-info-buffer 'dape-info-watch-mode))
 
 (define-derived-mode dape-repl-mode comint-mode "REPL"
@@ -4928,7 +4930,7 @@ Update `dape--inlay-hint-overlays' from SCOPES."
                 (define-key map [mouse-1]
                             (lambda ()
                               (interactive)
-                              (dape-watch-dwim sym nil t t)))
+                              (dape-watch-dwim `(,sym) nil t t)))
                 map)
               'help-echo
               (format "mouse-1: add `%s' to watch" symbol))
