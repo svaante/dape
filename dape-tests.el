@@ -354,8 +354,7 @@ Expects line with string \"breakpoint\" in source."
          "b = B()"
          "pass # breakpoint")))
     ;; setup watched vars
-    (dape-watch-dwim "a")
-    (dape-watch-dwim "b")
+    (dape-watch-dwim '("a" "b"))
     ;; set breakpoint
     (with-current-buffer main-buffer
       (let ((line (dape-test--line-at-regex "breakpoint")))
