@@ -3482,6 +3482,8 @@ Buffer is displayed with `dape-display-source-buffer-action'."
 
 (defvar dape--info-buffers nil "List containing `dape-info' buffers.")
 
+(defvar dape--info-buffer-display-history nil "History list in (MODE INDEX).")
+
 (defun dape--info-buffer-list ()
   "Return all live `dape-info-parent-mode'."
   (setq dape--info-buffers
@@ -3516,6 +3518,7 @@ REVERSED selects previous."
                                                    (not (dape--info-buffer-p mode index))))
                                  (cadr))
                     (car dape--info-buffer-related))))
+    (push `(,mode ,index) dape--info-buffer-display-history)
     (gdb-set-window-buffer (dape--info-get-buffer-create mode index) t)))
 
 (defvar dape-info-parent-mode-map
@@ -3569,6 +3572,7 @@ with HELP-ECHO string, MOUSE-FACE and FACE."
              (let ((buffer
                     (dape--info-get-buffer-create mode index)))
                (with-current-buffer buffer (revert-buffer))
+               (push `(,mode ,index) dape--info-buffer-display-history)
                (gdb-set-window-buffer buffer t)))))
         (map (make-sparse-keymap)))
     (define-key map (vector 'header-line 'mouse-1) command)
@@ -3658,7 +3662,19 @@ buffers get displayed and how they are grouped."
              (setq buffer-displayed-p t)
              (dape--display-buffer
               (apply #'dape--info-get-buffer-create
-                     (ensure-list (car group)))))
+                     (or
+                      ;; Try to re-create the last window setup
+                      (cl-find-if
+                       (pcase-lambda (`(,hist-mode ,hist-index))
+                         (cl-some
+                          (pcase-lambda (`(,spec-mode ,spec-index))
+                            (and (eq hist-mode spec-mode)
+                                 (eq hist-index spec-index)))
+                          group
+                          :key #'ensure-list))
+                       dape--info-buffer-display-history)
+                      ;; ...or fallback to car if no history
+                      (ensure-list (car group))))))
     (when (and maybe-kill (not buffer-displayed-p))
       (cl-loop for buffer in (dape--info-buffer-list)
                do (kill-buffer buffer)))
