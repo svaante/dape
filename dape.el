@@ -3666,10 +3666,11 @@ buffers get displayed and how they are grouped."
                       ;; Try to re-create the last window setup
                       (cl-find-if
                        (pcase-lambda (`(,hist-mode ,hist-index))
-                         (cl-some
+                         (cl-find-if
                           (pcase-lambda (`(,spec-mode ,spec-index))
                             (and (eq hist-mode spec-mode)
-                                 (eq hist-index spec-index)))
+                                 (or (not spec-index)
+                                     (eq hist-index spec-index))))
                           group
                           :key #'ensure-list))
                        dape--info-buffer-display-history)
