@@ -3542,16 +3542,20 @@ Each buffers store its own debounce context."
 Creates header with string NAME, mouse map to select buffer
 identified with MODE and INDEX (see `dape--info-buffer-index')
 with HELP-ECHO string, MOUSE-FACE and FACE."
-  (propertize name 'help-echo help-echo 'mouse-face mouse-face 'face face
-              'keymap
-              (gdb-make-header-line-mouse-map
-	       'mouse-1
-	       (lambda (event) (interactive "e")
-		 (save-selected-window
-		   (select-window (posn-window (event-start event)))
-                   (let ((buffer (dape--info-get-buffer-create mode index)))
-                     (with-current-buffer buffer (revert-buffer))
-                     (gdb-set-window-buffer buffer t)))))))
+  (let ((command
+         (lambda (event)
+           (interactive "e")
+           (save-selected-window
+             (select-window (posn-window (event-start event)))
+             (let ((buffer
+                    (dape--info-get-buffer-create mode index)))
+               (with-current-buffer buffer (revert-buffer))
+               (gdb-set-window-buffer buffer t)))))
+        (map (make-sparse-keymap)))
+    (define-key map (vector 'header-line 'mouse-1) command)
+    (define-key map (vector 'header-line 'down-mouse-1) command)
+    (propertize name 'help-echo help-echo 'mouse-face mouse-face 'face face
+                'keymap map)))
 
 (defun dape--info-call-update-with (fn)
   "Helper for `dape--info-revert' functions.
