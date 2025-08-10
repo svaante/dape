@@ -4996,7 +4996,7 @@ This is a helper function for `dape-inlay-hints-update'."
       (let ((responses 0))
         (dolist (scope scopes)
           (dape--with-request (dape--variables connection scope)
-            (when (length= scopes (incf responses))
+            (when (length= scopes (cl-incf responses))
               ;; Update each overlay with the new variables
               (dape--inlay-hint-update-overlay-contents scopes))))))))
 
