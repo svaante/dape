@@ -1492,8 +1492,8 @@ If `dape--request-blocking' is non nil do blocking request."
                          (or (plist-get result :message) ""))))
             (timeout-fn ()
               (dape--warn
-               "Command %S timed out after %d seconds, the \
-timeout period is configurable with `dape-request-timeout'"
+               "Command %S timed out after %d seconds (see \
+`dape-request-timeout')"
                command
                dape-request-timeout)
               (funcall cb nil dape--timeout-error)))
