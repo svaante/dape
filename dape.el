@@ -2906,9 +2906,14 @@ of memory read."
   "View disassemble of instructions at ADDRESS."
   (interactive
    (list (string-trim
-          (read-string "Address: " nil nil
-                       (when-let* ((number (thing-at-point 'number)))
-                         (format "0x%08x" number))))))
+          (read-string
+           "Address: " nil nil
+           `(,@(when-let* ((number (thing-at-point 'number)))
+                 (list (format "0x%08x" number)))
+             ,@(when-let* ((conn (dape--live-connection 'stopped t))
+                           (address (plist-get (dape--current-stack-frame conn)
+                                               :instructionPointerReference)))
+                 (list address)))))))
   (if-let* ((conn (dape--live-connection 'stopped))
             ((not (dape--capable-p conn :supportsDisassembleRequest))))
       (user-error "Adapter does not support disassemble")
