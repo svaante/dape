@@ -4374,10 +4374,10 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 
 ;;; Info watch buffer
 
-(defvaralias 'dape-info-watch-mode-line-map 'dape-info-scope-mode-line-map)
+(defvar dape-info-watch-mode-line-map (copy-keymap dape-info-scope-mode-line-map))
 
 (defvar dape-info-watch-mode-map
-  (let ((map (make-composed-keymap nil dape-info-watch-mode-line-map)))
+  (let ((map (make-composed-keymap dape-info-watch-mode-line-map)))
     (define-key map "\C-x\C-q" #'dape-info-watch-edit-mode)
     map)
   "Local keymap for dape watch buffer.")
