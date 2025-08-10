@@ -3525,7 +3525,7 @@ Each buffers store its own debounce context."
           (cl-call-next-method))))))
 
 (define-derived-mode dape-info-parent-mode special-mode ""
-  "Generic mode to derive all other Dape gud buffer modes from."
+  "Generic mode to derive all other info buffer modes from."
   :interactive nil
   (setq-local buffer-read-only t
               truncate-lines t
@@ -3743,10 +3743,13 @@ buffers get displayed and how they are grouped."
                           (_ (user-error "Unable to edit breakpoint on line \
 without log or expression breakpoint"))))))
 
-(dape--buffer-map dape-info-breakpoints-mode-map dape-info-breakpoint-dwim
+(dape--buffer-map dape-info-breakpoints-mode-line-map dape-info-breakpoint-dwim
   "D" #'dape-info-breakpoint-disable
   "d" #'dape-info-breakpoint-delete
   "e" #'dape-info-breakpoint-log-edit)
+
+(defvar dape-info-breakpoints-mode-map
+  (copy-keymap dape-info-breakpoints-mode-line-map))
 
 (define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
   "Major mode for Dape info breakpoints."
@@ -3849,9 +3852,12 @@ without log or expression breakpoint"))))))
             (" \\(started\\)"  (1 font-lock-string-face))))
   "Keywords for `dape-info-threads-mode'.")
 
-(dape--buffer-map dape-info-threads-mode-map dape-info-select-thread
+(dape--buffer-map dape-info-threads-mode-line-map dape-info-select-thread
   ;; TODO Add bindings for individual threads.
   )
+
+(defvar dape-info-threads-mode-map
+  (copy-keymap dape-info-threads-mode-line-map))
 
 (defun dape--info-threads-stack-info (conn cb)
   "Populate stack frame info for CONNs threads.
@@ -3983,10 +3989,12 @@ See `dape-request' for expected CB signature."
       (dape-disassemble address)
     (user-error "No address for frame")))
 
-(dape--buffer-map dape-info-stack-mode-map dape-info-stack-select
+(dape--buffer-map dape-info-stack-mode-line-map dape-info-stack-select
   "m" #'dape-info-stack-memory
   "M" #'dape-info-stack-disassemble
   "D" #'dape-info-stack-disassemble)
+
+(defvar dape-info-stack-mode-map (copy-keymap dape-info-stack-mode-line-map))
 
 (define-derived-mode dape-info-stack-mode dape-info-parent-mode "Stack"
   "Major mode for Dape info stack."
@@ -4075,7 +4083,10 @@ current buffer with CONN config."
           (pop-to-buffer (marker-buffer marker))
         (user-error "Unable to open module")))))
 
-(dape--buffer-map dape-info-module-mode-map dape-info-modules-goto)
+(dape--buffer-map dape-info-modules-mode-line-map dape-info-modules-goto)
+
+(defvar dape-info-modules-mode-map
+  (copy-keymap dape-info-modules-mode-line-map))
 
 (define-derived-mode dape-info-modules-mode dape-info-parent-mode "Modules"
   "Major mode for Dape info modules."
@@ -4123,7 +4134,10 @@ current buffer with CONN config."
           (pop-to-buffer (marker-buffer marker))
         (user-error "Unable to get source")))))
 
-(dape--buffer-map dape-info-sources-mode-map dape-info-sources-goto)
+(dape--buffer-map dape-info-sources-mode-line-map dape-info-sources-goto)
+
+(defvar dape-info-sources-mode-map
+  (copy-keymap dape-info-sources-mode-line-map))
 
 (define-derived-mode dape-info-sources-mode dape-info-parent-mode "Sources"
   "Major mode for Dape info sources."
@@ -4227,18 +4241,17 @@ current buffer with CONN config."
            (dape--info-get-buffer-create 'dape-info-breakpoints-mode))
           (run-hooks 'dape-update-ui-hook))))))
 
-(defvar dape-info-variable-map
+(defvar dape-info-scope-mode-line-map
   (let ((map (make-sparse-keymap)))
     (define-key map "e" #'dape-info-scope-toggle)
     (define-key map "W" #'dape-info-scope-watch-dwim)
     (define-key map "=" #'dape-info-variable-edit)
     (define-key map "b" #'dape-info-scope-data-breakpoint)
     map)
-  "Keymap for buffers or regions displaying variables.")
+  "Keymap for buffers displaying variables.")
 
 (defvar dape-info-scope-mode-map
-  (make-composed-keymap dape-info-variable-map dape-info-parent-mode-map)
-  "Local keymap for dape scope buffers.")
+  (copy-keymap dape-info-scope-mode-line-map))
 
 (defun dape--info-locals-table-columns-list (alist)
   "Format and arrange the columns in locals display based on ALIST."
@@ -4361,8 +4374,10 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 
 ;;; Info watch buffer
 
+(defvaralias 'dape-info-watch-mode-line-map 'dape-info-scope-mode-line-map)
+
 (defvar dape-info-watch-mode-map
-  (let ((map (make-composed-keymap nil dape-info-scope-mode-map)))
+  (let ((map (make-composed-keymap nil dape-info-watch-mode-line-map)))
     (define-key map "\C-x\C-q" #'dape-info-watch-edit-mode)
     map)
   "Local keymap for dape watch buffer.")
@@ -4572,7 +4587,7 @@ The search is done backwards from POINT.  The line is marked with
     (dape--info-scope-add-variable table variable nil '(repl) #'dape--variable-expanded-p)
     (dape--repl-make-region-string (gdb-table-string table " ")
                                    (apply-partially #'dape--repl-variable variable)
-                                   dape-info-variable-map)))
+                                   dape-info-scope-mode-line-map)))
 
 (defun dape--repl-info-string (mode index)
   "Return info MODE buffer content as string.
@@ -4583,11 +4598,11 @@ See `dape--info-buffer-index' for information on INDEX."
     (let ((dape-ui-debounce-time 0)
           (dape--request-blocking t))
       (revert-buffer))
-    (font-lock-ensure)
+    (ignore-errors (font-lock-ensure))
     (dape--repl-make-region-string
      (buffer-substring (point-min) (point-max))
      (apply-partially #'dape--repl-info-string mode index)
-     (symbol-value (derived-mode-map-name mode)))))
+     (symbol-value (intern (concat (symbol-name mode) "-line-map"))))))
 
 (defun dape--repl-insert-info-buffer (mode &optional index)
   "Insert content of MODE info buffer into repl.
