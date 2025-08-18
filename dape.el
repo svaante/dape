@@ -3550,7 +3550,6 @@ Each buffers store its own debounce context."
   "Generic mode to derive all other info buffer modes from."
   :interactive nil
   (setq-local buffer-read-only t
-              truncate-lines t
               cursor-in-non-selected-windows nil
               revert-buffer-function #'dape--info-revert
               dape--info-debounce-timer (timer-create))
@@ -4375,7 +4374,8 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
   "Major mode for Dape info scope."
   :interactive nil
-  (setq dape--info-buffer-index 0)
+  (setq dape--info-buffer-index 0
+        truncate-lines t)
   (dape--info-update-with (insert "No scope information available.")))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-scope-mode))
@@ -4423,7 +4423,8 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 
 (define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"
   "Major mode for Dape info watch."
-  :interactive nil)
+  :interactive nil
+  (setq truncate-lines t))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
