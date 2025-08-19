@@ -2861,7 +2861,7 @@ If REUSE-BUFFER is non nil reuse the current buffer to display result
 of memory read."
   (interactive
    (list (string-trim
-          (read-string "Address: " nil nil
+          (read-string "View memory at address: " nil nil
                        (when-let* ((number (thing-at-point 'number)))
                          (format "0x%08x" number))))))
   (let ((conn (dape--live-connection 'stopped)))
@@ -2907,7 +2907,7 @@ of memory read."
   (interactive
    (list (string-trim
           (read-string
-           "Address: " nil nil
+           "Disassemble at address: " nil nil
            `(,@(when-let* ((number (thing-at-point 'number)))
                  (list (format "0x%08x" number)))
              ,@(when-let* ((conn (dape--live-connection 'stopped t))
