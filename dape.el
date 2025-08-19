@@ -3885,10 +3885,12 @@ without log or expression breakpoint"))))))
   (revert-buffer))
 
 (defvar dape--info-threads-font-lock-keywords
-  (append gdb-threads-font-lock-keywords
-          '((" \\(unknown\\)"  (1 font-lock-warning-face))
-            (" \\(exited\\)"  (1 font-lock-warning-face))
-            (" \\(started\\)"  (1 font-lock-string-face))))
+  '(("in \\([^ ^(]+\\)"  (1 font-lock-function-name-face))
+    (" \\(unknown\\)"  (1 font-lock-warning-face))
+    (" \\(stopped\\)"  (1 font-lock-warning-face))
+    (" \\(exited\\)"  (1 font-lock-warning-face))
+    (" \\(running\\)"  (1 font-lock-string-face))
+    (" \\(started\\)"  (1 font-lock-string-face)))
   "Keywords for `dape-info-threads-mode'.")
 
 (dape--buffer-map dape-info-threads-mode-line-map dape-info-select-thread
@@ -4007,7 +4009,7 @@ See `dape-request' for expected CB signature."
   "`dape-info-stack-mode' marker for `overlay-arrow-variable-list'.")
 
 (defvar dape--info-stack-font-lock-keywords
-  '(("^[ 0-9]+ \\([^ ]+\\)"  (1 font-lock-function-name-face)))
+  '(("^[ 0-9]+ \\([^ ^(]+\\)"  (1 font-lock-function-name-face)))
   "Font lock keywords used in `gdb-frames-mode'.")
 
 (dape--command-at-line dape-info-stack-select (dape--info-frame)
