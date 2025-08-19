@@ -3792,7 +3792,8 @@ without log or expression breakpoint"))))))
 
 (define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
   "Major mode for Dape info breakpoints."
-  :interactive nil)
+  :interactive nil
+  (setq truncate-lines t))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-breakpoints-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
@@ -3848,8 +3849,13 @@ without log or expression breakpoint"))))))
                      (if-let* ((file (buffer-file-name buffer)))
                          (dape--format-file-line file line)
                        (format "%s:%d" (buffer-name buffer) line))
-                     (dape--with-line buffer line
-                       (concat " " (string-trim (or (thing-at-point 'line) ""))))))
+                     (concat
+                      " "
+                      (thread-first
+                        (dape--with-line buffer line
+                          (or (thing-at-point 'line) ""))
+                        (string-trim-right)
+                        (truncate-string-to-width 80 nil nil t)))))
                   ;; Otherwise just show path:line
                   (when-let* ((path (dape--breakpoint-path breakpoint)))
                     (dape--format-file-line path line))))
