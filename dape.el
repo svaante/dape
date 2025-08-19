@@ -653,7 +653,7 @@ left-to-right display order of the properties."
   "Show module information in stack buffer if adapter supports it."
   :type 'boolean)
 
-(defcustom dape-info-stack-buffer-addresses nil
+(defcustom dape-info-stack-buffer-addresses t
   "Show frame addresses in stack buffer."
   :type 'boolean)
 
@@ -3536,6 +3536,7 @@ Each buffers store its own debounce context."
   "Generic mode to derive all other info buffer modes from."
   :interactive nil
   (setq-local buffer-read-only t
+              truncate-lines t
               cursor-in-non-selected-windows nil
               revert-buffer-function #'dape--info-revert
               dape--info-debounce-timer (timer-create))
@@ -3778,8 +3779,7 @@ without log or expression breakpoint"))))))
 
 (define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
   "Major mode for Dape info breakpoints."
-  :interactive nil
-  (setq truncate-lines t))
+  :interactive nil)
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-breakpoints-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
@@ -3932,6 +3932,7 @@ See `dape-request' for expected CB signature."
   "Major mode for dape info threads."
   :interactive nil
   (setq font-lock-defaults '(dape--info-threads-font-lock-keywords)
+        truncate-lines nil
         dape--info-thread-position (make-marker))
   (add-to-list 'overlay-arrow-variable-list 'dape--info-thread-position))
 
@@ -4368,8 +4369,7 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
   "Major mode for Dape info scope."
   :interactive nil
-  (setq dape--info-buffer-index 0
-        truncate-lines t)
+  (setq dape--info-buffer-index 0)
   (dape--info-update-with (insert "No scope information available.")))
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-scope-mode))
@@ -4417,8 +4417,7 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
 
 (define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"
   "Major mode for Dape info watch."
-  :interactive nil
-  (setq truncate-lines t))
+  :interactive nil)
 
 (cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-mode))
                                           &optional _ignore-auto _noconfirm _preserve-modes)
