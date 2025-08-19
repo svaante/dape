@@ -641,7 +641,7 @@ left-to-right display order of the properties."
   "Show file information or library names in threads buffer."
   :type 'boolean)
 
-(defcustom dape-info-thread-buffer-addresses t
+(defcustom dape-info-thread-buffer-addresses nil
   "Show addresses for thread frames in threads buffer."
   :type 'boolean)
 
@@ -653,7 +653,7 @@ left-to-right display order of the properties."
   "Show module information in stack buffer if adapter supports it."
   :type 'boolean)
 
-(defcustom dape-info-stack-buffer-addresses t
+(defcustom dape-info-stack-buffer-addresses nil
   "Show frame addresses in stack buffer."
   :type 'boolean)
 
