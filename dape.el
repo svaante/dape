@@ -2619,7 +2619,7 @@ If DISPLAY is non nil display the watch buffer."
    (list (mapcar
           #'string-trim
           (completing-read-multiple
-           "Watch or unwatch symbol(s) or expression: "
+           "Watch or unwatch symbol(s) or expression(s): "
            (mapcar (lambda (plist) (plist-get plist :name)) dape--watched)
            nil nil nil nil
            (or (and (region-active-p)
