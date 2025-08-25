@@ -5104,15 +5104,18 @@ CONN is inferred for interactive invocations."
           (dape-continue conn))))))
 
 (defun dape--until-reset ()
-  "Reset until state."
-  (cl-loop for breakpoint in dape--breakpoints
+  "Reset run until point state."
+  (cl-loop with update-required-p
+           for breakpoint in dape--breakpoints
            ;; Remove all `until' breakpoints
            when (eq (dape--breakpoint-type breakpoint) 'until)
            do (dape--breakpoint-remove breakpoint)
-           ;; ..and re-enable breakpoints disabled
+           ;; ...and re-enable disabled breakpoints
            when (eq (dape--breakpoint-disabled breakpoint) 'until)
-           do (dape--breakpoint-disable breakpoint nil)
-           finally (dape--breakpoints-update)))
+           do
+           (setq update-required-p t)
+           (dape--breakpoint-disable breakpoint nil)
+           finally (when update-required-p (dape--breakpoints-update))))
 
 (add-hook 'dape-active-mode-hook #'dape--until-reset)
 (add-hook 'dape-stopped-hook #'dape--until-reset)
