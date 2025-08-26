@@ -1300,6 +1300,29 @@ them then executes BODY."
   "If `display-graphic-p' focus Emacs."
   (select-frame-set-input-focus (selected-frame)))
 
+(define-minor-mode dape-many-windows
+  "Display complex window layout if t and simple if nil.
+The mode modifies `dape-start-hook' to remove or add the complex
+layout for future debugging sessions."
+  :global t
+  :init-value t
+  ;; Add or remove info buffers from `buffer-list' and hooks, based on
+  ;; `dape-many-windows'.
+  (if dape-many-windows
+      (progn (add-hook 'dape-start-hook #'dape-info)
+             (dape-info nil))
+    (remove-hook 'dape-start-hook #'dape-info)
+    (cl-loop for buffer in (dape--info-buffer-list)
+             for window = (get-buffer-window buffer)
+             when window do (quit-window t window)))
+  ;; And make sure that Shell and Repl is displayed
+  (when-let* ((buffer (get-buffer "*dape-shell*")))
+    (dape--display-buffer buffer))
+  (when-let* ((buffer (get-buffer "*dape-repl*"))
+              (window (get-buffer-window buffer)))
+    (quit-window nil window))
+  (dape-repl))
+
 
 ;;; Connection
 
