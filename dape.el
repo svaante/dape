@@ -1443,9 +1443,8 @@ See `dape--connection-selected'."
       message
     (with-slots (last-id n-sent-notifs) conn
       (cond ((eq subtype 'notification)
-             (cl-incf n-sent-notifs)
              `( :type "event"
-                :seq ,(+ last-id n-sent-notifs)
+                :seq ,(+ last-id (cl-incf n-sent-notifs))
                 :event ,method
                 :body ,params))
             ((eq subtype 'request)
