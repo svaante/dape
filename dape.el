@@ -2817,7 +2817,7 @@ Using BUFFER and STR."
                 (delete-region (match-beginning 0) (match-end 0))
                 ;; `hexl' does not support address over 8 hex chars
                 (insert (append (substring address (- (length address) 8)))))))
-          (replace-region-contents (point-min) (point-max) temp-buffer)
+          (replace-region-contents (point-min) (point-max) (lambda () temp-buffer))
           (when buffer-empty-p (hexl-goto-address 0))
           (kill-buffer temp-buffer))
         (set-buffer-modified-p nil)
