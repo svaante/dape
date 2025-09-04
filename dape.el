@@ -5457,26 +5457,27 @@ Completes from suggested conjurations, a configuration is suggested if
 it's for current `major-mode' and it's available.
 See `modes' and `ensure' in `dape-configs'."
   (let* ((suggested-configs
-          (cl-loop for (key . config) in dape-configs
+          (cl-loop for (name . config) in dape-configs
                    when (and (dape--config-mode-p config)
                              (dape--config-ensure config))
-                   collect (dape--config-to-string key nil)))
+                   collect (symbol-name name)))
          (initial-contents
           (or
            ;; Take `dape-command' if exist
            (when dape-command
              (dape--config-to-string (car dape-command) (cdr dape-command)))
            ;; Take first valid history item
-           (seq-find (lambda (str)
-                       (ignore-errors
-                         (thread-first (dape--config-from-string str)
-                                       (car)
-                                       (dape--config-to-string nil)
-                                       (member suggested-configs))))
-                     dape-history)
+           (cl-loop for string in dape-history
+                    for (_ config) = (ignore-errors
+                                       (dape--config-from-string string))
+                    when (and config
+                              (dape--config-mode-p config)
+                              (dape--config-ensure config))
+                    return string)
            ;; Take first suggested config if only one exist
-           (and (length= suggested-configs 1)
-                (car suggested-configs))))
+           (when (and (length= suggested-configs 1)
+                      (car suggested-configs))
+             suggested-configs)))
          (default-value
           (when initial-contents
             (pcase-let ((`(,key ,config)
