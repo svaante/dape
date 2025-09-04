@@ -2049,20 +2049,24 @@ BODY is an plist of adapter capabilities."
 Update `dape--breakpoints' according to BODY."
   (when-let* ((update (plist-get body :breakpoint))
               (id (plist-get update :id)))
-    ;; Until `:reason' gets properly speced, try to infer update
-    ;; intention, would prefer `pcase' on `:reason'.
-    (if-let* ((breakpoint
-               (cl-find id dape--breakpoints
-                        :key (lambda (breakpoint)
-                               (plist-get (dape--breakpoint-id breakpoint) conn)))))
-        (dape--breakpoint-update conn breakpoint update)
-      (unless (equal (plist-get body :reason) "removed")
+    (let ((breakpoint
+           (cl-find id dape--breakpoints
+                    :key (lambda (breakpoint)
+                           (plist-get (dape--breakpoint-id breakpoint) conn)))))
+      (cond
+       (breakpoint
+        (dape--breakpoint-update conn breakpoint update))
+       ((not (equal (plist-get body :reason) "removed"))
         (dape--with-request (dape--source-ensure conn update)
           (when-let* ((marker (dape--object-to-marker conn update)))
             (dape--with-line (marker-buffer marker) (plist-get update :line)
-              (dape--message "Creating breakpoint in %s:%d"
-                             (buffer-name) (plist-get update :line))
-              (dape--breakpoint-place))))))))
+              (if-let* ((breakpoints (dape--breakpoints-at-point)))
+                  (dape-breakpoint-remove-at-point 'skip-update)
+                (dape--message "Creating breakpoint in %s:%d"
+                               (buffer-name) (plist-get update :line)))
+              (dape--breakpoint-update
+               conn (dape--breakpoint-place nil nil 'skip-update)
+               update)))))))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql module)) body)
   "Handle adapter CONNs module events.
@@ -3203,22 +3207,20 @@ If FROM-RESTART is non nil keep id and verified."
            else do
            (dape--breakpoint-remove breakpoint)))
 
-(defun dape--breakpoint-place (&optional type value)
+(defun dape--breakpoint-place (&optional type value skip-update)
   "Place breakpoint at current line.
-Valid values for TYPE is nil, `log', `expression' and `hits'.
-If TYPE is non nil VALUE is expected to be an string.
-If there are breakpoints at current line remove those breakpoints from
-`dape--breakpoints'.  Updates all breakpoints in all known connections."
+TYPE is expected to be nil, `log', `expression', `hits', or `until'.
+If TYPE is `log', `expression', or `hits', VALUE should be a string.
+Unless SKIP-UPDATE is non-nil, push changes to all connections.
+Note: removes existing breakpoints at the line before placing."
   (unless (derived-mode-p 'prog-mode)
     (user-error "Trying to set breakpoint in none `prog-mode' buffer"))
-  ;; Remove breakpoints at line
   (dape-breakpoint-remove-at-point 'skip-update)
-  ;; Create breakpoint
   (let ((breakpoint (dape--breakpoint-make :type type :value value)))
     (dape--breakpoint-set-overlay breakpoint)
     (push breakpoint dape--breakpoints)
-    ;; ...and push to adapter
-    (dape--breakpoint-broadcast-update (current-buffer))
+    (unless skip-update
+      (dape--breakpoint-broadcast-update (current-buffer)))
     breakpoint))
 
 (defun dape--breakpoint-delete-overlay (breakpoint)
