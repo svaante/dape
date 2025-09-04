@@ -3373,10 +3373,10 @@ See `dape-request' for expected CB signature."
          (refrence (plist-get source :sourceReference))
          (buffer (plist-get dape--source-buffers refrence)))
     (cond
-     ((or (and (stringp path) (file-exists-p (dape--path-local conn path)) path)
+     ((or (and (stringp path) (file-exists-p (dape--path-local conn path)))
           (and (buffer-live-p buffer) buffer))
       (dape--request-continue cb))
-     ((and (numberp refrence) (< 0 refrence) refrence)
+     ((and (numberp refrence) (< 0 refrence))
       (dape--with-request-bind
           ((&key content mimeType &allow-other-keys) error)
           (dape-request conn :source
