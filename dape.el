@@ -1150,7 +1150,7 @@ as is."
               (tramp-file-name-user parts)
               (tramp-file-name-host parts)
               "")))
-        (dape--message "Remote connection detected, setting prefix-local to %S"
+        (dape--message "Remote connection detected, setting `prefix-local' to %S"
                        prefix-local)
         (plist-put config 'prefix-local prefix-local)))
     (when (and (plist-get config 'command)
@@ -1158,7 +1158,7 @@ as is."
                (not (plist-get config 'host))
                (equal (tramp-file-name-method parts) "ssh"))
       (let ((host (file-remote-p default-directory 'host)))
-        (dape--message "Remote connection detected, setting host to %S" host)
+        (dape--message "Remote connection detected, setting `host' to %S" host)
         (plist-put config 'host host))))
   config)
 
