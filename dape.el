@@ -5120,10 +5120,9 @@ CONN is inferred for interactive invocations."
                           (eq (dape--breakpoint-type breakpoint) 'until))
                do (dape--breakpoint-disable breakpoint 'until)
                finally do (dape--breakpoints-update))
-      (when-let* ((breakpoint (dape--breakpoint-place 'until)))
-        ;; Bookkeeping - store until breakpoint
-        (when (dape--stopped-threads conn)
-          (dape-continue conn))))))
+      (dape--breakpoint-place 'until)
+      (when (dape--stopped-threads conn)
+        (dape-continue conn)))))
 
 (defun dape--until-reset ()
   "Reset run until point state."
