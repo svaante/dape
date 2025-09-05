@@ -1674,23 +1674,21 @@ See `dape-request' for expected CB signature."
 The exceptions are derived from `dape--exceptions'.
 See `dape-request' for expected CB signature."
   (setq dape--exceptions
-        (cl-map 'list
-                (lambda (exception)
-                  (let ((stored-exception
-                         (seq-find (lambda (stored-exception)
-                                     (equal (plist-get exception :filter)
-                                            (plist-get stored-exception :filter)))
-                                   dape--exceptions)))
-                    (cond
-                     (stored-exception
-                      (plist-put exception :enabled
-                                 (plist-get stored-exception :enabled)))
-                     ;; new exception
-                     (t
-                      (plist-put exception :enabled
-                                 (eq (plist-get exception :default) t))))))
-                (plist-get (dape--capabilities conn)
-                           :exceptionBreakpointFilters)))
+        (cl-map
+         'list
+         (lambda (exception)
+           (if-let* ((stored-exception
+                      (cl-find (plist-get exception :filter)
+                               dape--exceptions
+                               :key (lambda (ex) (plist-get ex :filter))
+                               :test #'equal)))
+               ;; Exception is known, store old value
+               (plist-put exception :enabled
+                          (plist-get stored-exception :enabled))
+             ;; New exception use default
+             (plist-put exception :enabled
+                        (eq (plist-get exception :default) t))))
+         (plist-get (dape--capabilities conn) :exceptionBreakpointFilters)))
   (dape--with-request (dape--set-exception-breakpoints conn)
     (run-hooks 'dape-update-ui-hook)
     (dape--request-continue cb)))
