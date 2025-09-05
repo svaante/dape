@@ -1071,6 +1071,22 @@ Note requires `dape--source-ensure' if source is by reference."
           (forward-char (1- column))))
       (point-marker))))
 
+(defvar-local dape--original-margin nil
+  "Bookkeeping for buffer margin width.")
+
+(defun dape--indicator (string bitmap face)
+  "Return indicator string in margin (STRING) or fringe (BITMAP).
+The indicator is `propertize'd with with FACE."
+  (if (and (window-system)
+           (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
+      (propertize " " 'display `(left-fringe ,bitmap ,face))
+    (setq-local dape--original-margin (or dape--original-margin
+                                          left-margin-width)
+                left-margin-width 2)
+    (set-window-margins (selected-window) left-margin-width)
+    (propertize " " 'display
+                `((margin left-margin) ,(propertize string 'face face)))))
+
 (defun dape--default-cwd ()
   "Try to guess current project absolute file path with `project'."
   (or (when-let* ((project (project-current)))
@@ -3129,22 +3145,6 @@ Used as an hook on `find-file-hook'."
                (dape--breakpoint-set-overlay breakpoint))
              (run-hooks 'dape-update-ui-hook)))
   (dape--breakpoint-maybe-remove-ff-hook))
-
-(defvar-local dape--original-margin nil
-  "Bookkeeping for buffer margin width.")
-
-(defun dape--indicator (string bitmap face)
-  "Return indicator string in margin (STRING) or fringe (BITMAP).
-The indicator is `propertize'd with with FACE."
-  (if (and (window-system)
-           (not (eql (frame-parameter (selected-frame) 'left-fringe) 0)))
-      (propertize " " 'display `(left-fringe ,bitmap ,face))
-    (setq-local dape--original-margin (or dape--original-margin
-                                          left-margin-width)
-                left-margin-width 2)
-    (set-window-margins (selected-window) left-margin-width)
-    (propertize " " 'display `((margin left-margin)
-                               ,(propertize string 'face face)))))
 
 (defun dape--breakpoint-freeze (overlay _after _begin _end &optional _len)
   "Make sure that OVERLAY region covers line."
