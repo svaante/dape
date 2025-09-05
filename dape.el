@@ -3365,44 +3365,48 @@ Will use `dape-default-breakpoints-file' if FILE is nil."
 
 ;;; Source buffers
 
+(defun dape--source-make-buffer (name reference content mime-type)
+  "Make source buffer from REFERENCE.
+Created from NAME, MIME-TYPE, REFERENCE and CONTENT."
+  (let ((buffer (generate-new-buffer (format "*dape-source %s*" name))))
+    (setq dape--source-buffers
+          (plist-put dape--source-buffers reference buffer))
+    (with-current-buffer buffer
+      (when mime-type
+        (if-let* ((mode (cdr (assoc mime-type dape-mime-mode-alist))))
+            (unless (eq major-mode mode)
+              (funcall mode))
+          (message "Unknown mime type %s, see `dape-mime-mode-alist'"
+                   mime-type)))
+      (setq buffer-read-only t)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert content))
+      (goto-char (point-min)))))
+
 (defun dape--source-ensure (conn plist cb)
   "Ensure that source object in PLIST exist for adapter CONN.
 See `dape-request' for expected CB signature."
   (let* ((source (plist-get plist :source))
          (path (plist-get source :path))
-         (refrence (plist-get source :sourceReference))
-         (buffer (plist-get dape--source-buffers refrence)))
+         (reference (plist-get source :sourceReference))
+         (buffer (plist-get dape--source-buffers reference)))
     (cond
      ((or (and (stringp path) (file-exists-p (dape--path-local conn path)))
-          (and (buffer-live-p buffer) buffer))
+          (and (buffer-live-p buffer)))
       (dape--request-continue cb))
-     ((and (numberp refrence) (< 0 refrence))
+     ((and (numberp reference)
+           (< 0 reference))
       (dape--with-request-bind
           ((&key content mimeType &allow-other-keys) error)
           (dape-request conn :source
-                        (list :source source :sourceReference refrence))
-        (cond (error (dape--warn "%s" error))
+                        (list :source source :sourceReference reference))
+        (cond (error
+               (dape--warn "%s" error))
               (content
-               (let ((buffer
-                      (generate-new-buffer
-                       (format "*dape-source %s*" (plist-get source :name)))))
-                 (setq dape--source-buffers
-                       (plist-put dape--source-buffers
-                                  (plist-get source :sourceReference) buffer))
-                 (with-current-buffer buffer
-                   (when mimeType
-                     (if-let* ((mode
-                                (alist-get mimeType dape-mime-mode-alist nil nil #'equal)))
-                         (unless (eq major-mode mode)
-                           (funcall mode))
-                       (message "Unknown mime type %s, see `dape-mime-mode-alist'"
-                                mimeType)))
-                   (setq buffer-read-only t)
-                   (let ((inhibit-read-only t))
-                     (erase-buffer)
-                     (insert content))
-                   (goto-char (point-min)))
-                 (dape--request-continue cb)))))))))
+               (dape--source-make-buffer (plist-get source :name)
+                                         reference content mimeType)
+               (dape--request-continue cb))))))))
 
 
 ;;; Stack frame source
