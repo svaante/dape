@@ -1095,7 +1095,8 @@ The indicator is `propertize'd with with FACE."
     (setq-local dape--original-margin (or dape--original-margin
                                           left-margin-width)
                 left-margin-width 2)
-    (set-window-margins (selected-window) left-margin-width)
+    (when-let* ((window (get-buffer-window (current-buffer))))
+      (set-window-margins window left-margin-width))
     (propertize " " 'display
                 `((margin left-margin) ,(propertize string 'face face)))))
 
