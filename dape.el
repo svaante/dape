@@ -3834,8 +3834,8 @@ without log or expression breakpoint"))))))
   "Major mode for Dape info breakpoints."
   :interactive nil)
 
-(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-breakpoints-mode))
-                                          &optional _ignore-auto _noconfirm _preserve-modes)
+(cl-defmethod dape--info-revert (&context (major-mode dape-info-breakpoints-mode)
+                                          &rest _)
   "Revert buffer function for MAJOR-MODE `dape-info-breakpoints-mode'."
   (dape--info-update-with
     (let ((table (make-gdb-table))
@@ -3990,8 +3990,8 @@ See `dape-request' for expected CB signature."
         dape--info-thread-position (make-marker))
   (add-to-list 'overlay-arrow-variable-list 'dape--info-thread-position))
 
-(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-threads-mode))
-                                          &optional _ignore-auto _noconfirm _preserve-modes)
+(cl-defmethod dape--info-revert (&context (major-mode dape-info-threads-mode)
+                                          &rest _)
   "Revert buffer function for MAJOR-MODE `dape-info-threads-mode'."
   (if-let* ((conn (dape--live-connection 'last t))
             ((dape--threads conn)))
@@ -4125,8 +4125,8 @@ current buffer with CONN config."
            (when selected-line
              (gdb-mark-line selected-line dape--info-stack-position))))
 
-(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-stack-mode))
-                                          &optional _ignore-auto _noconfirm _preserve-modes)
+(cl-defmethod dape--info-revert (&context (major-mode dape-info-stack-mode)
+                                          &rest _)
   "Revert buffer function for MAJOR-MODE `dape-info-stack-mode'."
   (let* ((conn (or (dape--live-connection 'stopped t t)
                    (dape--live-connection 'last t t)))
@@ -4183,8 +4183,8 @@ current buffer with CONN config."
   (dape--info-update-with
     (insert "No modules available.")))
 
-(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-modules-mode))
-                                          &optional _ignore-auto _noconfirm _preserve-modes)
+(cl-defmethod dape--info-revert (&context (major-mode dape-info-modules-mode)
+                                          &rest _)
   "Revert buffer function for MAJOR-MODE `dape-info-modules-mode'."
   ;; Use last connection if current is dead
   (when-let* ((conn (or (dape--live-connection 'stopped t)
@@ -4233,8 +4233,8 @@ current buffer with CONN config."
   (dape--info-update-with
     (insert "No sources available.")))
 
-(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-sources-mode))
-                                          &optional _ignore-auto _noconfirm _preserve-modes)
+(cl-defmethod dape--info-revert (&context (major-mode dape-info-sources-mode)
+                                          &rest _)
   "Revert buffer function for MAJOR-MODE `dape-info-sources-mode'."
   ;; Use last connection if current is dead
   (when-let* ((conn (or (dape--live-connection 'stopped t)
@@ -4426,8 +4426,8 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
   (setq dape--info-buffer-index 0)
   (dape--info-update-with (insert "No scope information available.")))
 
-(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-scope-mode))
-                                          &optional _ignore-auto _noconfirm _preserve-modes)
+(cl-defmethod dape--info-revert (&context (major-mode dape-info-scope-mode)
+                                          &rest _)
   "Revert buffer function for MAJOR-MODE `dape-info-scope-mode'."
   (when-let* ((conn (or (dape--live-connection 'stopped t)
                         (dape--live-connection 'last t)))
@@ -4473,8 +4473,8 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
   "Major mode for Dape info watch."
   :interactive nil)
 
-(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-mode))
-                                          &optional _ignore-auto _noconfirm _preserve-modes)
+(cl-defmethod dape--info-revert (&context (major-mode dape-info-watch-mode)
+                                          &rest _)
   "Revert buffer function for MAJOR-MODE `dape-info-watch-mode'."
   (let ((conn (dape--live-connection 'stopped t)))
     (cond
@@ -4547,8 +4547,8 @@ or \\[dape-info-watch-abort-changes] to abort changes"))
   (dape--info-set-related-buffers)
   (revert-buffer))
 
-(cl-defmethod dape--info-revert (&context (major-mode (eql dape-info-watch-edit-mode))
-                                          &optional _ignore-auto _noconfirm _preserve-modes)
+(cl-defmethod dape--info-revert (&context (major-mode dape-info-watch-edit-mode)
+                                          &rest _)
   "Revert buffer function for MAJOR-MODE `dape-info-watch-edit-mode'."
   (dape--info-update-with
     (cl-loop for watch in dape--watched
