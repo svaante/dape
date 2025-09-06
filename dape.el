@@ -1011,42 +1011,39 @@ by `dape--threads-make-update-handle'."
                   (eq (plist-get thread :id) (dape--thread-id conn)))
                 (dape--threads conn))))
 
-(defun dape--file-name-1 (conn filename format)
-  "Return translate absolute FILENAME in FORMAT from CONN.
-Accepted FORMAT values are local and remote.
+(defun dape--file-name-1 (conn filename remote-p)
+  "Return FILENAME path with prefix substitution applied.
+The substitution is configured by CONN or last known connection.
+If REMOTE-P is non-nil, translate from local to adapter format.
+Otherwise, translate from adapter to local format.
 See `dape-configs' symbols prefix-local prefix-remote."
-  (if-let* (;; Fallback to last connection
-            (config (dape--config (or conn dape--connection)))
-            ;; If neither `prefix-local' or `prefix-remote' is set there is
-            ;; no work to be done
-            ((or (plist-member config 'prefix-local)
+  (if-let* ((config (dape--config (or conn dape--connection)))
+            (;; Skip if no prefixes configured
+             (or (plist-member config 'prefix-local)
                  (plist-member config 'prefix-remote)))
-            (absolute-file
-             ;; `command-cwd' is always set in `dape--launch-or-attach'
-             (let ((command-cwd (plist-get config 'command-cwd)))
-               (expand-file-name filename
-                                 (pcase format
-                                   ('local (tramp-file-local-name command-cwd))
-                                   ('remote command-cwd)))))
+            (;; Is set in `dape--launch-or-attach'
+             command-cwd (plist-get config 'command-cwd))
+            (expanded-file
+             (expand-file-name filename
+                               (if remote-p
+                                   (tramp-file-local-name command-cwd)
+                                 command-cwd)))
             (prefix-local (or (plist-get config 'prefix-local) ""))
             (prefix-remote (or (plist-get config 'prefix-remote) ""))
-            (mapping (pcase format
-                       ('local (cons prefix-remote prefix-local))
-                       ('remote (cons prefix-local prefix-remote))
-                       (_ (error "Unknown format"))))
-            ;; Substitute prefix if there is an match or nil
-            ((string-prefix-p (car mapping) absolute-file)))
-      (concat (cdr mapping)
-              (string-remove-prefix (car mapping) absolute-file))
+            (from-prefix (if remote-p prefix-local prefix-remote))
+            (to-prefix (if remote-p prefix-remote prefix-local))
+            (;; Substitute if there is a match or `from-prefix' is ""
+             (string-prefix-p from-prefix expanded-file)))
+      (concat to-prefix (string-remove-prefix from-prefix expanded-file))
     filename))
 
 (defun dape--file-name-local (conn filename)
-  "Return translate FILENAME to local format by CONN.
+  "Return FILENAME string for `find-file' configured by CONN.
 See `dape--file-name-1'."
-  (dape--file-name-1 conn filename 'local))
+  (dape--file-name-1 conn filename nil))
 
 (defun dape--file-name-remote (conn filename)
-  "Return translate FILENAME to remote format by CONN.
+  "Return FILENAME string for adapter configured by CONN.
 See `dape--file-name-1'."
   (dape--file-name-1 conn filename 'remote))
 
