@@ -2950,6 +2950,7 @@ of memory read."
 
 (define-derived-mode dape-disassemble-mode asm-mode "Disassemble"
   :interactive nil
+  ;; TODO Add support for :SetInstructionBreakpoints
   (setq-local dape--disassemble-overlay-arrow (make-marker)
               dape-stepping-granularity 'instruction))
 
@@ -2964,8 +2965,9 @@ of memory read."
                       'dape-disassemble-mode)
              do (with-current-buffer buffer (revert-buffer)))))
 
-(defun dape-disassemble (address)
-  "View disassemble of instructions at ADDRESS."
+(defun dape-disassemble (address &optional display-p)
+  "View disassemble of instructions at ADDRESS.
+If DISPLAY-P is non nil, display buffer."
   (interactive
    (list (string-trim
           (read-string
@@ -2975,7 +2977,8 @@ of memory read."
              ,@(when-let* ((conn (dape--live-connection 'stopped t))
                            (address (plist-get (dape--current-stack-frame conn)
                                                :instructionPointerReference)))
-                 (list address)))))))
+                 (list address)))))
+         t))
   (if-let* ((conn (dape--live-connection 'stopped))
             ((not (dape--capable-p conn :supportsDisassembleRequest))))
       (user-error "Adapter does not support disassemble")
@@ -3031,10 +3034,12 @@ of memory read."
              'dape--disassemble-instruction instruction)))
           (setq-local revert-buffer-function
                       (lambda (&rest _) (dape-disassemble address)))
-          (select-window (display-buffer (current-buffer)))
+          (when (or display-p (marker-position dape--disassemble-overlay-arrow))
+            (select-window (display-buffer (current-buffer))))
           (goto-char (or (marker-position dape--disassemble-overlay-arrow)
                          (point-min)))
-          (run-hooks 'dape-display-source-hook))))))
+          (when (marker-position dape--disassemble-overlay-arrow)
+            (run-hooks 'dape-display-source-hook)))))))
 
 
 ;;; Breakpoints
