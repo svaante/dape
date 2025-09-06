@@ -1472,7 +1472,7 @@ See `dape--connection-selected'."
 
 (cl-defstruct (dape--breakpoint (:constructor dape--breakpoint-make))
   "Breakpoint object storing location and state."
-  overlay path-line type value disabled hits verified id)
+  location type value disabled hits verified id)
 
 (cl-defmethod jsonrpc-convert-to-endpoint ((conn dape-connection)
                                            message subtype)
@@ -1628,7 +1628,7 @@ If `dape--request-blocking' is non nil do blocking request."
 
 (defun dape--set-breakpoints-in-source (conn source &optional cb)
   "Set breakpoints in SOURCE for adapter CONN.
-SOURCE is expected to be buffer or name of file.
+SOURCE is expected to be buffer or file name string.
 See `dape-request' for expected CB signature."
   (cl-flet
       ((objectify (breakpoint)
@@ -3042,24 +3042,34 @@ of memory read."
 ;;; Breakpoints
 
 (defun dape--breakpoint-buffer (breakpoint)
-  "Return a buffer visiting BREAKPOINT if one exist."
-  (when-let* ((overlay (dape--breakpoint-overlay breakpoint)))
+  "Return buffer visiting BREAKPOINT if exists."
+  (when-let* ((overlay (dape--breakpoint-location breakpoint))
+              ((overlayp overlay)))
     (overlay-buffer overlay)))
 
-(defun dape--breakpoint-path (breakpoint)
-  "Return path for BREAKPOINT if one exist."
-  (with-slots (overlay path-line) breakpoint
-    (if overlay
-        (buffer-file-name (overlay-buffer overlay))
-      (car path-line))))
+(defun dape--breakpoint-file-name (breakpoint)
+  "Return file name for BREAKPOINT."
+  (let ((location (dape--breakpoint-location breakpoint)))
+    (cond ((overlayp location)
+           (buffer-file-name (overlay-buffer location)))
+          ((consp location)
+           (car location)))))
 
 (defun dape--breakpoint-line (breakpoint)
-  "Return line for BREAKPOINT."
-  (with-slots (overlay path-line) breakpoint
-    (if overlay
-        (with-current-buffer (overlay-buffer overlay)
-          (line-number-at-pos (overlay-start overlay)))
-      (cdr path-line))))
+  "Return line number for BREAKPOINT."
+  (let ((location (dape--breakpoint-location breakpoint)))
+    (cond ((overlayp location)
+           (with-current-buffer (overlay-buffer location)
+             (line-number-at-pos (overlay-start location))))
+          ((consp location)
+           (cdr location)))))
+
+(defun dape--breakpoint-source (breakpoint)
+  "Return the source of BREAKPOINT.
+Source is either a buffer or file name."
+  (if-let* ((buffer (dape--breakpoint-buffer breakpoint)))
+      buffer
+    (dape--breakpoint-file-name breakpoint)))
 
 (defun dape--breakpoints-in-buffer ()
   "Return list of breakpoints in current buffer."
@@ -3120,7 +3130,7 @@ of memory read."
                        dape-breakpoint-margin-string
                        'breakpoint
                        (or disabled-face 'dape-breakpoint-face))))))
-    (setf (dape--breakpoint-overlay breakpoint) ov)))
+    (setf (dape--breakpoint-location breakpoint) ov)))
 
 (dape--mouse-command dape-mouse-breakpoint-toggle
   "Toggle breakpoint at current line."
@@ -3168,8 +3178,9 @@ of memory read."
 Called as a hook in `find-file-hook'."
   (when-let* ((buffer-file-name (buffer-file-name)))
     (cl-loop for breakpoint in dape--breakpoints
-             for (path . line) = (dape--breakpoint-path-line breakpoint)
-             when (and (equal buffer-file-name path) line)
+             for filename = (dape--breakpoint-file-name breakpoint)
+             for line = (dape--breakpoint-line breakpoint)
+             when (and (equal buffer-file-name filename) line)
              do (dape--with-line (current-buffer) line
                   (dape--breakpoint-make-overlay breakpoint)
                   (run-hooks 'dape-update-ui-hook))))
@@ -3214,9 +3225,10 @@ If KEEP-STATE is non nil preserve ID and VERIFIED state."
   (let ((buffer-file-name (buffer-file-name (current-buffer))))
     (dolist (breakpoint (dape--breakpoints-in-buffer))
       (cond (buffer-file-name
-             (setf (dape--breakpoint-path-line breakpoint)
-                   `(,buffer-file-name . ,(dape--breakpoint-line breakpoint)))
-             (dape--breakpoint-delete-overlay breakpoint)
+             (let ((line (dape--breakpoint-line breakpoint)))
+               (dape--breakpoint-delete-overlay breakpoint)
+               (setf (dape--breakpoint-location breakpoint)
+                     `(,buffer-file-name . ,line)))
              (add-hook 'find-file-hook #'dape--breakpoint-find-file-hook))
             (t (dape--breakpoint-remove breakpoint))))))
 
@@ -3239,32 +3251,32 @@ Note: removes existing breakpoints at the line before placing."
 
 (defun dape--breakpoint-delete-overlay (breakpoint)
   "Delete overlay of BREAKPOINT and restore margin if needed."
-  (when-let* ((buffer (dape--breakpoint-buffer breakpoint)))
-    (with-current-buffer buffer
-      (when (and
-             ;; If margin has been touched
-             dape--original-margin
-             ;; ...and no breakpoints left in margin
-             (not (cl-some (lambda (bp)
-                             (let ((type (dape--breakpoint-type bp)))
-                               (or (not type) (eq 'until type))))
-                           (dape--breakpoints-in-buffer))))
-        ;; ...the margin should be reset
-        (setq-local left-margin-width dape--original-margin
-                    dape--original-margin nil)
-        (when-let* ((window (get-buffer-window buffer)))
-          (set-window-margins window
-                              left-margin-width right-margin-width)
-          (redisplay t)))))
-  (with-slots (overlay) breakpoint
-    (when overlay
+  (let ((overlay (dape--breakpoint-location breakpoint)))
+    (when-let* ((buffer (dape--breakpoint-buffer breakpoint)))
+      (with-current-buffer buffer
+        (when (and
+               ;; If margin has been touched
+               dape--original-margin
+               ;; ...and no breakpoints left in margin
+               (not (cl-some (lambda (bp)
+                               (let ((type (dape--breakpoint-type bp)))
+                                 (or (not type) (eq 'until type))))
+                             (dape--breakpoints-in-buffer))))
+          ;; ...the margin should be reset
+          (setq-local left-margin-width dape--original-margin
+                      dape--original-margin nil)
+          (when-let* ((window (get-buffer-window buffer)))
+            (set-window-margins window
+                                left-margin-width right-margin-width)
+            (redisplay t)))))
+    (when (overlayp overlay)
       (delete-overlay overlay))
-    (setf overlay nil)))
+    (setf (dape--breakpoint-location breakpoint) nil)))
 
 (defun dape--breakpoint-disable (breakpoint disabled)
   "Set BREAKPOINT overlay state to DISABLED."
   (setf (dape--breakpoint-disabled breakpoint) disabled)
-  (when-let* ((buffer (dape--breakpoint-source breakpoint))
+  (when-let* ((buffer (dape--breakpoint-buffer breakpoint))
               (line (dape--breakpoint-line breakpoint))
               ((bufferp buffer)))
     (dape--breakpoint-delete-overlay breakpoint)
@@ -3280,13 +3292,6 @@ If SKIP-NOTIFY is non nil, do not notify adapter about removal."
   (dape--breakpoint-delete-overlay breakpoint)
   (dape--breakpoint-maybe-remove-ff-hook)
   (run-hooks 'dape-update-ui-hook))
-
-(defun dape--breakpoint-source (breakpoint)
-  "Return the source of BREAKPOINT.
-The source is either a buffer or a file path."
-  (if-let* ((buffer (dape--breakpoint-buffer breakpoint)))
-      buffer
-    (dape--breakpoint-path breakpoint)))
 
 (defun dape--breakpoint-update (conn breakpoint update)
   "Update BREAKPOINT with UPDATE plist from CONN."
@@ -3311,68 +3316,67 @@ The source is either a buffer or a file path."
                 (pulse-momentary-highlight-region
                  (line-beginning-position) (line-beginning-position 2)
                  'next-error))
-            (setcdr (dape--breakpoint-path-line breakpoint) new-line))
+            (setcdr (dape--breakpoint-location breakpoint) new-line))
           (dape--breakpoint-notify-changes (dape--breakpoint-source breakpoint))
           (dape--message "Breakpoint in %s moved from line %s to %s"
                          (if buffer (buffer-name buffer)
-                           (dape--breakpoint-path breakpoint))
+                           (dape--breakpoint-file-name breakpoint))
                          line new-line)))))
   (run-hooks 'dape-update-ui-hook))
 
-(defun dape-breakpoint-load (&optional file)
+(defun dape-breakpoint-load (&optional filename)
   "Load breakpoints from FILE.
 All breakpoints will be removed before loading new ones.
 Will open buffers containing breakpoints.
-Will use `dape-default-breakpoints-file' if FILE is nil."
+Will use `dape-default-breakpoints-file' if FILENAME is nil."
   (interactive
    (list (read-file-name "Load breakpoints from file: ")))
-  (setq file (or file dape-default-breakpoints-file))
-  (when (file-exists-p file)
+  (setq filename (or filename dape-default-breakpoints-file))
+  (when (file-exists-p filename)
     (dape-breakpoint-remove-all)
     (let ((breakpoints
            (with-temp-buffer
-             (insert-file-contents file)
+             (insert-file-contents filename)
              (goto-char (point-min))
              (nreverse (read (current-buffer))))))
-      (cl-loop for (file line type value) in breakpoints
-               if (find-buffer-visiting file)
-               do (dape--with-line (find-file-noselect file) line
+      (cl-loop for (filename line type value) in breakpoints
+               if (find-buffer-visiting filename)
+               do (dape--with-line (find-file-noselect filename) line
                     (dape--breakpoint-place type value))
                else do
                (add-hook 'find-file-hook #'dape--breakpoint-find-file-hook)
-               (push (dape--breakpoint-make :path-line (cons file line)
+               (push (dape--breakpoint-make :location (cons filename line)
                                             :type type
                                             :value value)
                      dape--breakpoints))))
   (dape--breakpoint-notify-all))
 
-(defun dape-breakpoint-save (&optional file)
+(defun dape-breakpoint-save (&optional filename)
   "Save breakpoints to FILE.
-Will use `dape-default-breakpoints-file' if FILE is nil."
+Will use `dape-default-breakpoints-file' if FILENAME is nil."
   (interactive
    (list
     (read-file-name "Save breakpoints to file: ")))
-  (setq file (or file dape-default-breakpoints-file))
+  (setq filename (or filename dape-default-breakpoints-file))
   (with-temp-buffer
     (insert
      ";; Generated by `dape-breakpoint-save'\n"
      ";; Load breakpoints with `dape-breakpoint-load'\n\n")
     (cl-loop for breakpoint in dape--breakpoints
-             for path = (dape--breakpoint-path breakpoint)
-             when path collect
-             (list path
-                   (dape--breakpoint-line breakpoint)
-                   (dape--breakpoint-type breakpoint)
-                   (dape--breakpoint-value breakpoint))
+             for filename = (dape--breakpoint-file-name breakpoint)
+             when filename collect
+             `(,filename ,(dape--breakpoint-line breakpoint)
+                         ,(dape--breakpoint-type breakpoint)
+                         ,(dape--breakpoint-value breakpoint))
              into serialized finally do
              (prin1 serialized (current-buffer)))
     ;; Skip write if nothing has changed since last save
-    (unless (and (file-exists-p file)
+    (unless (and (file-exists-p filename)
                  (equal (buffer-string)
                         (with-temp-buffer
-                          (insert-file-contents file)
+                          (insert-file-contents filename)
                           (buffer-string))))
-      (write-region (point-min) (point-max) file nil
+      (write-region (point-min) (point-max) filename nil
                     (unless (called-interactively-p 'interactive) 'quiet)))))
 
 
@@ -3786,7 +3790,8 @@ buffers get displayed and how they are grouped."
          (with-selected-window
              (display-buffer
               (or (dape--breakpoint-buffer dape--info-breakpoint)
-                  (find-file-noselect (dape--breakpoint-path dape--info-breakpoint)))
+                  (find-file-noselect
+                   (dape--breakpoint-file-name dape--info-breakpoint)))
               dape-display-source-buffer-action)
            (goto-char (point-min))
            (forward-line (1- (dape--breakpoint-line dape--info-breakpoint)))))
@@ -3818,7 +3823,7 @@ buffers get displayed and how they are grouped."
   (with-selected-window
       (display-buffer
        (or (dape--breakpoint-buffer dape--info-breakpoint)
-           (find-file-noselect (dape--breakpoint-path dape--info-breakpoint)))
+           (find-file-noselect (dape--breakpoint-file-name dape--info-breakpoint)))
        dape-display-source-buffer-action)
     (goto-char (point-min))
     (forward-line (1- (dape--breakpoint-line dape--info-breakpoint)))
@@ -3902,9 +3907,10 @@ without log or expression breakpoint"))))))
                           (or (thing-at-point 'line) ""))
                         (string-trim-right)
                         (truncate-string-to-width 80 nil nil t)))))
-                  ;; Otherwise just show path:line
-                  (when-let* ((path (dape--breakpoint-path breakpoint)))
-                    (dape--format-file-line path line))))
+                  ;; Otherwise just show filename:line
+                  (when-let* ((filename
+                               (dape--breakpoint-file-name breakpoint)))
+                    (dape--format-file-line filename line))))
                 `( dape--info-breakpoint ,breakpoint
                    mouse-face highlight
                    help-echo "mouse-2, RET: visit breakpoint"
