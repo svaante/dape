@@ -1877,20 +1877,20 @@ See `dape-request' for expected CB signature."
                               :context context))
                 cb))
 
-(defun dape--set-variable (conn variable-reference variable value)
-  "Set VARIABLE to VALUE with VARIABLE-REFERENCE in for CONN.
-Calls setVariable endpoint if VARIABLE-REFERENCE is an number and
-setExpression if it's not.
-Runs the appropriate hooks on non error response."
+(defun dape--set-variable (conn reference variable value)
+  "Set VARIABLE to VALUE with REFERENCE in for CONN.
+Calls :setVariable endpoint if REFERENCE is an number and
+:setExpression if not.
+Runs the appropriate hooks on non error responses."
   (cond
-   ;; `variable' from an "variable" request
-   ((and (dape--capable-p conn :supportsSetVariable)
-         (numberp variable-reference))
+   (;; `variable' from :variable request - with reference
+    (and (dape--capable-p conn :supportsSetVariable)
+         (numberp reference))
     (dape--with-request-bind
         (body error)
         (dape-request
          conn :setVariable
-         (list :variablesReference variable-reference
+         (list :variablesReference reference
                :name (plist-get variable :name)
                :value value))
       (if error
@@ -1903,8 +1903,8 @@ Runs the appropriate hooks on non error response."
         (cl-loop for (key value) on body by 'cddr
                  do (plist-put variable key value))
         (run-hooks 'dape-update-ui-hook))))
-   ;; `variable' from an "evaluate" request
-   ((and (dape--capable-p conn :supportsSetExpression)
+   (;; `variable' from :evaluate request - w/o reference
+    (and (dape--capable-p conn :supportsSetExpression)
          (or (plist-get variable :evaluateName)
              (plist-get variable :name)))
     (dape--with-request-bind
@@ -1933,30 +1933,28 @@ See `dape-request' for expected CB signature."
         (dape--request-continue cb error))
     (dape--request-continue cb)))
 
-(defun dape--update (conn clear display)
+(defun dape--update (conn &optional invalidate display-source-p)
   "Update adapter CONN data and UI.
-CLEAR can be one of:
- `stack-frames': clear stack data for each thread.  This effects
-current selected stack frame.
- `variables': keep stack frame data but clear variables for each
-frame.
- nil: keep all available data.
-If DISPLAY is non nil display buffer containing source of current
-selected stack frame."
-  (let ((current-thread (dape--current-thread conn)))
+Use INVALIDATE to invalidate `stack-frames' or `variables'.
+If DISPLAY-SOURCE-P is non nil, display displayable top frame."
+  ;; Invalidate parts of each thread's data
+  (when invalidate
     (dolist (thread (dape--threads conn))
-      (pcase clear
+      (pcase invalidate
         ('stack-frames
-         (plist-put thread :stackFrames nil)
-         (plist-put thread :totalFrames nil))
+         (setf (plist-get thread :stackFrames) nil
+               (plist-get thread :totalFrames) nil))
         ('variables
          (dolist (frame (plist-get thread :stackFrames))
-           (plist-put frame :scopes nil)))))
-    (dape--with-request (dape--stack-trace conn current-thread 1)
-      (when display (dape--stack-frame-display conn))
-      (dape--with-request
-          (dape--scopes conn (dape--current-stack-frame conn))
-        (run-hooks 'dape-update-ui-hook)))))
+           (setf (plist-get frame :scopes) nil))))))
+  ;; Hydrate current thread's data (unless cached)
+  (dape--with-request (dape--stack-trace conn (dape--current-thread conn) 1)
+    (when display-source-p
+      ;; Display source ASAP (top frame has just been acquired)
+      (dape--stack-frame-display conn))
+    (dape--with-request (dape--scopes conn (dape--current-stack-frame conn))
+      ;; Scopes buffers needs scopes in place... for some reason
+      (run-hooks 'dape-update-ui-hook))))
 
 
 ;;; Incoming requests
@@ -1977,32 +1975,34 @@ Starts a new adapter CONNs from ARGUMENTS."
              default-directory))
         (process-environment
          (or (cl-loop for (key value) on (plist-get arguments :env) by 'cddr
-                      collect (format "%s=%s" (substring (format "%s" key) 1) value))
+                      collect
+                      (format "%s=%s" (substring (format "%s" key) 1) value))
              process-environment))
         (buffer (get-buffer-create "*dape-shell*")))
     (with-current-buffer buffer
       (dape-shell-mode)
       (shell-command-save-pos-or-erase))
     (let ((process
-           (make-process :name "dape shell"
-                         :buffer buffer
-                         :command
-                         (let ((args (append (plist-get arguments :args) nil)))
-                           (if (plist-get arguments :argsCanBeInterpretedByShell)
-                               (list shell-file-name shell-command-switch
-                                     (mapconcat #'identity args " "))
-                             args))
-                         :filter
-                         (if dape-repl-echo-shell-output
-                             (lambda (process string)
-                               (let ((before (marker-position (process-mark process))))
-                                 (comint-output-filter process string)
-                                 (dape--repl-insert
-                                  (with-current-buffer (process-buffer process)
-                                    (buffer-substring before (process-mark process))))))
-                           #'comint-output-filter)
-                         :sentinel #'shell-command-sentinel
-                         :file-handler t)))
+           (make-process
+            :name "dape shell"
+            :buffer buffer
+            :command
+            (let ((args (append (plist-get arguments :args) nil)))
+              (if (plist-get arguments :argsCanBeInterpretedByShell)
+                  (list shell-file-name shell-command-switch
+                        (mapconcat #'identity args " "))
+                args))
+            :filter
+            (if dape-repl-echo-shell-output
+                (lambda (process string)
+                  (let ((before (marker-position (process-mark process))))
+                    (comint-output-filter process string)
+                    (dape--repl-insert
+                     (with-current-buffer (process-buffer process)
+                       (buffer-substring before (process-mark process))))))
+              #'comint-output-filter)
+            :sentinel #'shell-command-sentinel
+            :file-handler t)))
       (unless dape-repl-echo-shell-output (dape--display-buffer buffer))
       (list :processId (process-id process)))))
 
@@ -2439,8 +2439,8 @@ SKIP-COMPILE is used internally for recursive calls."
   (interactive (list (dape--live-connection 'last t)))
   (dape--stack-frame-cleanup)
   (cond
-   ;; Restart if adapter supports it
-   ((and conn (dape--capable-p conn :supportsRestartRequest))
+   (;; Restart if adapter supports it
+    (and conn (dape--capable-p conn :supportsRestartRequest))
     (if (and (not skip-compile) (plist-get (dape--config conn) 'compile))
         (dape--compile (dape--config conn)
                        (lambda () (dape-restart conn 'skip-compile)))
@@ -2456,10 +2456,10 @@ SKIP-COMPILE is used internally for recursive calls."
           (dape-request conn :restart
                         `(:arguments ,(dape--launch-or-attach-arguments conn)))
         (setf (dape--restart-in-progress-p conn) nil))))
-   ;; Use previous connections configuration
-   (dape--connection (dape (dape--config dape--connection)))
-   ;; Use history
-   (dape-history
+   (;; Use previous connections configuration
+    dape--connection (dape (dape--config dape--connection)))
+   (;; Use history
+    dape-history
     (dape (apply #'dape--config-eval (dape--config-from-string (car dape-history)))))
    ((user-error "Unable to derive session to restart, run `dape'"))))
 
@@ -2594,9 +2594,8 @@ With prefix argument thread is selected by index."
   (interactive
    (let* ((conn (dape--live-connection 'last))
           (collection
-           (cl-loop with conns = (dape--live-connections)
-                    with index = 0
-                    for conn in conns append
+           (cl-loop with index = 0
+                    for conn in (dape--live-connections) append
                     (cl-loop for thread in (dape--threads conn) collect
                              (list (format "%s %s" (cl-incf index) (plist-get thread :name))
                                    conn
@@ -3738,26 +3737,31 @@ buffers get displayed and how they are grouped."
   (let* ((conn (dape--live-connection 'stopped t))
          (scopes (plist-get (dape--current-stack-frame conn) :scopes)))
     (when (or (not dape--info-buffer-related) scopes)
-      (cl-loop for spec in (dape--info-window-group)
-               for (mode index) = (ensure-list spec) append
-               (cond ((and (eq 'dape-info-scope-mode mode) (not index))
-                      (cl-loop for scope in scopes for index upfrom 0 collect
-                               `(dape-info-scope-mode ,index ,(plist-get scope :name))))
-                     ((and (eq 'dape-info-scope-mode mode) index)
-                      (when-let* ((scope (nth index scopes)))
-                        `((dape-info-scope-mode ,index ,(plist-get scope :name)))))
-                     (`((,mode nil ,(alist-get mode dape--info-buffer-name-alist)))))
-               into related
-               finally (setq dape--info-buffer-related related))
-      (cl-loop for (mode index name) in dape--info-buffer-related append
-               `(,(if (dape--info-buffer-p mode index)
-                      (dape--info-header name mode index nil nil 'mode-line)
-                    (dape--info-header name mode index "mouse-1: select"
-                                       'mode-line-highlight
-                                       'mode-line-inactive))
-                 " ")
-               into format
-               finally (setq header-line-format format)))))
+      (setq
+       ;; Set related buffers
+       dape--info-buffer-related
+       (cl-loop
+        for spec in (dape--info-window-group)
+        for (mode index) = (ensure-list spec)
+        append
+        (cond
+         ((and (eq 'dape-info-scope-mode mode) (not index))
+          (cl-loop for scope in scopes for index upfrom 0 collect
+                   `(dape-info-scope-mode ,index ,(plist-get scope :name))))
+         ((and (eq 'dape-info-scope-mode mode) index)
+          (when-let* ((scope (nth index scopes)))
+            `((dape-info-scope-mode ,index ,(plist-get scope :name)))))
+         (`((,mode nil ,(alist-get mode dape--info-buffer-name-alist))))))
+       ;; Show buffer tabs in header-line
+       header-line-format
+       (cl-loop for (mode index name) in dape--info-buffer-related
+                append
+                `(,(if (dape--info-buffer-p mode index)
+                       (dape--info-header name mode index nil nil 'mode-line)
+                     (dape--info-header name mode index "mouse-1: select"
+                                        'mode-line-highlight
+                                        'mode-line-inactive))
+                  " "))))))
 
 
 ;;; Info breakpoints buffer
@@ -3830,7 +3834,8 @@ without log or expression breakpoint"))))))
 (defvar dape-info-breakpoints-mode-map
   (copy-keymap dape-info-breakpoints-mode-line-map))
 
-(define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
+(define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode
+  "Breakpoints"
   "Major mode for Dape info breakpoints."
   :interactive nil)
 
