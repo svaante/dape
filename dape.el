@@ -3766,65 +3766,64 @@ buffers get displayed and how they are grouped."
 
 ;;; Info breakpoints buffer
 
-(dape--command-at-line dape-info-breakpoint-disable (dape--info-breakpoint)
+(dape--command-at-line dape-info-breakpoint-disable (dape--breakpoint)
   "Enable/disable breakpoint at line in dape info buffer."
   (dape--breakpoint-disable
-   dape--info-breakpoint (not (dape--breakpoint-disabled dape--info-breakpoint)))
-  (dape--breakpoint-notify-changes
-   (dape--breakpoint-source dape--info-breakpoint))
+   dape--breakpoint (not (dape--breakpoint-disabled dape--breakpoint)))
+  (dape--breakpoint-notify-changes (dape--breakpoint-source dape--breakpoint))
   (revert-buffer)
   (run-hooks 'dape-update-ui-hook))
 
-(dape--command-at-line dape-info-breakpoint-dwim (dape--info-breakpoint
-                                                  dape--info-exception)
+(dape--command-at-line dape-info-breakpoint-dwim (dape--breakpoint
+                                                  dape--exception)
   "Toggle exception or goto breakpoint in info buffer."
-  (cond (dape--info-breakpoint
+  (cond (dape--breakpoint
          (with-selected-window
              (display-buffer
-              (or (dape--breakpoint-buffer dape--info-breakpoint)
+              (or (dape--breakpoint-buffer dape--breakpoint)
                   (find-file-noselect
-                   (dape--breakpoint-file-name dape--info-breakpoint)))
+                   (dape--breakpoint-file-name dape--breakpoint)))
               dape-display-source-buffer-action)
            (goto-char (point-min))
-           (forward-line (1- (dape--breakpoint-line dape--info-breakpoint)))))
-        (dape--info-exception
-         (plist-put dape--info-exception :enabled
-                    (not (plist-get dape--info-exception :enabled)))
+           (forward-line (1- (dape--breakpoint-line dape--breakpoint)))))
+        (dape--exception
+         (plist-put dape--exception :enabled
+                    (not (plist-get dape--exception :enabled)))
          (dolist (conn (dape--live-connections))
            (dape--set-exception-breakpoints conn))
          (revert-buffer)
          (run-hooks 'dape-update-ui-hook))))
 
 
-(dape--command-at-line dape-info-breakpoint-delete (dape--info-breakpoint
-                                                    dape--info-data-breakpoint)
+(dape--command-at-line dape-info-breakpoint-delete (dape--breakpoint
+                                                    dape--data-breakpoint)
   "Delete breakpoint at line in info buffer."
-  (cond (dape--info-breakpoint
-         (dape--breakpoint-remove dape--info-breakpoint))
-        (dape--info-data-breakpoint
+  (cond (dape--breakpoint
+         (dape--breakpoint-remove dape--breakpoint))
+        (dape--data-breakpoint
          (setq dape--data-breakpoints
-               (delq dape--info-data-breakpoint
+               (delq dape--data-breakpoint
                      dape--data-breakpoints))
          (when-let* ((conn (dape--live-connection 'stopped t)))
            (dape--with-request (dape--set-data-breakpoints conn)))))
   (revert-buffer)
   (run-hooks 'dape-update-ui-hook))
 
-(dape--command-at-line dape-info-breakpoint-log-edit (dape--info-breakpoint)
+(dape--command-at-line dape-info-breakpoint-log-edit (dape--breakpoint)
   "Edit breakpoint at line in dape info buffer."
   (with-selected-window
       (display-buffer
-       (or (dape--breakpoint-buffer dape--info-breakpoint)
-           (find-file-noselect (dape--breakpoint-file-name dape--info-breakpoint)))
+       (or (dape--breakpoint-buffer dape--breakpoint)
+           (find-file-noselect (dape--breakpoint-file-name dape--breakpoint)))
        dape-display-source-buffer-action)
     (goto-char (point-min))
-    (forward-line (1- (dape--breakpoint-line dape--info-breakpoint)))
-    (call-interactively (pcase (dape--breakpoint-type dape--info-breakpoint)
-                          ('log #'dape-breakpoint-log)
-                          ('expression #'dape-breakpoint-expression)
-                          ('hits #'dape-breakpoint-hits)
-                          (_ (user-error "Unable to edit breakpoint on line \
-without log or expression breakpoint"))))))
+    (forward-line (1- (dape--breakpoint-line dape--breakpoint)))
+    (pcase (dape--breakpoint-type dape--breakpoint)
+      ('log (call-interactively  #'dape-breakpoint-log))
+      ('expression (call-interactively #'dape-breakpoint-expression))
+      ('hits (call-interactively #'dape-breakpoint-hits))
+      (_ (user-error "Unable to edit breakpoint on line without log or \
+expression breakpoint")))))
 
 (dape--buffer-map dape-info-breakpoints-mode-line-map dape-info-breakpoint-dwim
   "D" #'dape-info-breakpoint-disable
@@ -3858,7 +3857,7 @@ without log or expression breakpoint"))))))
                          (plist-get plist :accessType)
                          (when-let* ((data-id (plist-get plist :dataId)))
                            (format "(%s)" data-id))))
-                (list 'dape--info-data-breakpoint plist)))
+                `(dape--data-breakpoint ,plist)))
       (cl-loop for breakpoint in dape--breakpoints
                for line = (dape--breakpoint-line breakpoint)
                for verified-plist = (dape--breakpoint-verified breakpoint)
@@ -3904,19 +3903,19 @@ without log or expression breakpoint"))))))
                   (when-let* ((filename
                                (dape--breakpoint-file-name breakpoint)))
                     (dape--format-file-name-line filename line))))
-                `( dape--info-breakpoint ,breakpoint
+                `( dape--breakpoint ,breakpoint
                    mouse-face highlight
                    help-echo "mouse-2, RET: visit breakpoint"
                    ,@(unless verified-p '(font-lock-face shadow)))))
       (cl-loop for exception in dape--exceptions do
                (gdb-table-add-row
                 table
-                (list (if (plist-get exception :enabled) y n)
-                      "Excep"
-                      (format "%s" (plist-get exception :label)))
-                (list 'dape--info-exception exception
-                      'mouse-face 'highlight
-                      'help-echo "mouse-2, RET: toggle exception")))
+                `(,(if (plist-get exception :enabled) y n)
+                  "Excep"
+                  ,(format "%s" (plist-get exception :label)))
+                `( dape--exception ,exception
+                   mouse-face highlight
+                   help-echo "mouse-2, RET: toggle exception")))
       (insert (gdb-table-string table " ")))))
 
 
@@ -3930,9 +3929,9 @@ without log or expression breakpoint"))))))
 (defvar dape-info--threads-tt-bench 2
   "Time to Bench.")
 
-(dape--command-at-line dape-info-select-thread (dape--info-thread dape--info-conn)
+(dape--command-at-line dape-info-select-thread (dape--thread dape--conn)
   "Select thread at line in dape info buffer."
-  (dape-select-thread dape--info-conn (plist-get dape--info-thread :id))
+  (dape-select-thread dape--conn (plist-get dape--thread :id))
   (revert-buffer))
 
 (defvar dape--info-threads-font-lock-keywords
@@ -4016,35 +4015,34 @@ See `dape-request' for expected CB signature."
           (when (eq current-thread thread) (setq selected-line line))
           (gdb-table-add-row
            table
-           (list
-            (format "%s" line)
-            (concat
-             (plist-get thread :name)
-             " "
-             (if-let* ((status (plist-get thread :status)))
-                 (format "%s" status)
-               "unknown")
-             (if-let* (((equal (plist-get thread :status) 'stopped))
-                       (top-stack (car (plist-get thread :stackFrames))))
-                 (concat
-                  " in " (plist-get top-stack :name)
-                  (when-let* ((dape-info-thread-buffer-locations)
-                              (path (thread-first top-stack
-                                                  (plist-get :source)
-                                                  (plist-get :path)))
-                              (filename (dape--file-name-local conn path))
-                              (line (plist-get top-stack :line)))
-                    (concat " of " (dape--format-file-name-line filename line)))
-                  (when-let* ((dape-info-thread-buffer-addresses)
-                              (addr (plist-get top-stack
-                                               :instructionPointerReference)))
-                    (concat " at " addr))
-                  " "))))
-           (list 'dape--info-conn conn
-                 'dape--info-thread thread
-                 'dape--selected (eq current-thread thread)
-                 'mouse-face 'highlight
-                 'help-echo "mouse-2, RET: select thread")))
+           `(,(format "%s" line)
+             ,(concat
+               (plist-get thread :name)
+               " "
+               (if-let* ((status (plist-get thread :status)))
+                   (format "%s" status)
+                 "unknown")
+               (if-let* (((equal (plist-get thread :status) 'stopped))
+                         (top-stack (car (plist-get thread :stackFrames))))
+                   (concat
+                    " in " (plist-get top-stack :name)
+                    (when-let* ((dape-info-thread-buffer-locations)
+                                (path (thread-first top-stack
+                                                    (plist-get :source)
+                                                    (plist-get :path)))
+                                (filename (dape--file-name-local conn path))
+                                (line (plist-get top-stack :line)))
+                      (concat " of " (dape--format-file-name-line filename line)))
+                    (when-let* ((dape-info-thread-buffer-addresses)
+                                (addr (plist-get top-stack
+                                                 :instructionPointerReference)))
+                      (concat " at " addr))
+                    " "))))
+           `( dape--conn ,conn
+              dape--thread ,thread
+              dape--selected ,(eq current-thread thread)
+              mouse-face highlight
+              help-echo "mouse-2, RET: select thread")))
          finally do
          (dape--info-update-with
            (insert (gdb-table-string table " "))
@@ -4064,21 +4062,21 @@ See `dape-request' for expected CB signature."
   '(("^[ 0-9]+ \\([^ ^(]+\\)"  (1 font-lock-function-name-face)))
   "Font lock keywords used in `gdb-frames-mode'.")
 
-(dape--command-at-line dape-info-stack-select (dape--info-frame)
+(dape--command-at-line dape-info-stack-select (dape--frame)
   "Select stack at line in dape info buffer."
   (dape-select-stack (dape--live-connection 'stopped)
-                     (plist-get dape--info-frame :id))
+                     (plist-get dape--frame :id))
   (revert-buffer))
 
-(dape--command-at-line dape-info-stack-memory (dape--info-frame)
+(dape--command-at-line dape-info-stack-memory (dape--frame)
   "View and edit memory at address of frame."
-  (if-let* ((ref (plist-get dape--info-frame :instructionPointerReference)))
+  (if-let* ((ref (plist-get dape--frame :instructionPointerReference)))
       (dape-memory ref)
     (user-error "No address for frame")))
 
-(dape--command-at-line dape-info-stack-disassemble (dape--info-frame)
+(dape--command-at-line dape-info-stack-disassemble (dape--frame)
   "View disassemble at address of frame."
-  (if-let* ((address (plist-get dape--info-frame :instructionPointerReference)))
+  (if-let* ((address (plist-get dape--frame :instructionPointerReference)))
       (dape-disassemble address)
     (user-error "No address for frame")))
 
@@ -4106,25 +4104,26 @@ current buffer with CONN config."
              (setq selected-line line))
            (gdb-table-add-row
             table
-            (list
-             (format "%s" line)
-             (concat
-              (plist-get frame :name)
-              (when-let* ((dape-info-stack-buffer-locations)
-                          (file (thread-first
-                                  frame (plist-get :source) (plist-get :path)))
-                          (file (dape--file-name-local conn file)))
-                (concat " of "
-                        (dape--format-file-name-line
-                         file (plist-get frame :line))))
-              (when-let* ((dape-info-stack-buffer-addresses)
-                          (ref (plist-get frame :instructionPointerReference)))
-                (concat " at " ref))
-              " "))
-            (list 'dape--info-frame frame
-                  'dape--selected (eq current-stack-frame frame)
-                  'mouse-face 'highlight
-                  'help-echo "mouse-2, RET: select frame"))
+            `(,(format "%s" line)
+              ,(concat
+                (plist-get frame :name)
+                (when-let* ((dape-info-stack-buffer-locations)
+                            (filename
+                             (thread-first
+                               frame (plist-get :source) (plist-get :path)))
+                            (filename (dape--file-name-local conn filename)))
+                  (concat " of "
+                          (dape--format-file-name-line
+                           filename (plist-get frame :line))))
+                (when-let* ((dape-info-stack-buffer-addresses)
+                            (ref (plist-get frame
+                                            :instructionPointerReference)))
+                  (concat " at " ref))
+                " "))
+            `( dape--frame ,frame
+               dape--selected ,(eq current-stack-frame frame)
+               mouse-face highlight
+               help-echo "mouse-2, RET: select frame"))
            finally do
            (insert (gdb-table-string table " "))
            (when selected-line
@@ -4166,10 +4165,10 @@ current buffer with CONN config."
     ("^\\([^ ]+\\) "  (1 font-lock-function-name-face)))
   "Font lock keywords used in `gdb-frames-mode'.")
 
-(dape--command-at-line dape-info-modules-goto (dape--info-module)
+(dape--command-at-line dape-info-modules-goto (dape-module)
   "Goto module."
   (let ((conn (dape--live-connection 'last t))
-        (source (list :source dape--info-module)))
+        (source (list :source dape-module)))
     (dape--with-request (dape--source-ensure conn source)
       (if-let* ((marker
                  (dape--object-to-marker conn source)))
@@ -4201,26 +4200,25 @@ current buffer with CONN config."
                for module in (reverse modules) do
                (gdb-table-add-row
                 table
-                (list
-                 (concat
-                  (plist-get module :name)
-                  (when-let* ((path (plist-get module :path)))
-                    (concat " of " (dape--format-file-name-line path nil)))
-                  (when-let* ((address-range (plist-get module :addressRange)))
-                    (concat " at " address-range nil))
-                  " "))
-                (list 'dape--info-module module
-                      'mouse-face 'highlight
-                      'help-echo (format "mouse-2: goto module")))
+                `(,(concat
+                    (plist-get module :name)
+                    (when-let* ((path (plist-get module :path)))
+                      (concat " of " (dape--format-file-name-line path nil)))
+                    (when-let* ((address-range (plist-get module :addressRange)))
+                      (concat " at " address-range nil))
+                    " "))
+                `( dape-module ,module
+                   mouse-face highlight
+                   help-echo ,(format "mouse-2: goto module")))
                finally (insert (gdb-table-string table " "))))))
 
 
 ;;; Info sources buffer
 
-(dape--command-at-line dape-info-sources-goto (dape--info-source)
+(dape--command-at-line dape-info-sources-goto (dape--source)
   "Goto source."
   (let ((conn (dape--live-connection 'last t))
-        (source (list :source dape--info-source)))
+        (source (list :source dape--source)))
     (dape--with-request (dape--source-ensure conn source)
       (if-let* ((marker
                  (dape--object-to-marker conn source)))
@@ -4251,9 +4249,9 @@ current buffer with CONN config."
                for source in (reverse sources) do
                (gdb-table-add-row
                 table (list (concat (plist-get source :name) " "))
-                (list 'dape--info-source source
-                      'mouse-face 'highlight
-                      'help-echo "mouse-2, RET: goto source"))
+                `( dape--source ,source
+                   mouse-face highlight
+                   help-echo "mouse-2, RET: goto source"))
                finally (insert (gdb-table-string table " "))))))
 
 
@@ -4272,50 +4270,50 @@ current buffer with CONN config."
                             (alist-get nil dape-variable-auto-expand-alist))))
              (length< path (+ auto-expand 2)))))
 
-(dape--command-at-line dape-info-scope-toggle (dape--info-path)
+(dape--command-at-line dape-info-scope-toggle (dape--path)
   "Expand or contract variable at line in dape info buffer."
   (unless (dape--live-connection 'stopped)
     (user-error "No stopped threads"))
-  (puthash dape--info-path (not (dape--variable-expanded-p dape--info-path))
+  (puthash dape--path (not (dape--variable-expanded-p dape--path))
            dape--variable-expanded-p)
   (revert-buffer))
 
 (dape--buffer-map dape-info-variable-prefix-map dape-info-scope-toggle)
 
-(dape--command-at-line dape-info-scope-watch-dwim (dape--info-variable)
+(dape--command-at-line dape-info-scope-watch-dwim (dape--variable)
   "Watch variable or remove from watch at line in dape info buffer."
-  (dape-watch-dwim `(,(or (plist-get dape--info-variable :evaluateName)
-                          (plist-get dape--info-variable :name)))
+  (dape-watch-dwim `(,(or (plist-get dape--variable :evaluateName)
+                          (plist-get dape--variable :name)))
                    (eq major-mode 'dape-info-watch-mode)
                    (eq major-mode 'dape-info-scope-mode))
   (revert-buffer))
 
 (dape--buffer-map dape-info-variable-name-map dape-info-scope-watch-dwim)
 
-(dape--command-at-line dape-info-variable-edit (dape--info-ref dape--info-variable)
+(dape--command-at-line dape-info-variable-edit (dape--reference dape--variable)
   "Edit variable value at line in dape info buffer."
   (dape--set-variable
-   (dape--live-connection 'stopped) dape--info-ref dape--info-variable
+   (dape--live-connection 'stopped) dape--reference dape--variable
    (read-string (format "Set value of %s `%s' = "
-                        (plist-get dape--info-variable :type)
-                        (plist-get dape--info-variable :name))
-                nil nil (or (plist-get dape--info-variable :value)
-                            (plist-get dape--info-variable :result)))))
+                        (plist-get dape--variable :type)
+                        (plist-get dape--variable :name))
+                nil nil (or (plist-get dape--variable :value)
+                            (plist-get dape--variable :result)))))
 
 (dape--buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
-(dape--command-at-line dape-info-scope-data-breakpoint (dape--info-ref dape--info-variable)
+(dape--command-at-line dape-info-scope-data-breakpoint (dape--reference dape--variable)
   "Add data breakpoint on variable at line in info buffer."
   (let ((conn (dape--live-connection 'stopped))
-        (name (or (plist-get dape--info-variable :evaluateName)
-                  (plist-get dape--info-variable :name))))
+        (name (or (plist-get dape--variable :evaluateName)
+                  (plist-get dape--variable :name))))
     (unless (dape--capable-p conn :supportsDataBreakpoints)
       (user-error "Adapter does not support data breakpoints"))
     (dape--with-request-bind
         ((&key dataId description accessTypes &allow-other-keys) error)
         (dape-request conn :dataBreakpointInfo
-                      (if (numberp dape--info-ref)
-                          (list :variablesReference dape--info-ref
+                      (if (numberp dape--reference)
+                          (list :variablesReference dape--reference
                                 :name name)
                         (list :name name
                               :frameId (plist-get (dape--current-stack-frame conn) :id))))
@@ -4364,9 +4362,9 @@ current buffer with CONN config."
             (push prop columns)))))
     (nreverse columns)))
 
-(defun dape--info-scope-add-variable (table object ref path test-expanded
+(defun dape--info-scope-add-variable (table object reference path test-expanded
                                             &optional no-handles)
-  "Add variable OBJECT with REF and PATH to TABLE.
+  "Add variable OBJECT with REFERENCE and PATH to TABLE.
 TEST-EXPANDED is called with PATH and OBJECT to determine if recursive
 calls should continue.  If NO-HANDLES is non nil skip + - handles."
   (let* ((name (or (plist-get object :name) ""))
@@ -4413,10 +4411,10 @@ calls should continue.  If NO-HANDLES is non nil skip + - handles."
                        (if dape-info-variable-table-aligned
                            row
                          (list (mapconcat #'identity row " ")))
-                       (list 'dape--info-variable object
-                             'dape--info-path path
-                             ;; `dape--command-at-line' expects non nil
-                             'dape--info-ref (or ref 'refless)))
+                       `( dape--variable ,object
+                          dape--path ,path
+                          ;; `dape--command-at-line' expects non nil
+                          dape--reference ,(or reference 'nothing)))
     (when expanded-p
       ;; TODO Should be paged
       (dolist (variable (plist-get object :variables))
