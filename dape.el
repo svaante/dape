@@ -997,8 +997,8 @@ by `dape--threads-make-update-handle'."
                   (eq (plist-get thread :id) (dape--thread-id conn)))
                 (dape--threads conn))))
 
-(defun dape--path-1 (conn path format)
-  "Return translate absolute PATH in FORMAT from CONN config.
+(defun dape--file-name-1 (conn filename format)
+  "Return translate absolute FILENAME in FORMAT from CONN.
 Accepted FORMAT values are local and remote.
 See `dape-configs' symbols prefix-local prefix-remote."
   (if-let* (;; Fallback to last connection
@@ -1007,10 +1007,10 @@ See `dape-configs' symbols prefix-local prefix-remote."
             ;; no work to be done
             ((or (plist-member config 'prefix-local)
                  (plist-member config 'prefix-remote)))
-            (absolute-path
+            (absolute-file
              ;; `command-cwd' is always set in `dape--launch-or-attach'
              (let ((command-cwd (plist-get config 'command-cwd)))
-               (expand-file-name path
+               (expand-file-name filename
                                  (pcase format
                                    ('local (tramp-file-local-name command-cwd))
                                    ('remote command-cwd)))))
@@ -1021,20 +1021,20 @@ See `dape-configs' symbols prefix-local prefix-remote."
                        ('remote (cons prefix-local prefix-remote))
                        (_ (error "Unknown format"))))
             ;; Substitute prefix if there is an match or nil
-            ((string-prefix-p (car mapping) absolute-path)))
+            ((string-prefix-p (car mapping) absolute-file)))
       (concat (cdr mapping)
-              (string-remove-prefix (car mapping) absolute-path))
-    path))
+              (string-remove-prefix (car mapping) absolute-file))
+    filename))
 
-(defun dape--path-local (conn path)
-  "Return translate PATH to local format by CONN.
-See `dape--path-1'."
-  (dape--path-1 conn path 'local))
+(defun dape--file-name-local (conn filename)
+  "Return translate FILENAME to local format by CONN.
+See `dape--file-name-1'."
+  (dape--file-name-1 conn filename 'local))
 
-(defun dape--path-remote (conn path)
-  "Return translate PATH to remote format by CONN.
-See `dape--path-1'."
-  (dape--path-1 conn path 'remote))
+(defun dape--file-name-remote (conn filename)
+  "Return translate FILENAME to remote format by CONN.
+See `dape--file-name-1'."
+  (dape--file-name-1 conn filename 'remote))
 
 (defun dape--capable-p (conn thing)
   "Return non nil if CONN capable of THING."
@@ -1062,9 +1062,10 @@ Note requires `dape--source-ensure' if source is by reference."
                          buffer)
                        ;; Take buffer by path
                        (when-let* ((remote-path (plist-get source :path))
-                                   (path (dape--path-local conn remote-path))
-                                   ((file-exists-p path)))
-                         (find-file-noselect path t)))))
+                                   (filename
+                                    (dape--file-name-local conn remote-path))
+                                   ((file-exists-p filename)))
+                         (find-file-noselect filename t)))))
     (dape--with-line buffer line
       (when-let* ((column (plist-get plist :column)))
         (when (> column 0)
@@ -1194,8 +1195,8 @@ as is."
   (list (line-beginning-position)
         (1- (line-beginning-position 2))))
 
-(defun dape--format-file-line (file line)
-  "Formats FILE and LINE to string."
+(defun dape--format-file-name-line (filename line)
+  "Formats FILENAME and LINE to string."
   (let* ((conn dape--connection)
          (config
           (and conn
@@ -1205,10 +1206,10 @@ as is."
                    (dape--config conn))))
          (root-guess (dape--guess-root config))
          ;; Normalize paths for `file-relative-name'
-         (file (tramp-file-local-name file))
+         (filename (tramp-file-local-name filename))
          (root-guess (tramp-file-local-name root-guess)))
     (concat
-     (string-truncate-left (file-relative-name file root-guess)
+     (string-truncate-left (file-relative-name filename root-guess)
                            dape-info-file-name-max)
      (when line
        (format ":%d" line)))))
@@ -1648,7 +1649,7 @@ See `dape-request' for expected CB signature."
                     collect b))
           (source-object
            (pcase source
-             ((pred stringp) `(:path ,(dape--path-remote conn source)))
+             ((pred stringp) `(:path ,(dape--file-name-remote conn source)))
              ((pred bufferp)
               (or
                ;; Is source buffer (see `dape--source-make-buffer')?
@@ -1657,9 +1658,9 @@ See `dape-request' for expected CB signature."
                 when (eq buffer source)
                 return `(:sourceReference ,reference))
                ;; Other buffer?
-               (when-let* ((file (dape--path-remote
-                                  conn (buffer-file-name source))))
-                 `(:path ,file)))))))
+               (when-let* ((filename (dape--file-name-remote
+                                      conn (buffer-file-name source))))
+                 `(:path ,filename)))))))
       (if (not source-object)
           (dape--request-continue cb)
         (dape--with-request-bind
@@ -1974,7 +1975,7 @@ selected stack frame."
 Starts a new adapter CONNs from ARGUMENTS."
   (let ((default-directory
          (or (when-let* ((cwd (plist-get arguments :cwd)))
-               (dape--path-local conn cwd))
+               (dape--file-name-local conn cwd))
              default-directory))
         (process-environment
          (or (cl-loop for (key value) on (plist-get arguments :env) by 'cddr
@@ -3391,11 +3392,12 @@ Created from NAME, MIME-TYPE, REFERENCE and CONTENT."
   "Ensure that source object in PLIST exist for adapter CONN.
 See `dape-request' for expected CB signature."
   (let* ((source (plist-get plist :source))
-         (path (plist-get source :path))
+         (filename (plist-get source :path))
          (reference (plist-get source :sourceReference))
          (buffer (plist-get dape--source-buffers reference)))
     (cond
-     ((or (and (stringp path) (file-exists-p (dape--path-local conn path)))
+     ((or (and (stringp filename)
+               (file-exists-p (dape--file-name-local conn filename)))
           (and (buffer-live-p buffer)))
       (dape--request-continue cb))
      ((and (numberp reference)
@@ -3496,11 +3498,13 @@ Buffer is displayed with `dape-display-source-buffer-action'."
                    (cl-loop
                     for frame in cell
                     for source = (plist-get frame :source) when
-                    (or (when-let* ((reference (plist-get source :sourceReference)))
+                    (or (when-let* ((reference
+                                     (plist-get source :sourceReference)))
                           (< 0 reference))
                         (when-let* ((remote-path (plist-get source :path))
-                                    (path (dape--path-local conn remote-path)))
-                          (file-exists-p path)))
+                                    (filename
+                                     (dape--file-name-local conn remote-path)))
+                          (file-exists-p filename)))
                     return frame))))
         ;; Check if `displayable-frame' PLIST exist, otherwise fetch all
         (if-let* ((frame (displayable-frame)))
@@ -3883,8 +3887,8 @@ without log or expression breakpoint"))))))
                   ;; If buffer live, display part of the line
                   (when-let* ((buffer (dape--breakpoint-buffer breakpoint)))
                     (concat
-                     (if-let* ((file (buffer-file-name buffer)))
-                         (dape--format-file-line file line)
+                     (if-let* ((filename (buffer-file-name buffer)))
+                         (dape--format-file-name-line filename line)
                        (format "%s:%d" (buffer-name buffer) line))
                      (concat
                       " "
@@ -3896,7 +3900,7 @@ without log or expression breakpoint"))))))
                   ;; Otherwise just show filename:line
                   (when-let* ((filename
                                (dape--breakpoint-file-name breakpoint)))
-                    (dape--format-file-line filename line))))
+                    (dape--format-file-name-line filename line))))
                 `( dape--info-breakpoint ,breakpoint
                    mouse-face highlight
                    help-echo "mouse-2, RET: visit breakpoint"
@@ -4025,12 +4029,12 @@ See `dape-request' for expected CB signature."
                               (path (thread-first top-stack
                                                   (plist-get :source)
                                                   (plist-get :path)))
-                              (path (dape--path-local conn path))
+                              (filename (dape--file-name-local conn path))
                               (line (plist-get top-stack :line)))
-                    (concat " of " (dape--format-file-line path line)))
+                    (concat " of " (dape--format-file-name-line filename line)))
                   (when-let* ((dape-info-thread-buffer-addresses)
-                              (addr
-                               (plist-get top-stack :instructionPointerReference)))
+                              (addr (plist-get top-stack
+                                               :instructionPointerReference)))
                     (concat " at " addr))
                   " "))))
            (list 'dape--info-conn conn
@@ -4104,12 +4108,12 @@ current buffer with CONN config."
              (concat
               (plist-get frame :name)
               (when-let* ((dape-info-stack-buffer-locations)
-                          (path (thread-first frame
-                                              (plist-get :source)
-                                              (plist-get :path)))
-                          (path (dape--path-local conn path)))
+                          (file (thread-first
+                                  frame (plist-get :source) (plist-get :path)))
+                          (file (dape--file-name-local conn file)))
                 (concat " of "
-                        (dape--format-file-line path (plist-get frame :line))))
+                        (dape--format-file-name-line
+                         file (plist-get frame :line))))
               (when-let* ((dape-info-stack-buffer-addresses)
                           (ref (plist-get frame :instructionPointerReference)))
                 (concat " at " ref))
@@ -4198,7 +4202,7 @@ current buffer with CONN config."
                  (concat
                   (plist-get module :name)
                   (when-let* ((path (plist-get module :path)))
-                    (concat " of " (dape--format-file-line path nil)))
+                    (concat " of " (dape--format-file-name-line path nil)))
                   (when-let* ((address-range (plist-get module :addressRange)))
                     (concat " at " address-range nil))
                   " "))
