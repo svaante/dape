@@ -1325,15 +1325,15 @@ layout for future debugging sessions."
       (add-hook 'dape-start-hook #'dape-info)
     (remove-hook 'dape-start-hook #'dape-info)
     (dolist (buffer (dape--info-buffer-list))
-      (when-let ((window (get-buffer-window buffer)))
+      (when-let* ((window (get-buffer-window buffer)))
         (quit-window t window))))
   (when dape-active-mode
     (when dape-many-windows
       (dape-info nil))
-    (when-let ((buffer (get-buffer "*dape-shell*")))
+    (when-let* ((buffer (get-buffer "*dape-shell*")))
       (dape--display-buffer buffer))
-    (when-let ((buffer (get-buffer "*dape-repl*"))
-               (window (get-buffer-window buffer)))
+    (when-let* ((buffer (get-buffer "*dape-repl*"))
+                (window (get-buffer-window buffer)))
       (quit-window nil window))
     (dape-repl)))
 
