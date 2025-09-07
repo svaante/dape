@@ -3435,8 +3435,10 @@ See `dape-request' for expected CB signature."
     (delete-overlay dape--stack-position-overlay))
   (set-marker dape--overlay-arrow-position nil))
 
-(defun dape--stack-frame-display-1 (conn frame deepest-p)
-  "Display FRAME for adapter CONN as if DEEPEST-p.
+(defun dape--stack-frame-display-1 (conn frame selected-p first-selected-p)
+  "Display FRAME for adapter CONN.
+If SELECTED-P is non-nil, this frame is selected.
+If FIRST-SELECTED-P is non-nil, the top frame is selected.
 Helper for `dape--stack-frame-display'."
   (dape--with-request (dape--source-ensure conn frame)
     ;; Delete overlay before dropping the reference
@@ -3451,14 +3453,14 @@ Helper for `dape--stack-frame-display'."
                                         (line-beginning-position 2))))
                   (overlay-put ov 'category 'dape-source-line)
                   (overlay-put ov 'face 'dape-source-line-face)
-                  (when-let* (deepest-p
+                  (when-let* (first-selected-p
                               (description (dape--exception-description conn)))
                     (overlay-put ov 'after-string
                                  (propertize description 'face
                                              'dape-exception-description-face)))
                   ov)
                 fringe-indicator-alist
-                (unless deepest-p
+                (unless (and selected-p first-selected-p)
                   '((overlay-arrow . hollow-right-triangle))))
           ;; Move `overaly-arrow' arrow to point
           (move-marker dape--overlay-arrow-position
@@ -3474,9 +3476,10 @@ Helper for `dape--stack-frame-display'."
             (select-window window))
           (with-selected-window window
             ;; XXX This is where point is moved after step commands.
-            ;; Which means that `post-command-hook' has already run.
-            ;; Can't call the hook directly from timer context but can
-            ;; handle the important bits.
+            ;; Which means that `post-command-hook' has already run
+            ;; from `dape-next' etc.  Can't call the hook directly
+            ;; from this timer context because it will lead to
+            ;; strangeness, but we can handle the important bits.
             (goto-char (marker-position marker))
             ;; ...like fixing `hl-line'
             (when (featurep 'hl-line)
@@ -3489,31 +3492,36 @@ Helper for `dape--stack-frame-display'."
 Buffer is displayed with `dape-display-source-buffer-action'."
   (dape--stack-frame-cleanup)
   (when (dape--stopped-threads conn)
-    (let* ((selected (dape--current-stack-frame conn))
-           (thread (dape--current-thread conn))
-           (deepest-p (eq selected (car (plist-get thread :stackFrames)))))
-      (cl-flet ((displayable-frame ()
-                  (cl-loop
-                   with frames = (plist-get thread :stackFrames)
-                   for cell on frames for (frame . _rest) = cell
-                   when (eq frame selected) return
-                   (cl-loop
-                    for frame in cell
-                    for source = (plist-get frame :source) when
-                    (or (when-let* ((reference
-                                     (plist-get source :sourceReference)))
-                          (< 0 reference))
-                        (when-let* ((remote-path (plist-get source :path))
-                                    (filename
-                                     (dape--file-name-local conn remote-path)))
-                          (file-exists-p filename)))
-                    return frame))))
-        ;; Check if `displayable-frame' PLIST exist, otherwise fetch all
-        (if-let* ((frame (displayable-frame)))
-            (dape--stack-frame-display-1 conn frame deepest-p)
-          (dape--with-request (dape--stack-trace conn thread dape-stack-trace-levels)
-            (when-let* ((frame (displayable-frame)))
-              (dape--stack-frame-display-1 conn frame deepest-p))))))))
+    (cl-labels
+        ((displayable-p (source)
+           (or (when-let* ((reference
+                            (plist-get source :sourceReference)))
+                 (< 0 reference))
+               (when-let* ((remote-path (plist-get source :path))
+                           (filename
+                            (dape--file-name-local conn remote-path)))
+                 (file-exists-p filename))))
+         (displayable-frame-args ()
+           (cl-loop with thread = (dape--current-thread conn)
+                    with thread-frames = (plist-get thread :stackFrames)
+                    with selected = (dape--current-stack-frame conn)
+                    for frames on thread-frames
+                    when (eq (car frames) selected) return
+                    (cl-loop for frame in frames
+                             when (displayable-p (plist-get frame :source))
+                             return `(,frame
+                                      ,(eq frame selected)
+                                      ,(eq (car thread-frames) selected))))))
+      ;; Check if `displayable-p' frame exist among frames,
+      ;; otherwise fetch all (e.g. :supportsDelayedStackTraceLoading
+      ;; but frame zero is not displayable)
+      (if-let* ((args (displayable-frame-args)))
+          (apply #'dape--stack-frame-display-1 conn args)
+        (dape--with-request
+            (dape--stack-trace
+             conn (dape--current-thread conn) dape-stack-trace-levels)
+          (when-let* ((args (displayable-frame-args)))
+            (apply #'dape--stack-frame-display-1 conn args)))))))
 
 
 ;;; Info Buffers
