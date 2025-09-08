@@ -695,6 +695,7 @@ left-to-right display order of the properties."
     ("breakpoints" . dape-repl-breakpoints)
     ("scope" . dape-repl-scope)
     ("watch" . dape-repl-watch)
+    ("eval" . dape-repl-eval)
     ("restart" . dape-restart)
     ("kill" . dape-kill)
     ("disconnect" . dape-disconnect-quit)
@@ -4883,6 +4884,12 @@ If EXPRESSION is non blank add or remove expression to watch list."
   (when expressions
     (dape-watch-dwim `(,(string-join expression " "))))
   (dape--repl-insert-info-buffer 'dape-info-watch-mode))
+
+(defun dape-repl-eval (&rest expression)
+  "Evaluate EXPRESSION in REPL buffer."
+  (dape-evaluate-expression (dape--live-connection 'last)
+                            (string-join expression " ")
+                            "watch"))
 
 (define-derived-mode dape-repl-mode comint-mode "REPL"
   "Major mode for interacting with Dape and the debugger.
