@@ -1238,12 +1238,17 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
        (`(,fns . ,alist)
         (pcase dape-buffer-window-arrangement
           ((or 'left 'right)
-           (cons '(display-buffer-in-side-window)
-                 (pcase (cons mode group)
-                   (`(dape-repl-mode . ,_) '((side . bottom) (slot . -1)))
-                   (`(dape-shell-mode . ,_) '((side . bottom) (slot . 0)))
-                   (`(,_ . ,index) `((side . ,dape-buffer-window-arrangement)
-                                     (slot . ,(1- index)))))))
+           (pcase mode
+             ('dape-repl-mode
+              `((display-buffer-in-side-window)
+                (side . bottom) (slot . -1)))
+             ('dape-shell-mode
+              `((display-buffer-in-side-window)
+                (side . bottom) (slot . 0)))
+             ((guard group)
+              `((display-buffer-in-side-window)
+                (side . ,dape-buffer-window-arrangement)
+                (slot . ,(1- group))))))
           ('gud
            (pcase mode
              ('dape-repl-mode
@@ -1263,7 +1268,9 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
         (when group (intern (format "dape-info-%s" group)))))
     (display-buffer buffer
                     `((display-buffer-reuse-window . ,fns)
-                      (category . ,category) ,@alist))))
+                      (category . ,category)
+                      (dedicated . 'weakly)
+                      ,@alist))))
 
 (defmacro dape--mouse-command (name doc command)
   "Create mouse command with NAME, DOC which call COMMAND."
@@ -2926,7 +2933,7 @@ of memory read."
                       "Write memory with `\\[save-buffer]'"))))
         (setq dape--memory-address address)
         (revert-buffer))
-      (select-window (display-buffer buffer)))))
+      (select-window (dape--display-buffer buffer)))))
 
 
 ;;; Disassemble viewer
@@ -3023,7 +3030,7 @@ If DISPLAY-P is non-nil, display buffer."
           (setq-local revert-buffer-function
                       (lambda (&rest _) (dape-disassemble address)))
           (when (or display-p (marker-position dape--disassemble-overlay-arrow))
-            (select-window (display-buffer (current-buffer))))
+            (select-window (dape--display-buffer (current-buffer))))
           (goto-char (or (marker-position dape--disassemble-overlay-arrow)
                          (point-min)))
           (when (marker-position dape--disassemble-overlay-arrow)
