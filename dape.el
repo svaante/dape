@@ -1990,16 +1990,22 @@ If DISPLAY-SOURCE-P is non-nil, display displayable top frame."
 (cl-defmethod dape-handle-request (conn (_command (eql runInTerminal)) arguments)
   "Handle runInTerminal requests.
 Starts a new adapter CONNs from ARGUMENTS."
-  (let ((default-directory
-         (or (when-let* ((cwd (plist-get arguments :cwd)))
-               (dape--file-name-local conn cwd))
-             default-directory))
-        (process-environment
-         (or (cl-loop for (key value) on (plist-get arguments :env) by 'cddr
-                      collect
-                      (format "%s=%s" (substring (format "%s" key) 1) value))
-             process-environment))
-        (buffer (get-buffer-create "*dape-shell*")))
+  (let* ((default-directory
+          (or (when-let* ((cwd (plist-get arguments :cwd)))
+                (dape--file-name-local conn cwd))
+              default-directory))
+         (process-environment
+          (append
+           (cl-loop for (key value) on (plist-get arguments :env) by 'cddr
+                    collect
+                    (format "%s=%s" (substring (format "%s" key) 1) value))
+           ;; XXX Compat with directory-aware environment managing
+           ;; modes.  Capturing environment after `run-mode-hooks'
+           ;; have been called in `default-directory'.
+           (with-temp-buffer
+             (fundamental-mode) process-environment)
+           process-environment))
+         (buffer (get-buffer-create "*dape-shell*")))
     (with-current-buffer buffer
       (dape-shell-mode)
       (shell-command-save-pos-or-erase))
