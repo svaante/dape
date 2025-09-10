@@ -2245,7 +2245,7 @@ Killing the adapter and it's CONN."
   (let ((child-conn-p (dape--parent conn)))
     (dape--with-request (dape-kill conn)
       (when (not child-conn-p)
-        ;; HACK remove duplicated terminated print for dlv
+        ;; XXX Remove duplicated terminated print for dlv
         (unless (eq (dape--state conn) 'terminated)
           (dape--message "Session terminated"))
         (dape--update-state conn 'terminated)
