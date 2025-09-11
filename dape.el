@@ -5172,6 +5172,9 @@ This is a helper function for `dape-inlay-hints-update'."
 CONN is inferred for interactive invocations."
   (interactive (list (or (dape--live-connection 'stopped t)
                          (dape--live-connection 'parent))))
+  ;; Ensure that `dape-until' state is reset
+  (add-hook 'dape-active-mode-hook #'dape--until-reset)
+  (add-hook 'dape-stopped-hook #'dape--until-reset)
   (if (cl-member 'until (dape--breakpoints-at-point)
                  :key #'dape--breakpoint-type)
       (dape-breakpoint-remove-at-point)
@@ -5200,9 +5203,6 @@ CONN is inferred for interactive invocations."
              (dape--breakpoint-disable breakpoint nil))))
     (when notification-required-p
       (dape--breakpoint-notify-all))))
-
-(add-hook 'dape-active-mode-hook #'dape--until-reset)
-(add-hook 'dape-stopped-hook #'dape--until-reset)
 
 
 ;;; Minibuffer config hints
