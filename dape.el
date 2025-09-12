@@ -3582,19 +3582,21 @@ See `dape-info-buffer-window-groups'."
               dape-info-buffer-window-groups))
 
 (defun dape-info-buffer-tab (&optional reversed)
-  "Select next related buffer in `dape-info' buffers.
-REVERSED selects previous."
+  "Select next related buffer.
+If REVERSED is non-nil selects previous buffer in group.
+Customizable by `dape-info-buffer-window-groups'."
   (interactive)
   (unless dape--info-buffer-related
     (user-error "No related buffers for current buffer"))
   (pcase-let* ((order-fn (if reversed 'reverse 'identity))
                (`(,mode ,index)
-                (or (thread-last dape--info-buffer-related
-                                 (append  dape--info-buffer-related)
-                                 (funcall order-fn)
-                                 (seq-drop-while (pcase-lambda (`(,mode ,index))
-                                                   (not (dape--info-buffer-p mode index))))
-                                 (cadr))
+                (or (thread-last
+                      dape--info-buffer-related
+                      (append  dape--info-buffer-related)
+                      (funcall order-fn)
+                      (seq-drop-while (pcase-lambda (`(,mode ,index))
+                                        (not (dape--info-buffer-p mode index))))
+                      (cadr))
                     (car dape--info-buffer-related))))
     (push `(,mode ,index) dape--info-buffer-display-history)
     (gdb-set-window-buffer (dape--info-get-buffer-create mode index) t)))
@@ -3809,7 +3811,7 @@ buffers get displayed and how they are grouped."
 ;;; Info breakpoints buffer
 
 (dape--command-at-line dape-info-breakpoint-disable (dape--breakpoint)
-  "Enable/disable breakpoint at line in dape info buffer."
+  "Enable or disable breakpoint at current line."
   (dape--breakpoint-disable
    dape--breakpoint (not (dape--breakpoint-disabled dape--breakpoint)))
   (dape--breakpoint-notify-changes (dape--breakpoint-source dape--breakpoint))
@@ -3818,7 +3820,7 @@ buffers get displayed and how they are grouped."
 
 (dape--command-at-line dape-info-breakpoint-dwim (dape--breakpoint
                                                   dape--exception)
-  "Toggle exception or goto breakpoint in info buffer."
+  "Toggle exception or goto breakpoint at current line."
   (cond (dape--breakpoint
          (with-selected-window
              (display-buffer
@@ -3839,7 +3841,7 @@ buffers get displayed and how they are grouped."
 
 (dape--command-at-line dape-info-breakpoint-delete (dape--breakpoint
                                                     dape--data-breakpoint)
-  "Delete breakpoint at line in info buffer."
+  "Delete breakpoint at current line."
   (cond (dape--breakpoint
          (dape--breakpoint-remove dape--breakpoint))
         (dape--data-breakpoint
@@ -3852,7 +3854,7 @@ buffers get displayed and how they are grouped."
   (run-hooks 'dape-update-ui-hook))
 
 (dape--command-at-line dape-info-breakpoint-log-edit (dape--breakpoint)
-  "Edit breakpoint at line in dape info buffer."
+  "Edit breakpoint at current line."
   (with-selected-window
       (display-buffer
        (or (dape--breakpoint-buffer dape--breakpoint)
@@ -3971,7 +3973,7 @@ expression breakpoint")))))
   "Time to Bench.")
 
 (dape--command-at-line dape-info-select-thread (dape--thread dape--conn)
-  "Select thread at line in dape info buffer."
+  "Select thread at current line."
   (dape-select-thread dape--conn (plist-get dape--thread :id))
   (revert-buffer))
 
@@ -4104,19 +4106,19 @@ See `dape-request' for expected CB signature."
   "Font lock keywords used in `gdb-frames-mode'.")
 
 (dape--command-at-line dape-info-stack-select (dape--frame)
-  "Select stack at line in dape info buffer."
+  "Select stack frame at current line."
   (dape-select-stack (dape--live-connection 'stopped)
                      (plist-get dape--frame :id))
   (revert-buffer))
 
 (dape--command-at-line dape-info-stack-memory (dape--frame)
-  "View and edit memory at address of frame."
+  "View and edit memory of stack frame at current line."
   (if-let* ((ref (plist-get dape--frame :instructionPointerReference)))
       (dape-memory ref)
     (user-error "No address for frame")))
 
 (dape--command-at-line dape-info-stack-disassemble (dape--frame)
-  "View disassemble at address of frame."
+  "View disassemble of stack frame at current line."
   (if-let* ((address (plist-get dape--frame :instructionPointerReference)))
       (dape-disassemble address)
     (user-error "No address for frame")))
@@ -4206,10 +4208,10 @@ current buffer with CONN config."
     ("^\\([^ ]+\\) "  (1 font-lock-function-name-face)))
   "Font lock keywords used in `gdb-frames-mode'.")
 
-(dape--command-at-line dape-info-modules-goto (dape-module)
-  "Goto module."
+(dape--command-at-line dape-info-modules-goto (dape--module)
+  "Goto module at current line."
   (let ((conn (dape--live-connection 'last t))
-        (source (list :source dape-module)))
+        (source (list :source dape--module)))
     (dape--with-request (dape--source-ensure conn source)
       (if-let* ((marker
                  (dape--object-to-marker conn source)))
@@ -4248,7 +4250,7 @@ current buffer with CONN config."
                     (when-let* ((address-range (plist-get module :addressRange)))
                       (concat " at " address-range nil))
                     " "))
-                `( dape-module ,module
+                `( dape--module ,module
                    mouse-face highlight
                    help-echo ,(format "mouse-2: goto module")))
                finally (insert (gdb-table-string table " "))))))
@@ -4257,7 +4259,7 @@ current buffer with CONN config."
 ;;; Info sources buffer
 
 (dape--command-at-line dape-info-sources-goto (dape--source)
-  "Goto source."
+  "Goto source at current line."
   (let ((conn (dape--live-connection 'last t))
         (source (list :source dape--source)))
     (dape--with-request (dape--source-ensure conn source)
@@ -4312,7 +4314,7 @@ current buffer with CONN config."
              (length< path (+ auto-expand 2)))))
 
 (dape--command-at-line dape-info-scope-toggle (dape--path)
-  "Expand or contract variable at line in dape info buffer."
+  "Expand or contract variable at current line."
   (unless (dape--live-connection 'stopped)
     (user-error "No stopped threads"))
   (puthash dape--path (not (dape--variable-expanded-p dape--path))
@@ -4322,7 +4324,7 @@ current buffer with CONN config."
 (dape--buffer-map dape-info-variable-prefix-map dape-info-scope-toggle)
 
 (dape--command-at-line dape-info-scope-watch-dwim (dape--variable)
-  "Watch variable or remove from watch at line in dape info buffer."
+  "Add or remove variable from watch at current line."
   (dape-watch-dwim `(,(or (plist-get dape--variable :evaluateName)
                           (plist-get dape--variable :name)))
                    (eq major-mode 'dape-info-watch-mode)
@@ -4332,7 +4334,7 @@ current buffer with CONN config."
 (dape--buffer-map dape-info-variable-name-map dape-info-scope-watch-dwim)
 
 (dape--command-at-line dape-info-variable-edit (dape--reference dape--variable)
-  "Edit variable value at line in dape info buffer."
+  "Edit variable value at current line."
   (dape--set-variable
    (dape--live-connection 'stopped) dape--reference dape--variable
    (read-string (format "Set value of %s `%s' = "
@@ -4344,7 +4346,7 @@ current buffer with CONN config."
 (dape--buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
 (dape--command-at-line dape-info-scope-data-breakpoint (dape--reference dape--variable)
-  "Add data breakpoint on variable at line in info buffer."
+  "Add data breakpoint on variable at current line."
   (let ((conn (dape--live-connection 'stopped))
         (name (or (plist-get dape--variable :evaluateName)
                   (plist-get dape--variable :name))))
@@ -4374,10 +4376,11 @@ current buffer with CONN config."
           (run-hooks 'dape-update-ui-hook))))))
 
 (dape--command-at-line dape-info-variable-memory (dape--variable)
-  "Display memory for variable's address at current line."
+  "View memory of variable at current line."
   (if-let* ((memory-reference (plist-get dape--variable :memoryReference)))
       (dape-memory memory-reference)
-    (user-error "Variable does not have a memory reference")))
+    (user-error "No memory reference for `%s' variable"
+                (plist-get dape--variable :name))))
 
 (defvar dape-info-scope-mode-line-map
   (let ((map (make-sparse-keymap)))
