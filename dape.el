@@ -1338,7 +1338,7 @@ then executes BODY.  Which MODES this command is applicable."
   (select-frame-set-input-focus (selected-frame)))
 
 (define-minor-mode dape-many-windows
-  "Display complex window layout if t and simple if nil.
+  "Toggle many-buffer debug layout and simple layout.
 The mode modifies `dape-start-hook' to remove or add the complex
 layout for future debugging sessions."
   :global t
@@ -2533,7 +2533,7 @@ connection.  CONN is inferred for interactive invocations."
     (dape--kill-buffers)))
 
 (defun dape-quit (&optional conn)
-  "Kill debug session and kill related dape buffers.
+  "Terminate session and kill all Dape buffers.
 CONN is inferred for interactive invocations."
   (interactive (list (dape--live-connection 'parent t)))
   (dape--kill-buffers 'skip-process-buffers)
@@ -2554,7 +2554,7 @@ CONN is inferred for interactive invocations."
     (dape--breakpoint-place)))
 
 (defun dape-breakpoint-log (message)
-  "Add log breakpoint at line with MESSAGE.
+  "Add log breakpoint at current line with MESSAGE.
 Expressions within `{}` are interpolated."
   (interactive
    (list
@@ -2582,7 +2582,7 @@ Expressions within `{}` are interpolated."
     (dape--breakpoint-place 'expression expression)))
 
 (defun dape-breakpoint-hits (condition)
-  "Add hits breakpoint at line with CONDITION.
+  "Add hits breakpoint at current line with CONDITION.
 An hit HITS is an string matching regex:
 \"\\(!=\\|==\\|[%<>]\\) [:digit:]\""
   (interactive
@@ -2604,7 +2604,6 @@ An hit HITS is an string matching regex:
 (defun dape-breakpoint-remove-at-point (&optional skip-notify)
   "Remove breakpoint, log breakpoint and expression at current line.
 When SKIP-NOTIFY is non-nil, do not notify adapters about removal."
-  (interactive)
   (dolist (breakpoint (dape--breakpoints-at-point))
     (dape--breakpoint-remove breakpoint skip-notify)))
 
@@ -2617,8 +2616,9 @@ When SKIP-NOTIFY is non-nil, do not notify adapters about removal."
     (apply #'dape--breakpoint-notify-changes sources)))
 
 (defun dape-select-thread (conn thread-id)
-  "Select current thread for adapter CONN by THREAD-ID.
-With prefix argument thread is selected by index."
+  "Select current active thread.
+With prefix argument thread is selected by index starting at 1.
+The thread is identified by THREAD-ID under adapter CONN."
   (interactive
    (let* ((conn (dape--live-connection 'last))
           (collection
@@ -2643,8 +2643,9 @@ With prefix argument thread is selected by index."
   (dape--mode-line-format))
 
 (defun dape-select-stack (conn stack-id)
-  "Selected current stack for adapter CONN by STACK-ID.
-With prefix argument stack is selected by index."
+  "Select current active stack.
+With prefix argument stack is selected by index starting at 1.
+The stack is identified by STACK-ID under adapter CONN."
   (interactive
    (let* ((conn (dape--live-connection 'stopped))
           (current-thread (dape--current-thread conn))
@@ -2669,7 +2670,8 @@ With prefix argument stack is selected by index."
   (dape--update conn nil t))
 
 (defun dape-stack-select-up (conn n)
-  "Select N stacks above current selected stack for adapter CONN."
+  "Select N (numeric arg) stacks above current selected stack.
+Use CONN to specify adapter connection."
   (interactive (list (dape--live-connection 'stopped) 1))
   ;; Ensure all threads.  See `dape--stack-trace'.
   (let ((dape--request-blocking t))
@@ -2682,7 +2684,8 @@ With prefix argument stack is selected by index."
     (message "No stopped threads")))
 
 (defun dape-stack-select-down (conn n)
-  "Select N stacks below current selected stack for adapter CONN."
+  "Select N (numeric arg) stacks below current selected stack.
+Use CONN to specify adapter connection."
   (interactive (list (dape--live-connection 'stopped) 1))
   (dape-stack-select-up conn (* n -1)))
 
@@ -2716,7 +2719,7 @@ If DISPLAY is non-nil display the watch buffer."
   (run-hooks 'dape-update-ui-hook))
 
 (defun dape-evaluate-expression (conn expression &optional context)
-  "Evaluate EXPRESSION in adapter CONN.
+  "Evaluate expression in current session.
 If called interactively and region is active evaluate region.
 EXPRESSION should be a string to be evaluated in CONTEXT.
 CONN is inferred by either last stopped then last created connection."
@@ -2746,7 +2749,8 @@ CONN is inferred by either last stopped then last created connection."
       (dape--repl-insert (concat result "\n"))))))
 
 (defun dape-restart-frame (conn stack-id)
-  "Restart frame STACK-ID for adapter CONN."
+  "Restart execution from selected stack frame.
+The frame is identified by STACK-ID under adapter CONN."
   (interactive
    (let ((conn (dape--live-connection 'stopped t)))
      (list conn (dape--stack-id conn))))
@@ -2762,7 +2766,7 @@ CONN is inferred by either last stopped then last created connection."
 
 ;;;###autoload
 (defun dape (config &optional skip-compile)
-  "Start a debugging session using CONFIG.
+  "Start debugging session with selected configuration.
 When called interactively, the command prompts for a alist KEY from
 `dape-configs', followed by additional property-value pairs.  These
 pairs override the properties in the plist associated with the key
@@ -3181,7 +3185,7 @@ Source is either a buffer or file name."
   "Keymap for `dape-breakpoint-global-mode'.")
 
 (define-minor-mode dape-breakpoint-global-mode
-  "Adds mouse breakpoint controls in fringe and margin."
+  "Toggle clickable breakpoint controls in fringe or margins."
   :global t
   :lighter nil)
 
@@ -3344,7 +3348,7 @@ If SKIP-NOTIFY is non-nil, do not notify adapter about removal."
   (run-hooks 'dape-update-ui-hook))
 
 (defun dape-breakpoint-load (&optional filename)
-  "Load breakpoints from FILE.
+  "Restore breakpoints from previously saved FILE.
 All breakpoints will be removed before loading new ones.
 Will open buffers containing breakpoints.
 Will use `dape-default-breakpoints-file' if FILENAME is nil."
@@ -3371,7 +3375,7 @@ Will use `dape-default-breakpoints-file' if FILENAME is nil."
   (dape--breakpoint-notify-all))
 
 (defun dape-breakpoint-save (&optional filename)
-  "Save breakpoints to FILE.
+  "Save all breakpoints to FILE for later restoration.
 Will use `dape-default-breakpoints-file' if FILENAME is nil."
   (interactive
    (list
@@ -3721,7 +3725,7 @@ See `dape--info-call-update-with'."
         (revert-buffer)))))
 
 (defun dape-info (&optional maybe-kill)
-  "Create and display dape info buffers.
+  "Display debug info buffers showing variables, stack, etc.
 If MAYBE-KILL is non-nil (which is always true when called
 interactively) and all info buffers are already displayed, kill each
 buffer info buffer.
@@ -3813,7 +3817,7 @@ buffers get displayed and how they are grouped."
 
 (dape--command-at-line dape-info-breakpoint-disable (dape--breakpoint)
   (dape-info-breakpoints-mode)
-  "Enable or disable breakpoint at current line."
+  "Enable or disable breakpoint at current line without removing it."
   (dape--breakpoint-disable
    dape--breakpoint (not (dape--breakpoint-disabled dape--breakpoint)))
   (dape--breakpoint-notify-changes (dape--breakpoint-source dape--breakpoint))
@@ -4626,7 +4630,7 @@ or \\[dape-info-watch-abort-changes] to abort changes"))
              do (insert "  " name "\n"))))
 
 (defun dape-info-watch-abort-changes ()
-  "Abort change and return to `dape-info-watch-mode'."
+  "Discard watch expression edits and return to watch view."
   (interactive)
   (dape-info-watch-mode)
   (dape--info-set-related-buffers)
