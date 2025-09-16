@@ -2683,15 +2683,19 @@ If REMOVE-ONLY-P is non-nil only allow removal of an existing watch.
 If ADD-ONLY-P is non-nil only allow adding a new watch.
 If DISPLAY-P is non-nil display-p the watch buffer."
   (interactive
-   (list (string-trim
-          (completing-read
-           "Toggle watch of expression: "
-           (mapcar (lambda (plist) (plist-get plist :name)) dape--watched)
-           nil nil nil nil
-           (or (and (region-active-p)
-                    (buffer-substring (region-beginning) (region-end)))
-               (thing-at-point 'symbol))))
-         nil nil t))
+   (let* ((map (copy-keymap minibuffer-local-completion-map))
+          (minibuffer-local-completion-map map))
+     (define-key map " " #'self-insert-command)
+     (define-key map "?" #'self-insert-command)
+     (list (string-trim
+            (completing-read
+             "Toggle watch of expression: "
+             (mapcar (lambda (plist) (plist-get plist :name)) dape--watched)
+             nil nil nil nil
+             (or (and (region-active-p)
+                      (buffer-substring (region-beginning) (region-end)))
+                 (thing-at-point 'symbol))))
+           nil nil t)))
   (if-let* ((watched
              (cl-find expression dape--watched
                       :key (lambda (plist) (plist-get plist :name))
