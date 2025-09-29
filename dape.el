@@ -5090,6 +5090,7 @@ Excludes symbols that are part of strings, comments or documentation."
                              :key (lambda (ov) (overlay-get ov 'category)))
               (let ((overlay (make-overlay line-start line-end)))
                 (overlay-put overlay 'category 'dape-inlay-hint)
+                (overlay-put overlay 'evaporate t)
                 (overlay-put overlay 'dape-symbols
                              (funcall dape--inlay-hint-symbols-fn
                                       line-start line-end))
