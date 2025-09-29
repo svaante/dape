@@ -2541,7 +2541,7 @@ CONN is inferred for interactive invocations."
 
 (defun dape-breakpoint-log (message)
   "Add log breakpoint at current line with MESSAGE.
-Expressions within `{}` are interpolated."
+Expressions within {} are interpolated."
   (interactive
    (list
     (read-string "Log (Expressions within {} are interpolated): "
@@ -2684,17 +2684,17 @@ If ADD-ONLY-P is non-nil only allow adding a new watch.
 If DISPLAY-P is non-nil display-p the watch buffer."
   (interactive
    (let* ((map (copy-keymap minibuffer-local-completion-map))
-          (minibuffer-local-completion-map map))
+          (minibuffer-local-completion-map map)
+          (default (or (and (region-active-p)
+                            (buffer-substring (region-beginning) (region-end)))
+                       (thing-at-point 'symbol))))
      (define-key map " " #'self-insert-command)
      (define-key map "?" #'self-insert-command)
      (list (string-trim
             (completing-read
-             "Toggle watch of expression: "
+             (format-prompt "Toggle watch of expression" default)
              (mapcar (lambda (plist) (plist-get plist :name)) dape--watched)
-             nil nil nil nil
-             (or (and (region-active-p)
-                      (buffer-substring (region-beginning) (region-end)))
-                 (thing-at-point 'symbol))))
+             nil nil nil nil default))
            nil nil t)))
   (if-let* ((watched
              (cl-find expression dape--watched
@@ -2718,7 +2718,8 @@ CONN is inferred by either last stopped then last created connection."
     (or (dape--live-connection 'stopped t) (dape--live-connection 'last))
     (if (region-active-p)
         (buffer-substring (region-beginning) (region-end))
-      (read-string "Evaluate: " nil nil (thing-at-point 'symbol)))))
+      (let ((default (thing-at-point 'symbol)))
+        (read-string (format-prompt "Evaluate" default) nil nil default)))))
   (dape--with-request-bind
       ((&whole body &key variablesReference result &allow-other-keys) error)
       (dape--evaluate-expression conn (plist-get (dape--current-stack-frame conn) :id)
@@ -2932,9 +2933,11 @@ If REUSE-BUFFER is non-nil reuse the current buffer to display result
 of memory read."
   (interactive
    (list (string-trim
-          (read-string "View memory at address: " nil nil
-                       (when-let* ((number (thing-at-point 'number)))
-                         (format "0x%08x" number))))))
+          (let ((default
+                 (when-let* ((number (thing-at-point 'number)))
+                   (format "0x%08x" number))))
+            (read-string (format-prompt "View memory at address" default)
+                         nil nil default)))))
   (let ((conn (dape--live-connection 'stopped)))
     (unless (dape--capable-p conn :supportsReadMemoryRequest)
       (user-error "Adapter not capable of reading memory"))
@@ -2979,16 +2982,18 @@ of memory read."
   "View disassemble of instructions at ADDRESS.
 If DISPLAY-P is non-nil, display buffer."
   (interactive
-   (list (string-trim
-          (read-string
-           "Disassemble at address: " nil nil
+   (list
+    (let ((default
            `(,@(when-let* ((number (thing-at-point 'number)))
                  (list (format "0x%08x" number)))
              ,@(when-let* ((conn (dape--live-connection 'stopped t))
                            (address (plist-get (dape--current-stack-frame conn)
                                                :instructionPointerReference)))
                  (list address)))))
-         t))
+      (string-trim
+       (read-string (format-prompt "Disassemble at address" default) nil nil
+                    default)))
+    t))
   (if-let* ((conn (dape--live-connection 'stopped))
             ((not (dape--capable-p conn :supportsDisassembleRequest))))
       (user-error "Adapter does not support disassemble")
@@ -4345,11 +4350,14 @@ current buffer with CONN config."
   "Edit variable value at current line."
   (dape--set-variable
    (dape--live-connection 'stopped) dape--reference dape--variable
-   (read-string (format "Set value of %s `%s' = "
-                        (plist-get dape--variable :type)
-                        (plist-get dape--variable :name))
-                nil nil (or (plist-get dape--variable :value)
-                            (plist-get dape--variable :result)))))
+   (let ((default
+          (or (plist-get dape--variable :value)
+              (plist-get dape--variable :result))))
+     (read-string (format-prompt "Set value of %s `%s'"
+                                 default
+                                 (plist-get dape--variable :type)
+                                 (plist-get dape--variable :name))
+                  nil nil default))))
 
 (dape--buffer-map dape-info-variable-value-map dape-info-variable-edit)
 
