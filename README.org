@@ -62,23 +62,28 @@ With =minibuffer= adapter configuration hints:
     ;; (dape-info-hide-mode-line nil)
 
     ;; Projectile users
-    ;; (dape-cwd-function 'projectile-project-root)
+    ;; (dape-cwd-function #'projectile-project-root)
 
     :config
     ;; Pulse source line (performance hit)
-    ;; (add-hook 'dape-display-source-hook 'pulse-momentary-highlight-one-line)
+    ;; (add-hook 'dape-display-source-hook #'pulse-momentary-highlight-one-line)
 
     ;; Save buffers on startup, useful for interpreted languages
     ;; (add-hook 'dape-start-hook (lambda () (save-some-buffers t t)))
 
     ;; Kill compile buffer on build success
-    ;; (add-hook 'dape-compile-hook 'kill-buffer)
+    ;; (add-hook 'dape-compile-hook #'kill-buffer)
     )
 
   ;; For a more ergonomic Emacs and `dape' experience
   (use-package repeat
     :custom
     (repeat-mode +1))
+
+  ;; Left and right side windows occupy full frame height
+  (use-package emacs
+    :custom
+    (window-sides-vertical t))
 #+end_src
 
 * Differences with dap-mode
