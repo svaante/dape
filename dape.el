@@ -2469,6 +2469,8 @@ SKIP-COMPILE is used internally for recursive calls."
       (dape--with-request
           (dape-request conn :restart
                         `(:arguments ,(dape--launch-or-attach-arguments conn)))
+        (unless dape-active-mode
+          (dape-active-mode +1))
         (setf (dape--restart-in-progress-p conn) nil))))
    (;; Use previous connections configuration
     dape--connection (dape (dape--config dape--connection)))
