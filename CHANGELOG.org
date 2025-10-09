@@ -2,6 +2,29 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.25.0
+- Add =dape-many-windows= to configure window usage
+- Add =dape-restart-frame= command to restart the current frame
+- Add =dape-until= command to run until point
+- Add =format-prompt= function to display default values in minibuffer prompts
+- Add REPL command =eval= to force a variable to evaluate in "repl" context
+- Add command to disable breakpoints
+- Add command to read the memory address of a variable
+- Add new TypeScript mode using tsx over ts-node
+- Add persistent window configuration across debug sessions
+- Change move info mode bindings into each mode map
+- Change move mode line info to =global-mode-string=
+- Change to show hollow triangle only when source buffer matches top frame
+- Change to use dedicated windows for =dape= buffers
+- Fix M-X pollution by specifying mode for =dape-info-*= commands
+- Fix breakpoint setting race condition
+- Fix compatibility with directory-aware environment management modes
+- Fix error in sentinel when =comint-indirect-buffer= is killed
+- Fix font-locking issues with function symbols in stack and threads buffers
+- Fix incorrect =dape-active-mode= value set on restart
+- Fix minibuffer bindings in =dape-watch-dwim=
+- Fix window selection when adding margins
+
 * Version 0.24.1
 - Fix saving of breakpoints when target file does not already exist
 
