@@ -3179,6 +3179,7 @@ Source is either a buffer or file name."
     map)
   "Keymap for `dape-breakpoint-global-mode'.")
 
+;;;###autoload
 (define-minor-mode dape-breakpoint-global-mode
   "Toggle clickable breakpoint controls in fringe or margins."
   :global t
