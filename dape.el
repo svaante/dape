@@ -225,7 +225,7 @@
                                   (string-to-number (match-string 1 output))))))
                 (unless (>= version 14.1)
                   (user-error "Requires gdb version >= 14.1"))))
-     modes (c-mode c-ts-mode c++-mode c++-ts-mode)
+     modes (c-mode c-ts-mode c++-mode c++-ts-mode hare-mode hare-ts-mode)
      command-cwd dape-command-cwd
      command "gdb"
      command-args ("--interpreter=dap")
