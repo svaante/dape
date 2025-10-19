@@ -1562,11 +1562,9 @@ If `dape--request-blocking' is non-nil do blocking request."
         (let ((result (jsonrpc-request conn command arguments)))
           (when cb (success-fn result)))
       (jsonrpc-async-request conn command arguments
-                             :success-fn
-                             (when cb #'success-fn)
-                             :error-fn #'ignore ;; will never be called
-                             :timeout-fn
-                             (when cb #'timeout-fn)
+                             :success-fn (when cb #'success-fn)
+                             :error-fn #'ignore ; will never be called
+                             :timeout-fn (when cb #'timeout-fn)
                              :timeout dape-request-timeout))))
 
 (defun dape--initialize (conn)
