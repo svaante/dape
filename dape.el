@@ -3166,7 +3166,7 @@ Source is either a buffer or file name."
   "Add hits breakpoint at current line."
   dape-breakpoint-hits)
 
-(defvar dape-breakpoint-global-mode-map
+(defvar dape-breakpoint-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map [left-fringe mouse-1] #'dape-mouse-breakpoint-toggle)
     (define-key map [left-margin mouse-1] #'dape-mouse-breakpoint-toggle)
@@ -3177,13 +3177,17 @@ Source is either a buffer or file name."
     (define-key map [left-fringe mouse-3] #'dape-mouse-breakpoint-log)
     (define-key map [left-margin mouse-3] #'dape-mouse-breakpoint-log)
     map)
-  "Keymap for `dape-breakpoint-global-mode'.")
+  "Keymap for `dape-breakpoint-mode'.")
+
+(define-minor-mode dape-breakpoint-mode
+  "Toggle clickable breakpoint controls in fringe or margins."
+  :lighter nil)
 
 ;;;###autoload
-(define-minor-mode dape-breakpoint-global-mode
-  "Toggle clickable breakpoint controls in fringe or margins."
-  :global t
-  :lighter nil)
+(define-globalized-minor-mode dape-breakpoint-global-mode dape-breakpoint-mode
+  (lambda ()
+    (when (derived-mode-p 'prog-mode)
+      (dape-breakpoint-mode 1))))
 
 (defun dape--breakpoint-maybe-remove-ff-hook ()
   "Remove the `find-file-hook' if all breakpoints have buffers."
@@ -3257,9 +3261,6 @@ TYPE is expected to be nil, `log', `expression', `hits', or `until'.
 If TYPE is `log', `expression', or `hits', VALUE should be a string.
 Unless SKIP-NOTIFY is non-nil, notify all connections.
 Note: removes existing breakpoints at the line before placing."
-  (unless (derived-mode-p 'prog-mode)
-    (user-error
-     "Should probably not set breakpoint in non `prog-mode' buffer"))
   (dape-breakpoint-remove-at-point 'skip-notify)
   (let ((breakpoint (dape--breakpoint-make :type type :value value)))
     (dape--breakpoint-make-overlay breakpoint)
