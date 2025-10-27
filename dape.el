@@ -738,6 +738,10 @@ compilation is successful."
   "Show `dape-configs' hints in minibuffer."
   :type 'boolean)
 
+(defcustom dape-read-config-hook nil
+  "Called before `dape-configs' is evaluated into completion candidates."
+  :type 'hook)
+
 (defcustom dape-minibuffer-hint-ignore-properties
   '( ensure fn modes command command-args command-env command-insert-stderr
      defer-launch-attach :type :request)
@@ -5594,6 +5598,7 @@ nil."
 Completes from suggested conjurations, a configuration is suggested if
 it's for current `major-mode' and it's available.
 See `modes' and `ensure' in `dape-configs'."
+  (run-hooks 'dape-read-config-hook)
   (let* ((suggested-configs
           (cl-loop for (name . config) in dape-configs
                    when (and (dape--config-mode-p config)
