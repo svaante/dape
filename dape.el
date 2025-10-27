@@ -794,7 +794,8 @@ Debug logging has an noticeable effect on performance."
   "Face used to display hits breakpoints.")
 
 (defface dape-exception-description-face '((t :inherit (error tooltip)
-                                              :extend t))
+                                              :extend t
+                                              :stipple nil))
   "Face used to display exception descriptions inline.")
 
 (defface dape-source-line-face '((t))
