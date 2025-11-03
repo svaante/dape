@@ -2595,6 +2595,7 @@ An hit HITS is an string matching regex:
 (defun dape-breakpoint-remove-at-point (&optional skip-notify)
   "Remove breakpoint, log breakpoint and expression at current line.
 When SKIP-NOTIFY is non-nil, do not notify adapters about removal."
+  (interactive)
   (dolist (breakpoint (dape--breakpoints-at-point))
     (dape--breakpoint-remove breakpoint skip-notify)))
 
