@@ -977,25 +977,33 @@ See `dape--threads-set-status'."
   (setf (dape--threads-update-handle conn)
         (1+ (dape--threads-update-handle conn))))
 
-(defun dape--threads-set-status (conn thread-id all-threads status update-handle)
+(defun dape--threads-set-status ( conn thread-id all-threads status
+                                  &optional update-handle)
   "Set string STATUS thread(s) for CONN.
 If THREAD-ID is non-nil set status for thread with :id equal to
 THREAD-ID to STATUS.
 If ALL-THREADS is non-nil set status of all all threads to STATUS.
 Ignore status update if UPDATE-HANDLE is not the last handle created
 by `dape--threads-make-update-handle'."
+  (unless update-handle
+    (setq update-handle (dape--threads-make-update-handle conn)))
   (when (> update-handle (dape--threads-last-update-handle conn))
     (setf (dape--threads-last-update-handle conn) update-handle)
-    (cond ((not status) nil)
-          (all-threads
-           (cl-loop for thread in (dape--threads conn)
-                    do (plist-put thread :status status)))
-          (thread-id
-           (plist-put
-            (cl-find-if (lambda (thread)
-                          (equal (plist-get thread :id) thread-id))
-                        (dape--threads conn))
-            :status status)))))
+    (let* ((threads (dape--threads conn))
+           (thread (cl-find thread-id threads
+                            :key (lambda (th) (plist-get th :id)))))
+      (unless thread
+        (setf (dape--threads conn)
+              (nconc threads
+                     `(( :id ,thread-id
+                         :name ,(format "thread-%s" thread-id)
+                         :status ,status)))))
+      (cond (;; Set status on all threads
+             all-threads
+             (cl-loop for th in threads
+                      do (plist-put th :status status)))
+            (;; Set status only on specified thread
+             thread (plist-put thread :status status))))))
 
 (defun dape--thread-id-object (conn)
   "Construct a thread id object for CONN."
@@ -2150,6 +2158,9 @@ Logs and sets state based on BODY contents."
     (dape--update-state conn (intern start-method))
     (dape--message "%s %s" (capitalize start-method) (plist-get body :name))))
 
+(defvar dape--thread-event-debounce-timer (timer-create)
+  "Debounce context for threads request in thread event.")
+
 (cl-defmethod dape-handle-event (conn (_event (eql thread)) body)
   "Handle adapter CONNs thread events.
 Stores `dape--thread-id' and updates/adds thread in
@@ -2158,21 +2169,15 @@ Stores `dape--thread-id' and updates/adds thread in
       body
     (dape--maybe-select-thread conn threadId)
     (when (equal reason "started")
-      ;; For adapters that does not send an continued request use
-      ;; thread started as an way to switch from `initialized' to
-      ;; running.
+      ;; For adapters that does not send an continued request,  use
+      ;; thread started to switch from `initialized' to `running'.
       (dape--update-state conn 'running))
-    (let ((update-handle
-           ;; Need to store handle before threads request to guard
-           ;; against an overwriting thread status if event is firing
-           ;; while threads request is in flight
-           (dape--threads-make-update-handle conn)))
+    (dape--threads-set-status conn threadId nil
+                              (if (equal reason "exited") 'exited 'running))
+    ;; XXX vscode uses a similar optimization, which makes it part of
+    ;; spec... some adapters will blow unless :thread is throttled.
+    (dape--with-debounce dape--thread-event-debounce-timer 0.001
       (dape--with-request (dape--update-threads conn)
-        (dape--threads-set-status conn threadId nil
-                                  (if (equal reason "exited")
-                                      'exited
-                                    'running)
-                                  update-handle)
         (run-hooks 'dape-update-ui-hook)))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql stopped)) body)
@@ -2184,14 +2189,12 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
             &allow-other-keys)
       body
     (dape--update-state conn 'stopped reason)
+    ;; Select thread as stopped this thread
     (dape--maybe-select-thread conn threadId 'force)
-    ;; Reset stack id to force a new frame in
-    ;; `dape--current-stack-frame'.
-    (setf (dape--stack-id conn) nil
-          ;; Reset exception description
-          (dape--exception-description conn) nil)
-    ;; Important to do this before `dape--update' to be able to setup
-    ;; breakpoints description.
+    ;; ...and frame as (car frames)
+    (setf (dape--stack-id conn) nil)
+    ;; Clear (and Update exception description)
+    (setf (dape--exception-description conn) nil)
     (when (equal reason "exception")
       ;; Output exception info in overlay and REPL
       (let* ((texts
@@ -2201,7 +2204,7 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
              (str (concat (mapconcat #'identity texts ":\n\t") "\n")))
         (setf (dape--exception-description conn) str)
         (dape--repl-insert-error str)))
-    ;; Update breakpoints hits
+    ;; Update number breakpoint of hits
     (cl-loop for id across hitBreakpointIds
              for breakpoint =
              (cl-find id dape--breakpoints
@@ -2210,13 +2213,16 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
              when breakpoint do
              (with-slots (hits) breakpoint
                (setf hits (1+ (or hits 0)))))
-    ;; Update `dape--threads'
+    ;; Set thread status ASAP to reflect the stopped state.
+    (dape--threads-set-status conn threadId (eq allThreadsStopped t) 'stopped)
     (let ((update-handle
            ;; Need to store handle before threads request to guard
            ;; against an overwriting thread status if event is firing
-           ;; while threads request is in flight
+           ;; while :threads request is in flight.
            (dape--threads-make-update-handle conn)))
       (dape--with-request (dape--update-threads conn)
+        ;; Then set it again to set `stopped' on threads that where
+        ;; not fetched before threads request.
         (dape--threads-set-status conn threadId (eq allThreadsStopped t)
                                   'stopped update-handle)
         (dape--update conn 'stack-frames t)))
@@ -2231,8 +2237,7 @@ Sets `dape--thread-id' from BODY if not set."
     (dape--update-state conn 'running)
     (dape--stack-frame-cleanup)
     (dape--maybe-select-thread conn threadId)
-    (dape--threads-set-status conn threadId (eq allThreadsContinued t) 'running
-                              (dape--threads-make-update-handle conn))
+    (dape--threads-set-status conn threadId (eq allThreadsContinued t) 'running)
     (run-hooks 'dape-update-ui-hook)))
 
 (cl-defmethod dape-handle-event (_conn (_event (eql output)) body)
@@ -4094,7 +4099,7 @@ See `dape-request' for expected CB signature."
                " "
                (if-let* ((status (plist-get thread :status)))
                    (format "%s" status)
-                 "unknown")
+                 "")
                (if-let* (((equal (plist-get thread :status) 'stopped))
                          (top-stack (car (plist-get thread :stackFrames))))
                    (concat
