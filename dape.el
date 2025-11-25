@@ -1207,7 +1207,11 @@ as is."
 
 (defun dape--ensure-executable (executable)
   "Ensure that EXECUTABLE exist on system."
-  (unless (or (file-executable-p executable)
+  (unless (or (and (file-name-absolute-p executable)
+                   (file-remote-p default-directory)
+                   (file-executable-p
+                    (concat (file-remote-p default-directory) executable)))
+              (file-executable-p executable)
               (executable-find executable t))
     (user-error "Unable to locate %S (default-directory %s)"
                 executable default-directory)))
