@@ -5831,7 +5831,8 @@ mouse-1: Display minor mode menu"
                dape-select-stack
                dape-select-thread
                dape-watch-dwim
-               dape-evaluate-expression))
+               dape-evaluate-expression
+               dape-info))
   (put cmd 'repeat-map 'dape-global-map))
 
 (when dape-key-prefix (global-set-key dape-key-prefix dape-global-map))
