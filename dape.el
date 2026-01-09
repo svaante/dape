@@ -1996,8 +1996,7 @@ If DISPLAY-SOURCE-P is non-nil, display displayable top frame."
 (define-derived-mode dape-shell-mode shell-mode "Shell"
   "Major mode for interacting with an debugged program."
   :interactive nil
-  (setq-local revert-buffer-function (lambda (&rest _) (dape-restart)))
-  (dape-tool-bar-mode))
+  (setq-local revert-buffer-function (lambda (&rest _) (dape-restart))))
 
 (cl-defmethod dape-handle-request (conn (_command (eql runInTerminal)) arguments)
   "Handle runInTerminal requests.
