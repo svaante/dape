@@ -1130,10 +1130,8 @@ The indicator is `propertize'd with with FACE."
 
 (defun dape--guess-root (config)
   "Return best guess root path from CONFIG."
-  (if-let* ((command-cwd (plist-get config 'command-cwd))
-            ((stringp command-cwd)))
-      command-cwd
-    (dape-command-cwd)))
+  (or (dape-config-get config 'command-cwd)
+      default-directory))
 
 (defun dape-config-autoport (config)
   "Handle :autoport in CONFIG keys `port', `command-args', and `command-env'.
@@ -2288,7 +2286,7 @@ Killing the adapter and it's CONN."
 If started by an startDebugging request expects PARENT to
 symbol `dape-connection'."
   (unless (plist-get config 'command-cwd)
-    (plist-put config 'command-cwd default-directory))
+    (plist-put config 'command-cwd (dape--guess-root config)))
   (let ((default-directory (plist-get config 'command-cwd))
         (process-environment (cl-copy-list process-environment))
         (command (cons (plist-get config 'command)
@@ -2832,7 +2830,7 @@ Using BUFFER and STR."
 (defun dape--compile (config fn)
   "Start compilation for CONFIG then call FN."
   (let ((default-directory (dape--guess-root config))
-        (command (plist-get config 'compile)))
+        (command (dape-config-get config 'compile)))
     (funcall dape-compile-function command)
     (with-current-buffer (compilation-find-buffer)
       (setq dape--compile-after-fn fn)
@@ -5671,7 +5669,9 @@ See `modes' and `ensure' in `dape-configs'."
                nil 'dape-history default-value)))
            (`(,key ,config)
             (dape--config-from-string (substring-no-properties str)))
-           (evaled-config (dape--config-eval key config)))
+           (evaled-config
+            (let ((default-directory (dape--guess-root config)))
+              (dape--config-eval key config))))
         (unless (eq dape-history-add 'input)
           (push (dape--config-to-string key evaled-config) dape-history))
         evaled-config))))
