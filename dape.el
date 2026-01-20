@@ -5344,7 +5344,7 @@ CONN is inferred for interactive invocations."
 
 (defun dape-config-get (config prop)
   "Return PROP value in CONFIG evaluated."
-  (dape--config-eval-value (plist-get config prop)))
+  (dape--config-eval-value (plist-get config prop) nil 'skip-interactive))
 
 (defun dape--plistp (object)
   "Non-nil if and only if OBJECT is a valid plist."
@@ -5389,7 +5389,7 @@ non-nil and function uses the minibuffer."
 
 (defun dape--config-eval-1 (config &optional skip-functions skip-interactive)
   "Return evaluated CONFIG.
-See `dape--config-eval' for SKIP-FUNCTIONS and SKIP-INTERACTIVE."
+See `dape--config-eval-value' for SKIP-FUNCTIONS and SKIP-INTERACTIVE."
   (cl-loop for (key value) on config by 'cddr append
            (cond
             ((memql key '(modes fn ensure)) (list key value))
@@ -5397,8 +5397,9 @@ See `dape--config-eval' for SKIP-FUNCTIONS and SKIP-INTERACTIVE."
                    (dape--config-eval-value value
                                             skip-functions
                                             skip-interactive))))))
-(defun dape--config-eval (key options)
-  "Evaluate config with KEY and OPTIONS."
+(defun dape--config-eval (key options &optional skip-functions)
+  "Evaluate config with KEY and OPTIONS.
+See `dape--config-eval-value' for SKIP-FUNCTIONS."
   (let ((base-config (alist-get key dape-configs)))
     (unless base-config
       (user-error "Unable to find `%s' in `dape-configs', available \
@@ -5407,7 +5408,8 @@ configurations: %s"
                                  dape-configs ", ")))
     (dape--config-eval-1 (seq-reduce (apply-partially 'apply 'plist-put)
                                      (nreverse (seq-partition options 2))
-                                     (copy-tree base-config)))))
+                                     (copy-tree base-config))
+                         skip-functions)))
 
 (defun dape--config-from-string (str)
   "Return list of (KEY CONFIG) from STR.
@@ -5620,7 +5622,7 @@ See `modes' and `ensure' in `dape-configs'."
                          (ignore-errors (dape--config-from-string initial-contents))))
               (list
                (dape--config-to-string
-                key (ignore-errors (dape--config-eval key config)))
+                key (ignore-errors (dape--config-eval key config 'skip-functions)))
                (format "%s " key))))))
     (setq dape--minibuffer-last-buffer (current-buffer)
           dape--minibuffer-cache nil)
