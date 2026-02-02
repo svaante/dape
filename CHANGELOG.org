@@ -2,6 +2,21 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.26.0
+- Add custom faces for mode line usage
+- Add =dape-info= to repeat bindings
+- Add hare modes to GDB configuration
+- Add debounce for threads request triggered by thread event
+- Add read configuration hook =dape-read-config-hook=
+- Change split breakpoint mode into globalized and local variants
+- Change default-directory handling when evaluating configuration
+- Change autoload =dape-breakpoint-global-mode=
+- Fix ensure remote executables use absolute paths
+- Fix ensure variables expanding properly in REPL
+- Fix default value evaluation in read configuration
+- Fix reinstate =dape-breakpoint-remove-at-point= as command
+- Fix exception description stipple handling
+
 * Version 0.25.0
 - Add =dape-many-windows= to configure window usage
 - Add =dape-restart-frame= command to restart the current frame
