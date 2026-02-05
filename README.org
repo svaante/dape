@@ -152,8 +152,35 @@ Configure debug adapter port under "Editor" > "Editor Settings" > "Debug Adapter
 ** Dart - flutter
 See for installation https://docs.flutter.dev/get-started/install
 
-** C# - netcoredbg
+** C# - netcoredb
+
+netcoredbg is an open-source debugger for .NET that implements the Debug
+Adapter Protocol.
+
 See https://github.com/Samsung/netcoredbg for installation
+
+Example configuration:
+
+#+begin_src emacs-lisp
+(add-to-list 'dape-configs
+             `(netcoredbg
+               modes (csharp-mode csharp-ts-mode)
+               ensure dape-ensure-command
+               command "netcoredbg"
+               command-args ("--interpreter=vscode")
+               normalize-path-separator 'windows  ;; Required for proper breakpoint binding
+               :type "coreclr"
+               :request "launch"
+               :cwd dape-cwd
+               :program dape-cwd
+               :stopAtEntry nil))
+#+end_src
+
+*Note:* The =normalize-path-separator= option is important for netcoredbg on
+Windows. netcoredbg requires exact path matching between source files and PDB
+symbol files. Since PDB files store paths with backslashes (=\=), but Emacs
+uses forward slashes (=/=), this option ensures paths are converted to the
+format expected by the debugger.
 
 ** Ruby - rdbg
 Install with ~gem install debug~.

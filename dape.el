@@ -312,6 +312,7 @@
      ensure dape-ensure-command
      command "netcoredbg"
      command-args ["--interpreter=vscode"]
+     normalize-path-separator 'windows
      :request "launch"
      :cwd dape-cwd
      :program (if-let* ((dlls
@@ -446,6 +447,11 @@ Symbol keys (Used by dape):
   stderr output from debugged program.
 - prefix-local: Path prefix for Emacs file access.
 - prefix-remote: Path prefix for debugger file access.
+- normalize-path-separator: Normalize path separators when sending to adapter.
+  When set to `'windows', converts forward slashes to backslashes.
+  When set to `'unix', converts backslashes to forward slashes.
+  nil (default) means no normalization. Useful for adapters like
+  netcoredbg that require exact path matching with symbol files.
 - host: Host of the debug adapter.
 - port: Port of the debug adapter.
 - modes: List of modes where the configuration is active in `dape'
@@ -494,6 +500,10 @@ Functions and symbols:
                         ((const :tag "Working directory for command" command-cwd) (choice string symbol))
                         ((const :tag "Path prefix for Emacs file access" prefix-local) string)
                         ((const :tag "Path prefix for debugger file access" prefix-remote) string)
+                        ((const :tag "Normalize path separators" normalize-path-separator)
+                         (choice (const :tag "No normalization" nil)
+                                 (const :tag "Convert to backslashes (Windows)" 'windows)
+                                 (const :tag "Convert to forward slashes (Unix)" 'unix)))
                         ((const :tag "Host of debug adapter" host) string)
                         ((const :tag "Port of debug adapter" port) natnum)
                         ((const :tag "Compile cmd" compile) string)
@@ -1060,9 +1070,18 @@ See `dape--file-name-1'."
   (dape--file-name-1 conn filename nil))
 
 (defun dape--file-name-remote (conn filename)
-  "Return FILENAME string for adapter configured by CONN.
+  "Return translate FILENAME to remote format by CONN.
+Normalizes path separators according to `normalize-path-separator' config option.
 See `dape--file-name-1'."
-  (dape--file-name-1 conn filename 'remote))
+  (let* ((result (dape--file-name-1 conn filename 'remote))
+         (config (dape--config conn))
+         (normalize (plist-get config 'normalize-path-separator)))
+    (if (and result normalize)
+        (pcase normalize
+          ('windows (replace-regexp-in-string "/" "\\\\" result))
+          ('unix (replace-regexp-in-string "\\\\" "/" result))
+          (_ result))
+      result)))
 
 (defun dape--capable-p (conn thing)
   "Return non-nil if CONN capable of THING."
