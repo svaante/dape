@@ -4472,6 +4472,9 @@ current buffer with CONN config."
 TEST-EXPANDED is called with PATH and OBJECT to determine if recursive
 calls should continue.  If NO-HANDLES is non-nil skip + - handles."
   (let* ((name (or (plist-get object :name) ""))
+         (name (if (string-empty-p name)
+                   (or (plist-get object :evaluateName) "")
+                 name))
          (type (or (plist-get object :type) ""))
          (value (or (plist-get object :value)
                     (plist-get object :result)
