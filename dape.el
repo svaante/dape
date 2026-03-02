@@ -4910,6 +4910,12 @@ Called by `comint-input-sender' in `dape-repl-mode'."
                     (or (plist-get target :text) (plist-get target :label))
                     (when-let* ((start (plist-get target :start))
                                 (offset (- (car bounds) line-start))
+                                ;; XXX Assume server sends both start
+                                ;; and length (vscode convention) or
+                                ;; bail.  Seems successful in
+                                ;; identifying misbehaving servers
+                                ;; (e.g. jdtls).
+                                ((plist-get target :length))
                                 ((< start offset)))
                       ;; XXX Adapter gets line but Emacs completion is
                       ;; given `word' bounds, cut prefix off candidate
