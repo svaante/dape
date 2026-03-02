@@ -5532,14 +5532,12 @@ Where ALIST-KEY exists in `dape-configs'."
 If SIGNAL is non-nil raises `user-error' on failure otherwise returns
 nil."
   (if-let* ((ensure-fn (plist-get config 'ensure)))
-      (let ((default-directory
-             (if-let* ((command-cwd (plist-get config 'command-cwd)))
-                 (dape--config-eval-value command-cwd)
-               default-directory)))
-        (condition-case err
-            (or (funcall ensure-fn config) t)
-          (error
-           (if signal (user-error (error-message-string err)) nil))))
+      (condition-case err
+          (let ((default-directory (or (dape-config-get config 'command-cwd)
+                                       default-directory)))
+            (or (funcall ensure-fn config) t))
+        (error
+         (if signal (user-error (error-message-string err)) nil)))
     t))
 
 (defun dape--config-mode-p (config)
@@ -5610,7 +5608,7 @@ See `modes' and `ensure' in `dape-configs'."
   (let* ((suggested-configs
           (cl-loop for (name . config) in dape-configs
                    when (and (dape--config-mode-p config)
-                             (dape--config-ensure config))
+                             (ignore-errors (dape--config-ensure config)))
                    collect (symbol-name name)))
          (initial-contents
           (or
@@ -5623,7 +5621,7 @@ See `modes' and `ensure' in `dape-configs'."
                                        (dape--config-from-string string))
                     when (and config
                               (dape--config-mode-p config)
-                              (dape--config-ensure config))
+                              (ignore-errors (dape--config-ensure config)))
                     return string)
            ;; Take first suggested config if only one exist
            (when (and (length= suggested-configs 1)
