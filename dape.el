@@ -3665,7 +3665,6 @@ Each buffers store its own debounce context."
   "Major mode to derive all Dape info buffer modes from."
   :interactive nil
   (setq-local buffer-read-only t
-              truncate-lines t
               cursor-in-non-selected-windows nil
               revert-buffer-function #'dape--info-revert
               dape--info-debounce-timer (timer-create))
@@ -3918,7 +3917,8 @@ expression breakpoint")))))
 
 (define-derived-mode dape-info-breakpoints-mode dape-info-parent-mode "Breakpoints"
   "Major mode for viewing and editing breakpoints."
-  :interactive nil)
+  :interactive nil
+  (setq truncate-lines t))
 
 (cl-defmethod dape--info-revert (&context (major-mode dape-info-breakpoints-mode)
                                           &rest _)
@@ -4073,7 +4073,6 @@ See `dape-request' for expected CB signature."
   "Major mode for viewing and selecting threads."
   :interactive nil
   (setq font-lock-defaults '(dape--info-threads-font-lock-keywords)
-        truncate-lines nil
         dape--info-thread-position (make-marker))
   (add-to-list 'overlay-arrow-variable-list 'dape--info-thread-position))
 
@@ -4177,6 +4176,7 @@ See `dape-request' for expected CB signature."
   "Major mode for viewing and navigating the call stack."
   :interactive nil
   (setq font-lock-defaults '(dape--info-stack-font-lock-keywords)
+        truncate-lines t
         dape--info-stack-position (make-marker))
   (add-to-list 'overlay-arrow-variable-list 'dape--info-stack-position))
 
