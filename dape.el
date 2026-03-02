@@ -5835,6 +5835,7 @@ mouse-1: Display minor mode menu"
     (define-key map "x" #'dape-evaluate-expression)
     (define-key map "w" #'dape-watch-dwim)
     (define-key map "D" #'dape-disconnect-quit)
+    (define-key map "K" #'dape-kill)
     (define-key map "q" #'dape-quit)
     map))
 
