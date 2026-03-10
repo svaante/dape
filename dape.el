@@ -57,7 +57,6 @@
 (require 'hexl)
 (require 'tramp)
 (require 'jsonrpc)
-(require 'which-func)
 
 
 ;;; Custom
@@ -457,8 +456,8 @@
                                        "out"
                                        "phpDebug.js")))
      :type "php"
-     :port 9003)
-    "This variable holds the dape configurations as an alist.
+     :port 9003))
+  "This variable holds the dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
@@ -511,7 +510,7 @@ Keywords in configuration:
 Functions and symbols:
   - If a value is a function, its return value replaces the key's
     value before execution.  The function is called with no arguments.
-  - If a value is a symbol, it resolves recursively before execution.")
+  - If a value is a symbol, it resolves recursively before execution."
   :type '(alist :key-type (symbol :tag "Name")
                 :value-type
                 (plist :options
