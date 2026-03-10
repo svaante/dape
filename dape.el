@@ -203,26 +203,6 @@
      :type "go"
      :cwd "."
      :program ".")
-    (go-gdb-test
-     modes (go-mode go-ts-mode)
-     command "gdb"
-     command-args ("--interpreter=dap")
-     command-cwd (lambda () (file-name-directory (buffer-file-name)))
-     compile (lambda () (format "go test -c -o %s -gcflags '-N -l'" (dape--go-test-binary-name))) ;; compile without optimizations
-     :request "launch"
-     :program dape--go-test-binary-name
-     :args []
-     :stopAtBeginningOfMainSubprogram t)
-    (go-gdb
-     modes (go-mode go-ts-mode)
-     command "gdb"
-     command-args ("--interpreter=dap")
-     command-cwd dape-command-cwd
-     compile (lambda () (format "go build -o %s -gcflags '-N -l'" (dape--go-binary-name))) ;; compile without optimizations
-     :request "launch"
-     :program dape--go-binary-name
-     :args []
-     :stopAtBeginningOfMainSubprogram t)
     (flutter
      ensure dape-ensure-command
      modes (dart-mode)
@@ -254,6 +234,38 @@
      :program "a.out"
      :args []
      :stopAtBeginningOfMainSubprogram nil)
+    ,@(let ((gdb-common
+	     `( ensure (lambda (config)
+			 (dape-ensure-command config)
+			 (let* ((default-directory
+				 (or (dape-config-get config 'command-cwd)
+				     default-directory))
+				(command (dape-config-get config 'command))
+				(output (shell-command-to-string (format "%s --version" command)))
+				(version (save-match-data
+					   (when (string-match "GNU gdb \\(?:(.*) \\)?\\([0-9.]+\\)" output)
+					     (string-to-number (match-string 1 output))))))
+			   (unless (>= version 14.1)
+			     (user-error "Requires gdb version >= 14.1"))))
+		command "gdb"
+		command-args ("--interpreter=dap")
+		:request "launch"
+		:stopAtBeginningOfMainSubprogram nil)))
+	     `((go-gdb-test ,@gdb-common
+			    modes (go-mode go-ts-mode)
+			    command-cwd (file-name-directory (buffer-file-name))
+			    compile (format "go test -c -o %s -gcflags='all=-N -l'"
+					    (expand-file-name "__test.bin" temporary-file-directory)) ;; compile without optimizations
+			    :program (expand-file-name "__test.bin" temporary-file-directory)
+			    :args [])
+	       (go-gdb ,@gdb-common
+		       modes (go-mode go-ts-mode)
+		       command-cwd (file-name-directory (buffer-file-name))
+		       compile (format "go build -o %s -gcflags='all=-N -l'"
+				       (expand-file-name "__binary.bin" temporary-file-directory)) ;; compile without optimizations
+		       :request "launch"
+		       :program (expand-file-name "__binary.bin" temporary-file-directory)
+		       :args [])))
     (godot
      modes (gdscript-mode)
      port 6006
@@ -445,8 +457,8 @@
                                        "out"
                                        "phpDebug.js")))
      :type "php"
-     :port 9003))
-  "This variable holds the dape configurations as an alist.
+     :port 9003)
+    "This variable holds the dape configurations as an alist.
 In this alist, the car element serves as a symbol identifying each
 configuration.  Each configuration, in turn, is a property list (plist)
 where keys can be symbols or keywords.
@@ -499,7 +511,7 @@ Keywords in configuration:
 Functions and symbols:
   - If a value is a function, its return value replaces the key's
     value before execution.  The function is called with no arguments.
-  - If a value is a symbol, it resolves recursively before execution."
+  - If a value is a symbol, it resolves recursively before execution.")
   :type '(alist :key-type (symbol :tag "Name")
                 :value-type
                 (plist :options
