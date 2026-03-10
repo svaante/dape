@@ -900,22 +900,6 @@ Non interactive global minor mode."
 
 ;;; Utils
 
-(defun dape--go-test-name ()
-  "Retrieve Go test function name from current cursor position."
-  (if-let* ((file-name (buffer-file-name))
-            ((string-suffix-p "_test.go" file-name))
-            (fn-name (which-function)))
-      `["-test.run" ,(concat "^" (car (split-string (substring-no-properties fn-name))) "$")]
-    []))
-
-(defun dape--go-test-binary-name ()
-  "Format path to Go debugged test binary executable file."
-  (concat (temporary-file-directory) "__test.bin"))
-
-(defun dape--go-binary-name ()
-  "Format path to Go debugger binary exectuable file."
-  (concat (temporary-file-directory) "__prog.bin"))
-
 (defun dape--warn (format &rest args)
   "Display warning/error message with FORMAT and ARGS."
   (dape--repl-insert-error (format "* %s *\n" (apply #'format format args))))
