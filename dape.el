@@ -1492,11 +1492,11 @@ See `dape--connection-selected'."
 
 (cl-defstruct (dape--breakpoint (:constructor nil))
   "Base breakpoint object."
-  disabled verified id)
+  disabled verified id hits)
 
 (cl-defstruct (dape--source-breakpoint (:include dape--breakpoint))
   "Source/line breakpoint."
-  location type value hits)
+  location type value)
 
 (cl-defstruct (dape--data-breakpoint (:include dape--breakpoint))
   "Data/hardware breakpoint."
@@ -1505,6 +1505,10 @@ See `dape--connection-selected'."
 (cl-defstruct (dape--exception-breakpoint (:include dape--breakpoint))
   "Exception filter breakpoint."
   filter label default)
+
+(cl-defstruct (dape--function-breakpoint (:include dape--breakpoint))
+  "Function breakpoint."
+  name)
 
 (cl-defmethod jsonrpc-convert-to-endpoint ((conn dape-connection)
                                            message subtype)
@@ -1817,6 +1821,34 @@ See `dape-request' for expected CB signature."
             (cl-remove-if #'dape--data-breakpoint-p dape--breakpoints))
       (dape--request-continue cb))))
 
+(defun dape--set-function-breakpoints (conn &optional cb)
+  "Set function breakpoints for adapter CONN.
+See `dape-request' for expected CB signature."
+  (let ((function-breakpoints (cl-remove-if-not #'dape--function-breakpoint-p
+                                                dape--breakpoints)))
+    (if (dape--capable-p conn :supportsFunctionBreakpoints)
+        (dape--with-request-bind
+            ((&key breakpoints &allow-other-keys) error)
+            (dape-request conn :setFunctionBreakpoints
+                          `(:breakpoints
+                            ,(cl-map 'vector
+                                     (lambda (b)
+                                       `(:name ,(dape--function-breakpoint-name b)))
+                                     function-breakpoints)))
+          (when error
+            (dape--warn "Failed to set function breakpoints: %s" error))
+          (cl-loop
+           for breakpoint in function-breakpoints
+           for res across (or breakpoints [])
+           do (setf (dape--breakpoint-id breakpoint)
+                    (plist-put (dape--breakpoint-id breakpoint) conn
+                               (plist-get res :id))
+                    (dape--breakpoint-verified breakpoint)
+                    (plist-put (dape--breakpoint-verified breakpoint) conn
+                               (eq (plist-get res :verified) t))))
+          (dape--request-continue cb error))
+      (dape--request-continue cb))))
+
 (defun dape--update-threads (conn cb)
   "Update threads for CONN in-place if possible.
 See `dape-request' for expected CB signature."
@@ -2095,11 +2127,12 @@ Starts a new adapter connection as per request of the debug adapter."
   (dape--update-state conn 'initialized)
   (dape--with-request (dape--configure-exceptions conn)
     (dape--with-request (dape--set-breakpoints conn)
-      (dape--with-request (dape--set-data-breakpoints conn)
-        (dape--with-request (dape-request conn :configurationDone nil)
-          ;; See `defer-launch-attach' in `dape-configs'
-          (when (plist-get (dape--config conn) 'defer-launch-attach)
-            (dape--launch-or-attach conn)))))))
+      (dape--with-request (dape--set-function-breakpoints conn)
+        (dape--with-request (dape--set-data-breakpoints conn)
+          (dape--with-request (dape-request conn :configurationDone nil)
+            ;; See `defer-launch-attach' in `dape-configs'
+            (when (plist-get (dape--config conn) 'defer-launch-attach)
+              (dape--launch-or-attach conn))))))))
 
 (cl-defmethod dape-handle-event (conn (_event (eql capabilities)) body)
   "Handle adapter CONNs capabilities events.
@@ -2230,8 +2263,8 @@ Sets `dape--thread-id' from BODY and invokes ui refresh with
                       :key (lambda (breakpoint)
                              (plist-get (dape--breakpoint-id breakpoint) conn)))
              when breakpoint do
-             (with-slots (hits) breakpoint
-               (setf hits (1+ (or hits 0)))))
+             (setf (dape--breakpoint-hits breakpoint)
+                   (1+ (or (dape--breakpoint-hits breakpoint) 0))))
     ;; Set thread status ASAP to reflect the stopped state.
     (dape--threads-set-status conn threadId (eq allThreadsStopped t) 'stopped)
     (let ((update-handle
@@ -2629,6 +2662,19 @@ An hit HITS is an string matching regex:
   (if (string-empty-p condition)
       (dape-breakpoint-remove-at-point)
     (dape--breakpoint-place 'hits condition)))
+
+(defun dape-breakpoint-function (name)
+  "Add function breakpoint for function NAME."
+  (interactive
+   (let ((default (when-let* ((sym (thing-at-point 'symbol)))
+                    (substring-no-properties sym))))
+     (list (read-string (format-prompt "Function name" default) nil nil default))))
+  (push (make-dape--function-breakpoint :name name) dape--breakpoints)
+  (dolist (conn (dape--live-connections))
+    (when (dape--initialized-p conn)
+      (dape--set-function-breakpoints conn)))
+  (dape--display-buffer (dape--info-get-buffer-create 'dape-info-breakpoints-mode))
+  (run-hooks 'dape-update-ui-hook))
 
 (defun dape-breakpoint-remove-at-point (&optional skip-notify)
   "Remove breakpoint, log breakpoint and expression at current line.
@@ -3272,8 +3318,7 @@ If KEEP-STATE is non-nil preserve ID and VERIFIED state."
     (unless keep-state
       (setf (dape--breakpoint-id breakpoint) nil
             (dape--breakpoint-verified breakpoint) nil))
-    (when (dape--source-breakpoint-p breakpoint)
-      (setf (dape--source-breakpoint-hits breakpoint) nil))))
+    (setf (dape--breakpoint-hits breakpoint) nil)))
 
 (defun dape--breakpoints-at-point ()
   "Return list of source breakpoints at current point."
@@ -3910,6 +3955,11 @@ buffers get displayed and how they are grouped."
      (setf (dape--breakpoint-disabled dape--breakpoint) t)
      (dolist (conn (dape--live-connections))
        (dape--set-exception-breakpoints conn)))
+    (dape--function-breakpoint
+     (dape--breakpoint-remove dape--breakpoint)
+     (dolist (conn (dape--live-connections))
+       (when (dape--initialized-p conn)
+         (dape--set-function-breakpoints conn))))
     (dape--data-breakpoint
      (dape--breakpoint-remove dape--breakpoint)
      (when-let* ((conn (dape--live-connection 'stopped t)))
@@ -3956,21 +4006,35 @@ expression breakpoint")))))
     (let ((table (make-gdb-table))
           (y (propertize "y" 'font-lock-face 'font-lock-warning-face))
           (n (propertize "n" 'font-lock-face 'font-lock-doc-face)))
-      (cl-loop for breakpoint in dape--breakpoints do
+      (cl-loop for breakpoint in dape--breakpoints
+               for enabled-or-hits =
+               (cond ((dape--breakpoint-disabled breakpoint) n)
+                     ((when-let* ((hits (dape--breakpoint-hits breakpoint)))
+                        (propertize (format "%s" hits)
+                                    'font-lock-face 'font-lock-warning-face)))
+                     (y))
+               for (row prop) =
                (cl-typecase breakpoint
+                 (dape--function-breakpoint
+                  (let* ((verified-plist (dape--breakpoint-verified breakpoint))
+                         (verified-p
+                          (or (not (dape--live-connection 'last t))
+                              (cl-find-if (apply-partially #'plist-get verified-plist)
+                                          (dape--live-connections)))))
+                    `(("Func "
+                       ,(dape--function-breakpoint-name breakpoint))
+                      ( dape--breakpoint ,breakpoint
+                        ,@(unless verified-p '(font-lock-face shadow))))))
                  (dape--data-breakpoint
-                  (gdb-table-add-row
-                   table
-                   (list
-                    y "Data "
-                    (format "%s %s %s"
-                            (propertize (dape--data-breakpoint-name breakpoint)
-                                        'font-lock-face
-                                        'font-lock-variable-name-face)
-                            (dape--data-breakpoint-access-type breakpoint)
-                            (when-let* ((id (dape--data-breakpoint-data-id breakpoint)))
-                              (format "(%s)" id))))
-                   `(dape--breakpoint ,breakpoint)))
+                  `(("Data "
+                     ,(format "%s %s %s"
+                              (propertize (dape--data-breakpoint-name breakpoint)
+                                          'font-lock-face
+                                          'font-lock-variable-name-face)
+                              (dape--data-breakpoint-access-type breakpoint)
+                              (when-let* ((id (dape--data-breakpoint-data-id breakpoint)))
+                                (format "(%s)" id))))
+                    (dape--breakpoint ,breakpoint)))
                  (dape--source-breakpoint
                   (let* ((line (dape--breakpoint-line breakpoint))
                          (verified-plist (dape--breakpoint-verified breakpoint))
@@ -3981,51 +4045,41 @@ expression breakpoint")))))
                            (cl-find-if (apply-partially #'plist-get verified-plist)
                                        (dape--live-connections))
                            ;; If hit then must be verified
-                           (dape--source-breakpoint-hits breakpoint))))
-                    (gdb-table-add-row
-                     table
-                     (list
-                      (cond ((dape--breakpoint-disabled breakpoint) n)
-                            ((when-let* ((hits (dape--source-breakpoint-hits breakpoint)))
-                               (propertize (format "%s" hits)
-                                           'font-lock-face 'font-lock-warning-face)))
-                            (y))
-                      (pcase (dape--source-breakpoint-type breakpoint)
-                        ('log        "Log  ")
-                        ('hits       "Hits ")
-                        ('expression "Cond ")
-                        ('until      "Until")
-                        (_           "Break"))
-                      (or
-                       ;; If buffer live, display part of the line
-                       (when-let* ((buffer (dape--breakpoint-buffer breakpoint)))
-                         (concat
-                          (if-let* ((filename (buffer-file-name buffer)))
-                              (dape--format-file-name-line filename line)
-                            (format "%s:%d" (buffer-name buffer) line))
-                          (concat
-                           " "
-                           (thread-first
-                             (dape--with-line buffer line
-                               (or (thing-at-point 'line) ""))
-                             (string-trim-right)
-                             (truncate-string-to-width 80 nil nil t)))))
-                       ;; Otherwise just show filename:line
-                       (when-let* ((filename (dape--breakpoint-file-name breakpoint)))
-                         (dape--format-file-name-line filename line))))
-                     `( dape--breakpoint ,breakpoint
+                           (dape--breakpoint-hits breakpoint))))
+                    `((,(pcase (dape--source-breakpoint-type breakpoint)
+                          ('log        "Log  ")
+                          ('hits       "Hits ")
+                          ('expression "Cond ")
+                          ('until      "Until")
+                          (_           "Break"))
+                       ,(or
+                         ;; If buffer live, display part of the line
+                         (when-let* ((buffer (dape--breakpoint-buffer breakpoint)))
+                           (concat
+                            (if-let* ((filename (buffer-file-name buffer)))
+                                (dape--format-file-name-line filename line)
+                              (format "%s:%d" (buffer-name buffer) line))
+                            (concat
+                             " "
+                             (thread-first
+                               (dape--with-line buffer line
+                                 (or (thing-at-point 'line) ""))
+                               (string-trim-right)
+                               (truncate-string-to-width 80 nil nil t)))))
+                         ;; Otherwise just show filename:line
+                         (when-let* ((filename (dape--breakpoint-file-name breakpoint)))
+                           (dape--format-file-name-line filename line))))
+                      ( dape--breakpoint ,breakpoint
                         mouse-face highlight
                         help-echo "mouse-2, RET: visit breakpoint"
                         ,@(unless verified-p '(font-lock-face shadow))))))
                  (dape--exception-breakpoint
-                  (gdb-table-add-row
-                   table
-                   `(,(if (not (dape--breakpoint-disabled breakpoint)) y n)
-                     "Excep"
-                     ,(format "%s" (dape--exception-breakpoint-label breakpoint)))
-                   `( dape--breakpoint ,breakpoint
+                  `(("Excep"
+                     ,(dape--exception-breakpoint-label breakpoint))
+                    ( dape--breakpoint ,breakpoint
                       mouse-face highlight
-                      help-echo "mouse-2, RET: toggle exception")))))
+                      help-echo "mouse-2, RET: toggle exception"))))
+               when row do (gdb-table-add-row table (cons enabled-or-hits row) prop))
       (insert (gdb-table-string table " ")))))
 
 
@@ -5858,6 +5912,7 @@ mouse-1: Display minor mode menu"
     (define-key map "l" #'dape-breakpoint-log)
     (define-key map "e" #'dape-breakpoint-expression)
     (define-key map "h" #'dape-breakpoint-hits)
+    (define-key map "F" #'dape-breakpoint-function)
     (define-key map "b" #'dape-breakpoint-toggle)
     (define-key map "B" #'dape-breakpoint-remove-all)
     (define-key map "t" #'dape-select-thread)
@@ -5883,6 +5938,7 @@ mouse-1: Display minor mode menu"
                dape-breakpoint-log
                dape-breakpoint-expression
                dape-breakpoint-hits
+               dape-breakpoint-function
                dape-breakpoint-toggle
                dape-breakpoint-remove-all
                dape-stack-select-up
