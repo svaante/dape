@@ -4769,7 +4769,7 @@ The search is done backwards from POINT.  The line is marked with
 (defun dape--repl-revert-region (&rest _)
   "Revert region by cont text property dape--revert-tag."
   (when-let* ((inhibit-read-only t)
-			  (fn (get-text-property (point) 'dape--revert-fn))
+	      (fn (get-text-property (point) 'dape--revert-fn))
               (start (save-excursion
                        (previous-single-property-change
                         (1+ (point)) 'dape--revert-tag)))
