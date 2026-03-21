@@ -233,6 +233,38 @@
      :program "a.out"
      :args []
      :stopAtBeginningOfMainSubprogram nil)
+    ,@(let ((gdb-common
+	     `( ensure (lambda (config)
+			 (dape-ensure-command config)
+			 (let* ((default-directory
+				 (or (dape-config-get config 'command-cwd)
+				     default-directory))
+				(command (dape-config-get config 'command))
+				(output (shell-command-to-string (format "%s --version" command)))
+				(version (save-match-data
+					   (when (string-match "GNU gdb \\(?:(.*) \\)?\\([0-9.]+\\)" output)
+					     (string-to-number (match-string 1 output))))))
+			   (unless (>= version 14.1)
+			     (user-error "Requires gdb version >= 14.1"))))
+		command "gdb"
+		command-args ("--interpreter=dap")
+		:request "launch"
+		:stopAtBeginningOfMainSubprogram nil)))
+	     `((go-gdb-test ,@gdb-common
+			    modes (go-mode go-ts-mode)
+			    command-cwd (file-name-directory (buffer-file-name))
+			    compile (format "go test -c -o %s -gcflags='all=-N -l'"
+					    (expand-file-name "__test.bin" temporary-file-directory)) ;; compile without optimizations
+			    :program (expand-file-name "__test.bin" temporary-file-directory)
+			    :args [])
+	       (go-gdb ,@gdb-common
+		       modes (go-mode go-ts-mode)
+		       command-cwd (file-name-directory (buffer-file-name))
+		       compile (format "go build -o %s -gcflags='all=-N -l'"
+				       (expand-file-name "__binary.bin" temporary-file-directory)) ;; compile without optimizations
+		       :request "launch"
+		       :program (expand-file-name "__binary.bin" temporary-file-directory)
+		       :args [])))
     (godot
      modes (gdscript-mode)
      port 6006
