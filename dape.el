@@ -1129,6 +1129,8 @@ The indicator is `propertize'd with with FACE."
 
 (defun dape-buffer-default ()
   "Return current buffers file name."
+  (unless (buffer-file-name)
+    (user-error "No buffer file name"))
   (tramp-file-local-name
    (file-relative-name (buffer-file-name) (dape-command-cwd))))
 
@@ -5510,8 +5512,7 @@ CONN is inferred for interactive invocations."
                       (and (eq key 'port) (eq value :autoport)))
            collect key into displayed-keys and collect
            (concat
-            (propertize (format "%s" key)
-                        'face 'font-lock-keyword-face)
+            (propertize (format "%s" key) 'face 'font-lock-keyword-face)
             " "
             (with-current-buffer dape--minibuffer-last-buffer
               (condition-case err
@@ -5531,20 +5532,16 @@ CONN is inferred for interactive invocations."
                   (propertize " " 'cursor 0)
                   (when error-message
                     (format "%s" (propertize error-message 'face 'error)))))
-    (when dape-minibuffer-hint
-      (overlay-put dape--minibuffer-hint-overlay
-                   'after-string
-                   (concat
-                    (when hint-rows
-                      (concat
-                       "\n"
-                       (propertize
-                        " " 'face 'dape-minibuffer-hint-separator-face
-                        'display '(space :align-to right))
-                       "\n"
-                       (mapconcat #'identity hint-rows "\n")))))
-      (move-overlay dape--minibuffer-hint-overlay
-                    (point-max) (point-max) (current-buffer)))))
+    (overlay-put dape--minibuffer-hint-overlay 'after-string
+                 (when (and dape-minibuffer-hint hint-rows)
+                   (concat "\n"
+                           (propertize
+                            " " 'face 'dape-minibuffer-hint-separator-face
+                            'display '(space :align-to right))
+                           "\n"
+                           (mapconcat #'identity hint-rows "\n"))))
+    (move-overlay dape--minibuffer-hint-overlay
+                  (point-max) (point-max) (current-buffer))))
 
 
 ;;; Config
@@ -5569,13 +5566,11 @@ non-nil and function uses the minibuffer."
          (and `(,x . ,_) (guard (and (symbolp x) (not (keywordp x))))))
      (if skip-functions
          value
-       (condition-case _
-           ;; Try to eval function, signal on minibuffer
-           (let ((enable-recursive-minibuffers (not skip-interactive)))
-             (if (functionp value)
-                 (funcall-interactively value)
-               (eval value t)))
-         (error value))))
+       ;; Try to eval function, signal on minibuffer
+       (let ((enable-recursive-minibuffers (not skip-interactive)))
+         (if (functionp value)
+             (funcall-interactively value)
+           (eval value t)))))
     ;; On plist recursively evaluate
     ((pred dape--plistp)
      (dape--config-eval-1 value skip-functions skip-interactive))
