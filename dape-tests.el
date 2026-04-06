@@ -100,7 +100,8 @@ Helper for `dape-test--with-files'."
                               (buffer-list))))
               (dape-test--should
                (not (process-list)) 10))
-          (setq dape--connection nil)
+          (setq dape--connections nil)
+          (setq dape--connection-selected nil)
           (advice-remove 'yes-or-no-p 'always-yes)
           (setq dape--variable-expanded-p
                 (make-hash-table :test 'equal))
@@ -148,7 +149,19 @@ Helper for `dape-test--with-files'."
   (cl-letf (((symbol-function 'read-from-minibuffer)
              (lambda (&rest _)
                (concat (format "%s " key)
-                       (mapconcat (lambda (o) (format "%S" o)) args " ")))))
+                       (mapconcat (lambda (o) (format "%S" o)) args " "))))
+            ((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+    (with-current-buffer buffer
+      (call-interactively 'dape))))
+
+(defun dape-test--debug-new-session (buffer key &rest args)
+  "Invoke `dape' interactively with KEY and ARGS, starting a new parallel session.
+When a session is already running, keep it."
+  (cl-letf (((symbol-function 'read-from-minibuffer)
+             (lambda (&rest _)
+               (concat (format "%s " key)
+                       (mapconcat (lambda (o) (format "%S" o)) args " "))))
+            ((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
     (with-current-buffer buffer
       (call-interactively 'dape))))
 
@@ -654,6 +667,41 @@ Expects line with string \"breakpoint\" in source."
       "()=>{}; // breakpoint"
       "}")))
    (dape-test--breakpoint-hits index-buffer 'js-debug-node)))
+
+(ert-deftest dape-test-two-sessions ()
+  "Test running two debug sessions simultaneously."
+  (dape-test--with-files
+   ((buf1 "main1.py" ("a = 0 # breakpoint1"))
+    (buf2 "main2.py" ("b = 0 # breakpoint2")))
+   ;; Set breakpoints in both files
+   (with-current-buffer buf1
+     (dape-test--goto-line (dape-test--line-at-regex "breakpoint1"))
+     (dape-breakpoint-toggle))
+   (with-current-buffer buf2
+     (dape-test--goto-line (dape-test--line-at-regex "breakpoint2"))
+     (dape-breakpoint-toggle))
+   ;; Start first session
+   (dape-test--debug buf1 'debugpy)
+   (dape-test--should-stopped)
+   ;; One session active
+   (should (= 1 (length (dape--live-connections-root))))
+   ;; Start second session in parallel
+   (dape-test--debug-new-session buf2 'debugpy)
+   (dape-test--should-stopped)
+   ;; Two sessions active simultaneously
+   (should (= 2 (length (dape--live-connections-root))))
+   ;; Single shared REPL buffer exists
+   (should (buffer-live-p (get-buffer "*dape-repl*")))
+   ;; Select first session and verify it's active
+   (let* ((roots (dape--live-connections-root))
+          (first (car (last roots))))
+     (dape-select-session first)
+     (should (eq (dape--live-connection 'parent t) first)))
+   ;; Kill the selected (first) session
+   (dape-kill (dape--live-connection 'parent t))
+   (dape-test--should (= 1 (length (dape--live-connections-root))) 10)
+   ;; Second session still running
+   (should (= 1 (length (dape--live-connections-root))))))
 
 (provide 'dape-tests)
 ;;; dape-tests.el ends here

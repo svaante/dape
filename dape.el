@@ -839,16 +839,14 @@ Debug logging has an noticeable effect on performance."
 (defvar dape-history nil
   "History variable for `dape'.")
 
-;; FIXME `dape--source-buffers' should be moved into connection as
-;; source references are not globally scoped.
-(defvar dape--source-buffers nil
-  "Plist of sources reference to buffer.")
 (defvar dape--breakpoints nil
   "List of `dape--breakpoint' objects (source, data, and exception).")
 (defvar dape--watched nil
   "List of watched expressions.")
-(defvar dape--connection nil
-  "Debug adapter connection.")
+(defvar dape--connections nil
+  "List of active root debug adapter connections.")
+(defvar dape--connection-counter 0
+  "Monotonically increasing counter for unique connection names.")
 (defvar dape--connection-selected nil
   "Selected debug adapter connection.
 If valid connection, this connection will be of highest priority when
@@ -1030,7 +1028,7 @@ The substitution is configured by CONN or last known connection.
 If REMOTE-P is non-nil, translate from local to adapter format.
 Otherwise, translate from adapter to local format.
 See `dape-configs' symbols prefix-local prefix-remote."
-  (if-let* ((config (dape--config (or conn dape--connection)))
+  (if-let* ((config (dape--config (or conn (dape--live-connection 'last t))))
             (;; Skip if no prefixes configured
              (or (plist-member config 'prefix-local)
                  (plist-member config 'prefix-remote)))
@@ -1081,7 +1079,9 @@ Note requires `dape--source-ensure' if source is by reference."
               (buffer (or
                        ;; Take buffer by source reference
                        (when-let* ((reference (plist-get source :sourceReference))
-                                   (buffer (plist-get dape--source-buffers reference))
+                                   (buffer (plist-get (dape--source-buffers
+                                                       (dape--root-of conn))
+                                                      reference))
                                    ((buffer-live-p buffer)))
                          buffer)
                        ;; Take buffer by path
@@ -1224,13 +1224,9 @@ as is."
 
 (defun dape--format-file-name-line (filename line)
   "Formats FILENAME and LINE to string."
-  (let* ((conn dape--connection)
+  (let* ((conn (dape--live-connection 'last t))
          (config
-          (and conn
-               ;; If child connection check parent
-               (or (when-let* ((parent (dape--parent conn)))
-                     (dape--config parent))
-                   (dape--config conn))))
+          (and conn (dape--config (dape--root-of conn))))
          (root-guess (dape--guess-root config))
          ;; Normalize paths for `file-relative-name'
          (filename (tramp-file-local-name filename))
@@ -1366,10 +1362,10 @@ layout for future debugging sessions."
   (when dape-active-mode
     (when dape-many-windows
       (dape-info nil))
-    (when-let* ((buffer (get-buffer "*dape-shell*")))
+    (when-let* ((conn (dape--live-connection 'parent t))
+                (buffer (dape--shell-buffer conn)))
       (dape--display-buffer buffer))
-    (when-let* ((buffer (get-buffer "*dape-repl*"))
-                (window (get-buffer-window buffer)))
+    (when-let* ((window (get-buffer-window "*dape-repl*")))
       (quit-window nil window))
     (dape-repl)))
 
@@ -1400,7 +1396,8 @@ See `dape--connection-selected'."
                 (reverse connections))))
          (conn
           (pcase type
-            ('parent (car connections))
+            ('parent (or (and selected (dape--root-of selected))
+                         (and connections (dape--root-of (car connections)))))
             ('last (cl-find-if #'dape--thread-id ordered))
             ('running (cl-find-if (lambda (conn)
                                     (and (dape--thread-id conn)
@@ -1427,7 +1424,11 @@ See `dape--connection-selected'."
                                 ;; are `reverse'd to guarantee LIFO
                                 ;; order.
                                 (reverse (dape--children conn)))))))
-    (live-connections-1 dape--connection)))
+    (mapcan #'live-connections-1 dape--connections)))
+
+(defun dape--live-connections-root ()
+  "Get all live root (parent-less) connections."
+  (cl-remove-if #'dape--parent (dape--live-connections)))
 
 (defclass dape-connection (jsonrpc-process-connection)
   ((last-id
@@ -1486,9 +1487,31 @@ See `dape--connection-selected'."
     :documentation "If connection has been initialized.")
    (restart-in-progress-p
     :accessor dape--restart-in-progress-p :initform nil
-    :documentation "If restart request is in flight."))
+    :documentation "If restart request is in flight.")
+   (shell-buffer
+    :accessor dape--shell-buffer :initform nil
+    :documentation "Shell buffer.")
+   (source-buffers
+    :accessor dape--source-buffers :initform nil
+    :documentation "Plist of source reference to buffer.")
+   (stderr-buffer
+    :accessor dape--stderr-buffer :initform nil
+    :initarg :stderr-buffer
+    :documentation "Stderr buffer for process."))
   :documentation
   "Represents a DAP debugger. Wraps a process for DAP communication.")
+
+(defun dape--root-of (conn)
+  "Return root connection of CONN."
+  (if (dape--parent conn)
+      (dape--root-of (dape--parent conn))
+    conn))
+
+(defun dape--session-connections (conn)
+  "Return all live connections in CONN's session."
+  (let ((root (dape--root-of conn)))
+    (cl-remove-if-not (lambda (c) (eq (dape--root-of c) root))
+                      (dape--live-connections))))
 
 (cl-defstruct (dape--breakpoint (:constructor nil))
   "Base breakpoint object."
@@ -1688,7 +1711,7 @@ See `dape-request' for expected CB signature."
            plist)))
     (let ((;; Importantly `breakpoints' is not the same object as
            ;; `dape--breakpoints' otherwise we would get hurt by
-           ;; mutations while request in flight.
+           ;; mutations while request-in-flight.
            breakpoints
            (cl-loop for b in dape--breakpoints
                     when (and (dape--source-breakpoint-p b)
@@ -1701,10 +1724,10 @@ See `dape-request' for expected CB signature."
              ((pred bufferp)
               (or
                ;; Is source buffer (see `dape--source-make-buffer')?
-               (cl-loop
-                for (reference buffer) on dape--source-buffers by #'cddr
-                when (eq buffer source)
-                return `(:sourceReference ,reference))
+               (cl-loop with buffers = (dape--source-buffers (dape--root-of conn))
+                        for (reference buffer) on buffers by #'cddr
+                        when (eq buffer source)
+                        return `(:sourceReference ,reference))
                ;; Other buffer?
                (when-let* ((filename (dape--file-name-remote
                                       conn (buffer-file-name source))))
@@ -1802,7 +1825,7 @@ See `dape-request' for expected CB signature."
                                            :accessType (dape--data-breakpoint-access-type bp)))
                                    data-breakpoints)))
           (when error
-            (message "Failed to setup data breakpoints: %s" error))
+            (dape--message "Failed to setup data breakpoints: %s" error))
           (cl-loop
            for bp in data-breakpoints
            for res across (or breakpoints [])
@@ -2068,7 +2091,15 @@ Starts a new adapter CONNs from ARGUMENTS."
            (with-temp-buffer
              (fundamental-mode) process-environment)
            process-environment))
-         (buffer (get-buffer-create "*dape-shell*")))
+         (name "*dape-shell*")
+         (buffer (get-buffer-create
+                  ;; Reuse buffer if owner is not live
+                  (if (cl-find name (dape--live-connections-root)
+                               :key (lambda (c) (buffer-name (dape--shell-buffer c)))
+                               :test #'equal)
+                      (generate-new-buffer-name name)
+                    name))))
+    (setf (dape--shell-buffer (dape--root-of conn)) buffer)
     (with-current-buffer buffer
       (dape-shell-mode)
       (shell-command-save-pos-or-erase))
@@ -2326,10 +2357,11 @@ Killing the adapter and it's CONN."
   (unless (dape--parent conn)
     (dape--stack-frame-cleanup)
     (dape--breakpoints-reset)
-    (cl-loop for (_ buffer) on dape--source-buffers by 'cddr
+    (cl-loop for (_ buffer) on (dape--source-buffers conn)
+             by 'cddr
              when (buffer-live-p buffer)
              do (kill-buffer buffer))
-    (setq dape--source-buffers nil)
+    (setf (dape--source-buffers conn) nil)
     (unless dape-active-mode
       (dape-active-mode +1))
     (dape--update-state conn 'starting)
@@ -2347,7 +2379,7 @@ symbol `dape-connection'."
         (command (cons (plist-get config 'command)
                        (cl-map 'list 'identity
                                (plist-get config 'command-args))))
-        process server-process)
+        process server-process stderr-buffer)
     ;; Initialize `process-environment' from `command-env'
     (cl-loop for (key value) on (plist-get config 'command-env) by 'cddr do
              (setenv (pcase key
@@ -2360,34 +2392,36 @@ symbol `dape-connection'."
       (plist-get config 'port)
       ;; 1. Start server
       (when (plist-get config 'command)
-        (let ((stderr-buffer
-               (with-current-buffer (get-buffer-create " *dape-adapter stderr*")
-                 (when (plist-get config 'command-insert-stderr)
-                   (add-hook 'after-change-functions
-                             (lambda (beg end _pre-change-len)
-                               (dape--repl-insert-error (buffer-substring beg end)))
-                             nil t))
-                 (current-buffer))))
-          (setq server-process
-                (make-process :name "dape adapter"
-                              :command command
-                              :filter (lambda (_process string)
-                                        (dape--repl-insert string))
-                              :file-handler t
-                              :buffer nil
-                              :stderr stderr-buffer))
-          (process-put server-process 'stderr-pipe stderr-buffer)
-          ;; XXX Tramp does not allow `make-pipe-process' as :stderr,
-          ;; `make-process' creates one for us with an unwanted
-          ;; sentinel (`internal-default-process-sentinel').
-          (when-let* ((pipe-process (get-buffer-process stderr-buffer)))
-            (set-process-sentinel pipe-process #'ignore))
-          (when dape-debug
-            (dape--message "Adapter server started with %S"
-                           (mapconcat #'identity command " "))))
-        ;; FIXME Why do I need this?
-        (when (file-remote-p default-directory)
-          (sleep-for 0.300)))
+        (setq stderr-buffer
+              (with-current-buffer
+                  (generate-new-buffer " *dape-adapter stderr*")
+                (when (plist-get config 'command-insert-stderr)
+                  (add-hook 'after-change-functions
+                            (lambda (beg end _pre-change-len)
+                              (dape--repl-insert-error
+                               (buffer-substring beg end)))
+                            nil t))
+                (current-buffer))
+              server-process
+              (make-process :name "dape adapter"
+                            :command command
+                            :filter (lambda (_process string)
+                                      (dape--repl-insert string))
+                            :file-handler t
+                            :buffer nil
+                            :stderr stderr-buffer))
+        (process-put server-process 'stderr-pipe stderr-buffer)
+        ;; XXX Tramp does not allow `make-pipe-process' as :stderr,
+        ;; `make-process' creates one for us with an unwanted
+        ;; sentinel (`internal-default-process-sentinel').
+        (when-let* ((pipe-process (get-buffer-process stderr-buffer)))
+          (set-process-sentinel pipe-process #'ignore))
+        (when dape-debug
+          (dape--message "Adapter server started with %S"
+                         (mapconcat #'identity command " "))))
+      ;; FIXME Why do I need this?
+      (when (file-remote-p default-directory)
+        (sleep-for 0.300))
       ;; 2. Connect to server
       (let ((host (or (plist-get config 'host) "localhost"))
             (retries 30))
@@ -2431,13 +2465,21 @@ symbol `dape-connection'."
                             :command command
                             :connection-type 'pipe
                             :coding 'utf-8-emacs-unix
-                            :stderr (get-buffer-create "*dape-connection stderr*")
+                            :stderr
+                            (setq stderr-buffer
+                                  (generate-new-buffer "*dape-connection stderr*"))
                             :file-handler t))
         (when dape-debug
           (dape--message "Adapter started with %S"
                          (mapconcat #'identity command " "))))))
     (dape-connection
-     :name "dape-connection"
+     :name (format "dape-%s<%d>"
+                   (or command
+                       (when-let* ((port (plist-get config 'port)))
+                         (format "dap:%s:%s"
+                                 (or (plist-get config 'host) "")
+                                 port)))
+                   (cl-incf dape--connection-counter))
      :config config
      :parent parent
      :server-process server-process
@@ -2451,17 +2493,29 @@ symbol `dape-connection'."
        (unless (dape--parent conn)
          ;; Clean source buffer
          (dape--stack-frame-cleanup)
-         ;; Kill server process
+         ;; Kill server process and its stderr buffer
          (when-let* ((server-process (dape--server-process conn)))
            (delete-process server-process)
            (while (process-live-p server-process)
              (accept-process-output nil nil 0.1)))
-         ;; Run hooks and update mode line
-         (dape-active-mode -1)
-         (force-mode-line-update t)))
+         (when-let* ((buf (dape--stderr-buffer conn))
+                     ((buffer-live-p buf)))
+           (when-let* ((pipe (get-buffer-process buf)))
+             (delete-process pipe))
+           (kill-buffer buf))
+         ;; Remove from session list and update selection
+         (setq dape--connections (delq conn dape--connections))
+         (when (eq dape--connection-selected conn)
+           (when-let* ((next (car (dape--live-connections-root))))
+             (dape-select-session next)))
+         ;; Run hooks and update mode line only when last session ends
+         (unless dape--connections
+           (dape-active-mode -1)
+           (force-mode-line-update t))))
      :request-dispatcher #'dape-handle-request
      :notification-dispatcher #'dape-handle-event
-     :process process)))
+     :process process
+     :stderr-buffer stderr-buffer)))
 
 
 ;;; Commands
@@ -2539,7 +2593,8 @@ SKIP-COMPILE is used internally for recursive calls."
             (dape--modules conn) nil
             (dape--sources conn) nil
             (dape--restart-in-progress-p conn) t)
-      (dape-active-mode -1)
+      (when (length= (dape--live-connections-root) 1)
+        (dape-active-mode -1))
       (dape--with-request
           (dape-request conn :restart
                         `(:arguments ,(dape--launch-or-attach-arguments conn)))
@@ -2547,7 +2602,11 @@ SKIP-COMPILE is used internally for recursive calls."
           (dape-active-mode +1))
         (setf (dape--restart-in-progress-p conn) nil))))
    (;; Use previous connections configuration
-    dape--connection (dape (dape--config dape--connection)))
+    dape--connections
+    (let* ((live (dape--live-connection 'parent t))
+           (config (dape--config live)))
+      (dape--with-request (dape-kill live)
+        (dape config))))
    (;; Use history
     dape-history
     (dape (apply #'dape--config-eval (dape--config-from-string (car dape-history)))))
@@ -2594,18 +2653,22 @@ connection.  CONN is inferred for interactive invocations."
     (jsonrpc-shutdown conn)
     (dape--kill-buffers)))
 
-(defun dape-quit (&optional conn)
-  "Terminate session and kill all Dape buffers.
-CONN is inferred for interactive invocations."
-  (interactive (list (dape--live-connection 'parent t)))
+(defun dape-quit ()
+  "Terminate all sessions and kill all Dape buffers."
+  (interactive)
   (dape--kill-buffers 'skip-process-buffers)
-  (if (not conn)
+  (if (not dape--connections)
       (dape--kill-buffers)
-    (let (;; Use a lower timeout, if trying to kill an to kill an
-          ;; unresponsive adapter 10s is an long time to wait.
-          (dape-request-timeout 3))
-      (dape--with-request (dape-kill conn)
-        (dape--kill-buffers)))))
+    (let (;; Use a lower timeout so an unresponsive adapter doesn't
+          ;; block for too long.
+          (dape-request-timeout 3)
+          (conns (copy-sequence dape--connections))
+          (remaining (length dape--connections)))
+      (dolist (conn conns)
+        (dape--with-request (dape-kill conn)
+          (cl-decf remaining)
+          (when (zerop remaining)
+            (dape--kill-buffers)))))))
 
 (defun dape-breakpoint-toggle ()
   "Add or remove breakpoint at current line."
@@ -2693,6 +2756,34 @@ When SKIP-NOTIFY is non-nil, do not notify adapters about removal."
       (dape--breakpoint-remove breakpoint 'skip-notify))
     (apply #'dape--breakpoint-notify-changes sources)))
 
+(defun dape-select-session (conn)
+  "Select CONN as the active debug session."
+  (interactive
+   (let ((collection
+          (cl-loop with root = (when dape--connection-selected
+                                 (dape--root-of dape--connection-selected))
+                   for c in (dape--live-connections-root)
+                   unless (eq c root)
+                   collect `(,(string-remove-prefix "dape-" (jsonrpc-name c))
+                             ,c))))
+     (unless collection
+       (user-error "No other active debug sessions"))
+     (cdr (assoc (completing-read "Select session: " collection nil t)
+                 collection))))
+  (setq dape--connection-selected
+        ;; XXX: Limit lookup scope to *this* session
+        (let ((dape--connections
+               (cl-loop with root = (dape--root-of conn)
+                        for conn in dape--connections
+                        when (eq (dape--root-of conn) root)
+                        collect conn)))
+          (dape--live-connection 'last)))
+  (when-let* ((buffer (dape--shell-buffer conn)))
+    (dape--display-buffer buffer))
+  (dape--update dape--connection-selected nil t)
+  (dape--mode-line-format)
+  (force-mode-line-update t))
+
 (defun dape-select-thread (conn thread-id)
   "Select current active thread.
 With prefix argument thread is selected by index starting at 1.
@@ -2701,7 +2792,7 @@ The thread is identified by THREAD-ID under adapter CONN."
    (let* ((conn (dape--live-connection 'last))
           (collection
            (cl-loop with index = 0
-                    for conn in (dape--live-connections) append
+                    for conn in (dape--session-connections conn) append
                     (cl-loop for thread in (dape--threads conn) collect
                              (list (format "%s %s" (cl-incf index)
                                            (plist-get thread :name))
@@ -2866,23 +2957,38 @@ SKIP-COMPILE argument is used internally for recursive calls
 and should not be specified manually.
 
 For more information see `dape-configs'."
-  (interactive (list (dape--read-config)))
-  (dape--with-request (dape-kill (dape--live-connection 'parent t))
-    (dape--config-ensure config t)
-    ;; Hooks need to be run before any REPL messaging but after we
-    ;; have tried ensured that config is executable.
-    (run-hooks 'dape-start-hook)
-    (when-let* ((fn (or (plist-get config 'fn) 'identity))
-                (fns (or (and (functionp fn) (list fn))
-                         (and (listp fn) fn))))
-      (setq config
-            (seq-reduce (lambda (config fn) (funcall fn config))
-                        (append fns dape-default-config-functions)
-                        (copy-tree config))))
-    (if (and (not skip-compile) (plist-get config 'compile))
-        (dape--compile config (lambda () (dape config 'skip-compile)))
-      (setq dape--connection (dape--create-connection config))
-      (dape--start-debugging dape--connection))))
+  (interactive
+   (let* ((config (dape--read-config)))
+     (when-let* ((live (dape--live-connections-root)))
+       (let (;; XXX Save and restore `last-command-event' to ignore
+             ;; yes/no inputs to keep transient `repeat-mode' map.
+             (saved-event last-command-event))
+         (when (yes-or-no-p
+                (format "Session(s) %s running; kill? "
+                        (mapconcat
+                         (lambda (c)
+                           (string-remove-prefix "dape-" (jsonrpc-name c)))
+                         live ", ")))
+           (dape--kill-busy-wait))
+         (setq last-command-event saved-event)))
+     (list config)))
+  (dape--config-ensure config t)
+  (when-let* ((fn (or (plist-get config 'fn) 'identity))
+              (fns (or (and (functionp fn) (list fn))
+                       (and (listp fn) fn))))
+    (setq config
+          (seq-reduce (lambda (config fn) (funcall fn config))
+                      (append fns dape-default-config-functions)
+                      (copy-tree config))))
+  (if (and (not skip-compile) (plist-get config 'compile))
+      (dape--compile config (lambda () (dape config 'skip-compile)))
+    (let ((conn (dape--create-connection config)))
+      (push conn dape--connections)
+      (setq dape--connection-selected conn)
+      ;; Hooks run after connection is registered so `dape-repl'
+      ;; and `dape-info' can use the active session.
+      (run-hooks 'dape-start-hook)
+      (dape--start-debugging conn))))
 
 
 ;;; Compile
@@ -3506,12 +3612,13 @@ Will use `dape-default-breakpoints-file' if FILENAME is nil."
 
 ;;; Source buffers
 
-(defun dape--source-make-buffer (name reference content mime-type)
-  "Make source buffer from REFERENCE.
+(defun dape--source-make-buffer (conn name reference content mime-type)
+  "Make source buffer from REFERENCE for CONN's session.
 Created from NAME, MIME-TYPE, REFERENCE and CONTENT."
-  (let ((buffer (generate-new-buffer (format "*dape-source %s*" name))))
-    (setq dape--source-buffers
-          (plist-put dape--source-buffers reference buffer))
+  (let ((root (dape--root-of conn))
+        (buffer (generate-new-buffer (format "*dape-source %s*" name))))
+    (setf (dape--source-buffers root)
+          (plist-put (dape--source-buffers root) reference buffer))
     (with-current-buffer buffer
       (when mime-type
         (if-let* ((mode (cdr (assoc mime-type dape-mime-mode-alist))))
@@ -3531,7 +3638,8 @@ See `dape-request' for expected CB signature."
   (let* ((source (plist-get plist :source))
          (filename (plist-get source :path))
          (reference (plist-get source :sourceReference))
-         (buffer (plist-get dape--source-buffers reference)))
+         (buffer (plist-get (dape--source-buffers (dape--root-of conn))
+                            reference)))
     (cond
      ((or (and (stringp filename)
                (file-exists-p (dape--file-name-local conn filename)))
@@ -3546,7 +3654,7 @@ See `dape-request' for expected CB signature."
         (cond (error
                (dape--warn "%s" error))
               (content
-               (dape--source-make-buffer (plist-get source :name)
+               (dape--source-make-buffer conn (plist-get source :name)
                                          reference content mimeType)
                (dape--request-continue cb))))))))
 
@@ -4167,7 +4275,7 @@ See `dape-request' for expected CB signature."
         (cl-loop
          initially do (set-marker dape--info-thread-position nil)
          with table = (make-gdb-table)
-         with conns = (dape--live-connections)
+         with conns = (dape--session-connections conn)
          with current-thread = (dape--current-thread conn)
          with line = 0
          with selected-line
@@ -4361,8 +4469,7 @@ current buffer with CONN config."
   "Revert buffer function for MAJOR-MODE `dape-info-modules-mode'."
   ;; Use last connection if current is dead
   (when-let* ((conn (or (dape--live-connection 'stopped t)
-                        (dape--live-connection 'last t)
-                        dape--connection))
+                        (dape--live-connection 'last t)))
               (modules (dape--modules conn)))
     (dape--info-update-with
       (cl-loop with table = (make-gdb-table)
@@ -4411,8 +4518,7 @@ current buffer with CONN config."
   "Revert buffer function for MAJOR-MODE `dape-info-sources-mode'."
   ;; Use last connection if current is dead
   (when-let* ((conn (or (dape--live-connection 'stopped t)
-                        (dape--live-connection 'last t)
-                        dape--connection))
+                        (dape--live-connection 'last t)))
               (sources (dape--sources conn)))
     (dape--info-update-with
       (cl-loop with table = (make-gdb-table)
@@ -5855,7 +5961,7 @@ See `eldoc-documentation-functions', for more information."
 (defun dape--mode-line-format ()
   "Update variable `dape--mode-line-format' format."
   (let ((conn (or (dape--live-connection 'last t)
-                  dape--connection)))
+                  (car dape--connections))))
     (setq dape--mode-line-format
           `(( :propertize "dape"
               face font-lock-constant-face
@@ -5878,13 +5984,17 @@ mouse-1: Display minor mode menu"
             ( :propertize ,(format "%s" (or (and conn (dape--state conn))
                                             'unknown))
               face font-lock-doc-face)
-            ,@(when-let* ((reason (and conn (dape--state-reason conn))))
+            ,@(when-let* (conn
+                          (reason (dape--state-reason conn)))
                 `("/" (:propertize ,reason face font-lock-doc-face)))
-            ,@(when-let* ((conns (dape--live-connections))
-                          (nof-conns
-                           (length (cl-remove-if-not #'dape--threads conns)))
-                          ((> nof-conns 1)))
-                `(( :propertize ,(format "(%s)" nof-conns)
+            ,@(when-let* (conn
+                          (children
+                           (cl-loop with root = (dape--root-of conn)
+                                    for conn in (dape--live-connections)
+                                    count (and (eq (dape--root-of conn) root)
+                                               (dape--threads conn))))
+                          ((> children 1)))
+                `(( :propertize ,(format "(%d)" children)
                     face shadow
                     help-echo "Active child connections")))))))
 
@@ -5916,6 +6026,7 @@ mouse-1: Display minor mode menu"
     (define-key map "b" #'dape-breakpoint-toggle)
     (define-key map "B" #'dape-breakpoint-remove-all)
     (define-key map "t" #'dape-select-thread)
+    (define-key map "T" #'dape-select-session)
     (define-key map "S" #'dape-select-stack)
     (define-key map ">" #'dape-stack-select-down)
     (define-key map "<" #'dape-stack-select-up)
@@ -5945,6 +6056,7 @@ mouse-1: Display minor mode menu"
                dape-stack-select-down
                dape-select-stack
                dape-select-thread
+               dape-select-session
                dape-watch-dwim
                dape-evaluate-expression
                dape-info))
@@ -5956,15 +6068,16 @@ mouse-1: Display minor mode menu"
 ;;; Hooks
 
 (defun dape--kill-busy-wait ()
-  "Kill connection and wait until finished."
-  (let (done)
-    (dape--with-request (dape-kill dape--connection)
-      (setf done t))
-    ;; Busy wait for response at least 2 seconds
-    (cl-loop with max-iterations = 20
-             for i from 1 to max-iterations
-             until done
-             do (accept-process-output nil 0.1))))
+  "Kill all connections and wait until finished."
+  (dolist (conn (copy-sequence dape--connections))
+    (let (done)
+      (dape--with-request (dape-kill conn)
+        (setf done t))
+      ;; Busy wait for response at least 2 seconds
+      (cl-loop with max-iterations = 20
+               for i from 1 to max-iterations
+               until done
+               do (accept-process-output nil 0.1)))))
 
 ;; Cleanup conn before bed time
 (add-hook 'kill-emacs-hook #'dape--kill-busy-wait)
