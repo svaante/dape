@@ -2508,10 +2508,10 @@ symbol `dape-connection'."
                          (mapconcat #'identity command " "))))))
     (dape-connection
      :name (format "dape-%s<%d>"
-                   (or command
+                   (or (and (car command) command)
                        (when-let* ((port (plist-get config 'port)))
-                         (format "dap:%s:%s"
-                                 (or (plist-get config 'host) "")
+                         (format "%s:%s"
+                                 (or (plist-get config 'host) "localhost")
                                  port)))
                    (cl-incf dape--connection-counter))
      :config config
