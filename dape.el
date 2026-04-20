@@ -858,8 +858,10 @@ Debug logging has an noticeable effect on performance."
 
 (defface dape-header-line-hover-face '((t :inherit mode-line-highlight))
   "Face for hovered Dape header tabs.")
+
 
 ;;; Forward declarations
+
 (defvar hl-line-mode)
 (defvar hl-line-sticky-flag)
 (declare-function global-hl-line-highlight  "hl-line" ())
@@ -1814,7 +1816,7 @@ See `dape-request' for expected CB signature."
              (enabled (if old
                           (not (dape--breakpoint-disabled old))
                         (eq (plist-get filter :default) t))))
-        ;; XXX Append to keep exceptions at bottom of breakpoint list.
+        ;; Append to keep exceptions at bottom of breakpoint list.
         (setq dape--breakpoints
               (nconc dape--breakpoints
                      (list (make-dape--exception-breakpoint
@@ -2805,7 +2807,7 @@ When SKIP-NOTIFY is non-nil, do not notify adapters about removal."
      (cdr (assoc (completing-read "Select session: " collection nil t)
                  collection))))
   (setq dape--connection-selected
-        ;; XXX: Limit lookup scope to *this* session
+        ;; Limit lookup scope to *this* session
         (let ((dape--connections
                (cl-loop with root = (dape--root-of conn)
                         for conn in dape--connections
