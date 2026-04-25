@@ -1253,6 +1253,8 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                  (buffer-match-p
                   '(or "\\*dape-source .+\\*"
                        "\\*dape-.+ events\\*"
+                       "\\*dape-.+ output\\*"
+                       "\\*dape-.+ stderr\\*"
                        (major-mode . dape-repl-mode)
                        (major-mode . dape-memory-mode)
                        (major-mode . dape-shell-mode)
