@@ -2656,7 +2656,7 @@ terminate.  CONN is inferred for interactive invocations."
       ;; way if the request timeout, otherwise we might force the
       ;; user to kill the process in some other way.
       (if (and error (not (eq error dape--timeout-error)))
-          (dape-kill cb 'with-disconnect)
+          (dape-kill conn cb 'with-disconnect)
         (dape--shutdown conn)
         (dape--request-continue cb))))
    ((and conn (jsonrpc-running-p conn))
