@@ -1277,16 +1277,26 @@ as is."
   "Kill all dape buffers.
 On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
   (cl-loop for buffer in (buffer-list)
-           when (and (not (and skip-process-buffers
-                               (get-buffer-process buffer)))
-                     (when-let* ((name (buffer-name buffer)))
-                       (string-match-p "\\*dape-.+\\*\\(<[0-9]+>\\)?$" name)))
-           do (condition-case err
-                  (let ((window (get-buffer-window buffer)))
-                    (kill-buffer buffer)
-                    (when (window-live-p window)
-                      (delete-window window)))
-                (error (message (error-message-string err))))))
+           when (and
+                 (buffer-match-p
+                  '(or "\\*dape-source .+\\*"
+                       "\\*dape-.+ events\\*"
+                       (major-mode . dape-repl-mode)
+                       (major-mode . dape-memory-mode)
+                       (major-mode . dape-shell-mode)
+                       (major-mode . dape-disassemble-mode)
+                       (derived-mode . dape-info-parent-mode))
+                  buffer)
+                 (buffer-live-p buffer)
+                 (not (and skip-process-buffers
+                           (get-buffer-process buffer))))
+           do
+           (condition-case err
+               (let ((window (get-buffer-window buffer)))
+                 (kill-buffer buffer)
+                 (when (window-live-p window)
+                   (delete-window window)))
+             (error (message (error-message-string err))))))
 
 (defun dape--display-buffer (buffer)
   "Display BUFFER according to `dape-buffer-window-arrangement'."
