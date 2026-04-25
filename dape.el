@@ -1250,6 +1250,7 @@ as is."
 On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
   (cl-loop for buffer in (buffer-list)
            when (and
+                 (buffer-live-p buffer)
                  (buffer-match-p
                   '(or "\\*dape-source .+\\*"
                        "\\*dape-.+ events\\*"
@@ -1261,7 +1262,6 @@ On SKIP-PROCESS-BUFFERS skip deletion of buffers which has processes."
                        (major-mode . dape-disassemble-mode)
                        (derived-mode . dape-info-parent-mode))
                   buffer)
-                 (buffer-live-p buffer)
                  (not (and skip-process-buffers
                            (get-buffer-process buffer))))
            do
@@ -2643,7 +2643,9 @@ SKIP-COMPILE is used internally for recursive calls."
     (delete-process proc)
     (accept-process-output nil 0.1)
     (kill-buffer (process-buffer proc))
-    (kill-buffer (jsonrpc-stderr-buffer conn))))
+    (kill-buffer (jsonrpc-stderr-buffer conn))
+    (unless dape-debug
+      (kill-buffer (jsonrpc-events-buffer conn)))))
 
 (defun dape-kill (conn &optional cb with-disconnect)
   "Kill debug session.
