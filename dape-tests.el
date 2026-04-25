@@ -211,7 +211,7 @@ Expects line with string \"breakpoint\" in source."
       "  return 0; // breakpoint"
       "}")))
    (dape--test-restart index-buffer
-                       'codelldb-cc
+                       'lldb-dap
                        'compile "gcc -g -o a.out main.c"))
   (dape-test--with-files
    ((main-buffer
@@ -266,7 +266,7 @@ Expects line with string \"breakpoint\" in source."
         ("int main() {"
          "  return 0; // breakpoint"
          "}")))
-    (dape--test-restart-with-dape main-buffer 'codelldb-cc
+    (dape--test-restart-with-dape main-buffer 'lldb-dap
                                   'compile "gcc -g -o a.out main.c"))
   (dape-test--with-files
       ((main-buffer
@@ -352,7 +352,7 @@ Expects line with string \"breakpoint\" in source."
          "  return 0; // breakpoint"
          "}")))
     (ignore main)
-    (dape--test-scope-buffer main 'codelldb-cc
+    (dape--test-scope-buffer main 'lldb-dap
                              'compile "gcc -g -o a.out main.c")))
 
 (ert-deftest dape-test-watch-buffer()
