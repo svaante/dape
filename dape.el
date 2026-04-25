@@ -2626,7 +2626,11 @@ SKIP-COMPILE is used internally for recursive calls."
           (dape-active-mode +1))
         (setf (dape--restart-in-progress-p conn) nil))))
    (;; Use previous connections configuration
-    dape--connections (dape (dape--config (car dape--connections))))
+    dape--connections
+    (let ((conn (or (and conn (dape--root-of conn))
+                    (car dape--connections))))
+      (dape--with-request (dape-kill conn)
+        (dape (dape--config conn)))))
    (;; Use history
     dape-history
     (dape (apply #'dape--config-eval (dape--config-from-string (car dape-history)))))
