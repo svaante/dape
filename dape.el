@@ -2594,7 +2594,8 @@ CONN is inferred for interactive invocations."
     (user-error "Thread is stopped"))
   (dape--with-request-bind
       (_body error)
-      (dape-request conn :pause (dape--thread-id-object conn))
+      (dape-request conn :pause (or (dape--thread-id-object conn)
+                                    '(:threadId 0)))
     (when error
       (error "Failed to pause: %s" error))))
 
