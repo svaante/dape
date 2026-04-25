@@ -112,34 +112,6 @@
          :pathCat "cat"
          :pathMkfifo "mkfifo"
          :pathPkill "pkill"))
-    ,@(let ((codelldb
-             `( ensure dape-ensure-command
-                command-cwd dape-command-cwd
-                command ,(file-name-concat dape-adapter-dir
-                                           "codelldb"
-                                           "extension"
-                                           "adapter"
-                                           "codelldb")
-                port :autoport
-                :type "lldb"
-                :request "launch"
-                :cwd "."))
-            (common `(:args [] :stopOnEntry nil)))
-        `((codelldb-cc
-           modes (c-mode c-ts-mode c++-mode c++-ts-mode)
-           command-args ("--port" :autoport)
-           ,@codelldb
-           :program "a.out"
-           ,@common)
-          (codelldb-rust
-           modes (rust-mode rust-ts-mode)
-           command-args ("--port" :autoport
-                         "--settings" "{\"sourceLanguages\":[\"rust\"]}")
-           ,@codelldb
-           :program (file-name-concat "target" "debug"
-                                      (car (last (file-name-split
-                                                  (directory-file-name (dape-cwd))))))
-           ,@common)))
     (cpptools
      modes (c-mode c-ts-mode c++-mode c++-ts-mode)
      ensure dape-ensure-command

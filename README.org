@@ -113,12 +113,6 @@ For more information see [[https://github.com/go-delve/delve/blob/master/Documen
 Ensure that your GDB version is 14.1 or newer.
 For further details, consult the [[https://sourceware.org/gdb/current/onlinedocs/gdb.html/Debugger-Adapter-Protocol.html][documentation]].
 
-** C, C++ and Rust - codelldb
-1. Download latest =vsix= [[https://github.com/vadimcn/codelldb/releases][release]] for your platform =codelldb-<platform>-<os>.vsix=
-2. Unpack ~mkdir -p ~/.emacs.d/debug-adapters && unzip codelldb-<platform>-<os>.vsix -d ~/.emacs.d/debug-adapters/codelldb~
-
-See [[https://github.com/vadimcn/codelldb/blob/v1.10.0/MANUAL.md][manual]] for more information.
-
 ** C and C++ - cpptools
 Download latesnd unpack =vsix= file with your favorite unzipper.
 
