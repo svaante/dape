@@ -1639,7 +1639,11 @@ If `dape--request-blocking' is non-nil do blocking request."
   (cl-flet ((success-fn (result)
               (funcall cb (plist-get result :body)
                        (unless (eq (plist-get result :success) t)
-                         (or (plist-get result :message) ""))))
+                         (or (plist-get result :message)
+                             (plist-get (plist-get (plist-get result :body)
+                                                   :error)
+                                        :format)
+                             ""))))
             (timeout-fn ()
               (dape--warn
                "Command %S timed out after %d seconds (see \
