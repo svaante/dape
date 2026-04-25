@@ -3803,7 +3803,7 @@ Buffer is displayed with `dape-display-source-buffer-action'."
 (defvar dape--info-buffer-display-history nil "History list in (MODE INDEX).")
 
 (defun dape--info-buffer-list ()
-  "Return all live `dape-info-parent-mode'."
+  "Return all live `dape-info-parent-mode' buffers."
   (setq dape--info-buffers
         (cl-delete-if-not #'buffer-live-p dape--info-buffers)))
 
