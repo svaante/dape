@@ -2658,6 +2658,14 @@ SKIP-COMPILE is used internally for recursive calls."
     (dape (apply #'dape--config-eval (dape--config-from-string (car dape-history)))))
    ((user-error "Unable to derive session to restart, run `dape'"))))
 
+(defun dape--shutdown (conn)
+  "Shutdown CONN and delete its jsonrpc buffers."
+  (let ((proc (jsonrpc--process conn)))
+    (delete-process proc)
+    (accept-process-output nil 0.1)
+    (kill-buffer (process-buffer proc))
+    (kill-buffer (jsonrpc-stderr-buffer conn))))
+
 (defun dape-kill (conn &optional cb with-disconnect)
   "Kill debug session.
 CB will be called after adapter termination.  With WITH-DISCONNECT use
@@ -2675,7 +2683,7 @@ terminate.  CONN is inferred for interactive invocations."
       ;; user to kill the process in some other way.
       (if (and error (not (eq error dape--timeout-error)))
           (dape-kill cb 'with-disconnect)
-        (jsonrpc-shutdown conn)
+        (dape--shutdown conn)
         (dape--request-continue cb))))
    ((and conn (jsonrpc-running-p conn))
     (dape--with-request
@@ -2683,7 +2691,7 @@ terminate.  CONN is inferred for interactive invocations."
                       `( :restart :json-false
                          ,@(when (dape--capable-p conn :supportTerminateDebuggee)
                              '(:terminateDebuggee t))))
-      (jsonrpc-shutdown conn)
+      (dape--shutdown conn)
       (dape--request-continue cb)))
    (t
     (dape--request-continue cb))))
@@ -2696,7 +2704,7 @@ connection.  CONN is inferred for interactive invocations."
   (dape--kill-buffers 'skip-process-buffers)
   (dape--with-request
       (dape-request conn :disconnect '(:terminateDebuggee :json-false))
-    (jsonrpc-shutdown conn)
+    (dape--shutdown conn)
     (dape--kill-buffers)))
 
 (defun dape-quit ()
