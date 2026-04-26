@@ -2647,7 +2647,7 @@ SKIP-COMPILE is used internally for recursive calls."
         ;; XXX Final call for timers to run while process exists.
         ;; May also swallow signals from non Dape owned
         ;; timer/sentinel/filter functions.
-        (with-demote-errors "%S" (accept-process-output nil 0.2))
+        (with-demoted-errors "%S" (accept-process-output nil 0.2))
         (delete-process proc)
         (jsonrpc-shutdown conn t))
     (unless dape-debug
