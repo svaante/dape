@@ -2644,7 +2644,7 @@ SKIP-COMPILE is used internally for recursive calls."
   ;; (DAP has no client-initiated shutdown).
   (unwind-protect
       (let ((proc (jsonrpc--process conn)))
-        (accept-process-output nil 0.2) ; pump timers before deleting
+        (ignore-errors (accept-process-output nil 0.2)) ; pump timers before deleting
         (delete-process proc)
         (jsonrpc-shutdown conn t))
     (unless dape-debug
