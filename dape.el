@@ -2812,7 +2812,7 @@ When SKIP-NOTIFY is non-nil, do not notify adapters about removal."
                         for conn in dape--connections
                         when (eq (dape--root-of conn) root)
                         collect conn)))
-          (dape--live-connection 'last)))
+          (or (dape--live-connection 'last t) conn)))
   (when-let* ((buffer (dape--shell-buffer conn)))
     (dape--display-buffer buffer))
   (dape--update dape--connection-selected nil t)
