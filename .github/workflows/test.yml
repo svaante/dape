@@ -34,12 +34,14 @@ jobs:
       run: |
         pip3 install debugpy
 
-    - name: Download codelldb
+    - name: Install lldb-dap
       run: |
-        sudo apt install wget
-        mkdir -p ~/.emacs.d/debug-adapters/codelldb/
-        wget https://github.com/vadimcn/codelldb/releases/download/v1.10.0/codelldb-x86_64-linux.vsix
-        unzip codelldb-x86_64-linux.vsix -d ~/.emacs.d/debug-adapters/codelldb/
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        sudo apt-get update
+        sudo apt-get install -y lldb-22
+        sudo ln -sf /usr/bin/lldb-dap-22 /usr/local/bin/lldb-dap
+        lldb-dap --version
 
     - name: Download js-debug
       run: |
