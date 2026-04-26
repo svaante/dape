@@ -2639,12 +2639,15 @@ SKIP-COMPILE is used internally for recursive calls."
 
 (defun dape--shutdown (conn)
   "Shutdown CONN and delete its jsonrpc buffers."
-  ;; Signal the process first so the sentinel fires as iter 0 in
+  ;; Signal the process first so the sentinel fires on iter 0 in
   ;; `jsonrpc-shutdown'.  Preventing the misleading sentinel warning
   ;; (DAP has no client-initiated shutdown).
   (unwind-protect
       (let ((proc (jsonrpc--process conn)))
-        (ignore-errors (accept-process-output nil 0.2)) ; pump timers before deleting
+        ;; XXX Final call for timers to run while process exists.
+        ;; May also swallow signals from non Dape owned
+        ;; timer/sentinel/filter functions.
+        (with-demote-errors "%S" (accept-process-output nil 0.2))
         (delete-process proc)
         (jsonrpc-shutdown conn t))
     (unless dape-debug
