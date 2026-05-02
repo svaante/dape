@@ -2,6 +2,20 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.27.0
+- Add support for multiple simultaneous debug sessions
+- Add function breakpoints
+- Add hit conditions to all breakpoint types
+- Add default Go gdb configurations
+- Add =dape-kill= to repeat map
+- Add display of adapter error response messages
+- Add fallback to =:evaluateName= in variable view
+- Change info buffer line truncation defaults
+- Remove =codelldb= default configuration
+- Fix restart when no live connection
+- Fix naming of socket-based connections
+- Fix error hints disappearing in minibuffer
+
 * Version 0.26.0
 - Add custom faces for mode line usage
 - Add =dape-info= to repeat bindings
