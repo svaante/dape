@@ -222,14 +222,14 @@
 		command-args ("--interpreter=dap")
 		:request "launch"
 		:stopAtBeginningOfMainSubprogram nil)))
-	`((go-gdb-test ,@gdb-common
+	`((gdb-go-test ,@gdb-common
 		       modes (go-mode go-ts-mode)
 		       command-cwd (file-name-directory (buffer-file-name))
 		       compile (format "go test -c -o %s -gcflags='all=-N -l'"
 				       (expand-file-name "__test.bin" temporary-file-directory)) ;; compile without optimizations
 		       :program (expand-file-name "__test.bin" temporary-file-directory)
 		       :args [])
-	  (go-gdb ,@gdb-common
+	  (gdb-go ,@gdb-common
 		  modes (go-mode go-ts-mode)
 		  command-cwd (file-name-directory (buffer-file-name))
 		  compile (format "go build -o %s -gcflags='all=-N -l'"
