@@ -2,6 +2,9 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.27.1
+- Fix startup messages lost to echo area before REPL buffer creation
+
 * Version 0.27.0
 - Add support for multiple simultaneous debug sessions
 - Add function breakpoints
