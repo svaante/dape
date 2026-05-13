@@ -1896,6 +1896,13 @@ See `dape-request' for expected CB signature."
           (dape--request-continue cb error))
       (dape--request-continue cb))))
 
+(defun dape--configuration-done (conn &optional cb)
+  "Send configurationDone to CONN if supported.
+See `dape-request' for expected CB signature."
+  (if (dape--capable-p conn :supportsConfigurationDoneRequest)
+      (dape-request conn :configurationDone nil cb)
+    (dape--request-continue cb)))
+
 (defun dape--update-threads (conn cb)
   "Update threads for CONN in-place if possible.
 See `dape-request' for expected CB signature."
@@ -2184,7 +2191,7 @@ Starts a new adapter connection as per request of the debug adapter."
     (dape--with-request (dape--set-breakpoints conn)
       (dape--with-request (dape--set-function-breakpoints conn)
         (dape--with-request (dape--set-data-breakpoints conn)
-          (dape--with-request (dape-request conn :configurationDone nil)
+          (dape--with-request (dape--configuration-done conn)
             ;; See `defer-launch-attach' in `dape-configs'
             (when (plist-get (dape--config conn) 'defer-launch-attach)
               (dape--launch-or-attach conn))))))))
