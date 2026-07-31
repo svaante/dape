@@ -5898,7 +5898,15 @@ See `modes' and `ensure' in `dape-configs'."
               (list
                (dape--config-to-string
                 key (ignore-errors (dape--config-eval key config 'skip-functions)))
-               (format "%s " key))))))
+               (format "%s " key)))))
+         ;; Use completing-read to get initial input
+         (completing-read-input
+          (completing-read
+           "Run adapter: "
+           (mapcar #'car dape-configs)
+           nil t
+           (when default-value (cadr default-value))
+           'dape-history)))
     (setq dape--minibuffer-last-buffer (current-buffer)
           dape--minibuffer-cache nil)
     (minibuffer-with-setup-hook
@@ -5925,7 +5933,7 @@ See `modes' and `ensure' in `dape-configs'."
             (let ((history-add-new-input (eq dape-history-add 'input)))
               (read-from-minibuffer
                "Run adapter: "
-               initial-contents
+               completing-read-input
                (let ((map (make-sparse-keymap)))
                  (set-keymap-parent map minibuffer-local-map)
                  (define-key map (kbd "C-M-i") #'completion-at-point)
