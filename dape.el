@@ -5901,12 +5901,13 @@ See `modes' and `ensure' in `dape-configs'."
                (format "%s " key)))))
          ;; Use completing-read to get initial input
          (completing-read-input
-          (completing-read
-           "Run adapter: "
-           (mapcar #'car dape-configs)
-           nil t
-           (when default-value (cadr default-value))
-           'dape-history)))
+          (let ((selected (completing-read
+                           "Run adapter: "
+                           suggested-configs
+                           nil t
+                           (when default-value (cadr default-value))
+                           'dape-history)))
+            (format "%s " selected))))
     (setq dape--minibuffer-last-buffer (current-buffer)
           dape--minibuffer-cache nil)
     (minibuffer-with-setup-hook
