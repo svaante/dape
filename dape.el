@@ -206,37 +206,37 @@
      :args []
      :stopAtBeginningOfMainSubprogram nil)
     ,@(let ((gdb-common
-	     `( ensure (lambda (config)
-			 (dape-ensure-command config)
-			 (let* ((default-directory
-				 (or (dape-config-get config 'command-cwd)
-				     default-directory))
-				(command (dape-config-get config 'command))
-				(output (shell-command-to-string (format "%s --version" command)))
-				(version (save-match-data
-					   (when (string-match "GNU gdb \\(?:(.*) \\)?\\([0-9.]+\\)" output)
-					     (string-to-number (match-string 1 output))))))
-			   (unless (>= version 14.1)
-			     (user-error "Requires gdb version >= 14.1"))))
-		command "gdb"
-		command-args ("--interpreter=dap")
-		:request "launch"
-		:stopAtBeginningOfMainSubprogram nil)))
-	`((gdb-go-test ,@gdb-common
-		       modes (go-mode go-ts-mode)
-		       command-cwd (file-name-directory (buffer-file-name))
-		       compile (format "go test -c -o %s -gcflags='all=-N -l'"
-				       (expand-file-name "__test.bin" temporary-file-directory)) ;; compile without optimizations
-		       :program (expand-file-name "__test.bin" temporary-file-directory)
-		       :args [])
-	  (gdb-go ,@gdb-common
-		  modes (go-mode go-ts-mode)
-		  command-cwd (file-name-directory (buffer-file-name))
-		  compile (format "go build -o %s -gcflags='all=-N -l'"
-				  (expand-file-name "__binary.bin" temporary-file-directory)) ;; compile without optimizations
-		  :request "launch"
-		  :program (expand-file-name "__binary.bin" temporary-file-directory)
-		  :args [])))
+	         `( ensure (lambda (config)
+			             (dape-ensure-command config)
+			             (let* ((default-directory
+				                 (or (dape-config-get config 'command-cwd)
+				                     default-directory))
+				                (command (dape-config-get config 'command))
+				                (output (shell-command-to-string (format "%s --version" command)))
+				                (version (save-match-data
+					                       (when (string-match "GNU gdb \\(?:(.*) \\)?\\([0-9.]+\\)" output)
+					                         (string-to-number (match-string 1 output))))))
+			               (unless (>= version 14.1)
+			                 (user-error "Requires gdb version >= 14.1"))))
+		        command "gdb"
+		        command-args ("--interpreter=dap")
+		        :request "launch"
+		        :stopAtBeginningOfMainSubprogram nil)))
+	    `((gdb-go-test ,@gdb-common
+		               modes (go-mode go-ts-mode)
+		               command-cwd (file-name-directory (buffer-file-name))
+		               compile (format "go test -c -o %s -gcflags='all=-N -l'"
+				                       (expand-file-name "__test.bin" temporary-file-directory)) ;; compile without optimizations
+		               :program (expand-file-name "__test.bin" temporary-file-directory)
+		               :args [])
+	      (gdb-go ,@gdb-common
+		          modes (go-mode go-ts-mode)
+		          command-cwd (file-name-directory (buffer-file-name))
+		          compile (format "go build -o %s -gcflags='all=-N -l'"
+				                  (expand-file-name "__binary.bin" temporary-file-directory)) ;; compile without optimizations
+		          :request "launch"
+		          :program (expand-file-name "__binary.bin" temporary-file-directory)
+		          :args [])))
     (godot
      modes (gdscript-mode)
      port 6006
@@ -283,12 +283,12 @@
            :cwd dape-cwd
            :program dape-buffer-default
            :console "internalConsole")
-	  (js-debug-node-attach
+	      (js-debug-node-attach
            modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
            ,@js-debug
            :type "pwa-node"
-	   :request "attach"
-	   :port 9229)
+	       :request "attach"
+	       :port 9229)
           (js-debug-chrome
            modes (js-mode js-ts-mode typescript-mode typescript-ts-mode)
            ,@js-debug
@@ -363,23 +363,23 @@
                   (unless (and (featurep 'eglot) (eglot-current-server))
                     (user-error "No eglot instance active in buffer %s" (current-buffer)))
                   (unless (seq-contains-p (eglot--server-capable :executeCommandProvider :commands)
-        			          "vscode.java.resolveClasspath")
-        	    (user-error "Jdtls instance does not bundle java-debug-server, please install")))))
+        			                      "vscode.java.resolveClasspath")
+        	        (user-error "Jdtls instance does not bundle java-debug-server, please install")))))
      fn (lambda (config)
           (with-current-buffer
               (find-file-noselect (dape-config-get config :filePath))
             (if-let* ((server (eglot-current-server)))
-	        (pcase-let ((`[,module-paths ,class-paths]
-			     (eglot-execute-command server
+	            (pcase-let ((`[,module-paths ,class-paths]
+			                 (eglot-execute-command server
                                                     "vscode.java.resolveClasspath"
-					            (vector (plist-get config :mainClass)
+					                                (vector (plist-get config :mainClass)
                                                             (plist-get config :projectName))))
                             (port (eglot-execute-command server
-		                                         "vscode.java.startDebugSession" nil)))
-	          (thread-first config
+		                                                 "vscode.java.startDebugSession" nil)))
+	              (thread-first config
                                 (plist-put 'port port)
-			        (plist-put :modulePaths module-paths)
-			        (plist-put :classPaths class-paths)))
+			                    (plist-put :modulePaths module-paths)
+			                    (plist-put :classPaths class-paths)))
               server)))
      ,@(cl-flet ((resolve-main-class (key)
                    (ignore-errors
@@ -664,6 +664,22 @@ left-to-right display order of the properties."
                 :value-type (choice (const :tag "Full" 0)
                                     (natnum :tag "Width"))))
 
+(defcustom dape-info-variable-value-max-length 50
+  "Max length of a compound variable's preview in scope and watch buffers.
+Longer previews are replaced by a placeholder such as \"Server {…}\"
+or \"(5) […]\". 0 means always collapse.  nil disables collapsing."
+  :type '(choice (natnum :tag "Max characters (0 = always collapse)")
+                 (const :tag "Disabled" nil)))
+
+(defcustom dape-info-scalar-value-max-length 120
+  "Max display width of the value of a variable without children.
+Longer values are truncated with an ellipsis in scope and watch
+buffers.  The full value is shown as help echo (tooltip).
+nil disables truncation."
+  :type '(choice (natnum :tag "Max display width")
+                 (const :tag "Disabled" nil)))
+
+
 (defcustom dape-info-thread-buffer-locations t
   "Show file information or library names in threads buffer."
   :type 'boolean)
@@ -788,8 +804,8 @@ See `dape-minibuffer-hint'."
   :program, and :args as launch options.
   Example: \"launch - ENV=value program arg1 arg2\"."
   :type '(choice (const :tag "Input" input)
-		 (const :tag "After evaluation of each key" expanded)
-		 (const :tag "Shell like with - separator" shell-like)))
+		         (const :tag "After evaluation of each key" expanded)
+		         (const :tag "Shell like with - separator" shell-like)))
 
 (defcustom dape-ui-debounce-time 0.1
   "Number of seconds to debounce `revert-buffer' for UI buffers."
@@ -844,6 +860,10 @@ Debug logging has an noticeable effect on performance."
 
 (defface dape-header-line-hover-face '((t :inherit mode-line-highlight))
   "Face for hovered Dape header tabs.")
+
+(defface dape-variable-placeholder-face '((t :inherit shadow :slant italic))
+  "Face used for the placeholder of a collapsed compound variable.")
+
 
 
 ;;; Forward declarations
@@ -3007,9 +3027,9 @@ The frame is identified by STACK-ID under adapter CONN."
     (user-error "Adapter not capable of restarting frame"))
   (dape-select-stack conn stack-id)
   (let* ((current-frame (dape--current-stack-frame conn))
-	 (frame-id (plist-get current-frame :id)))
+	     (frame-id (plist-get current-frame :id)))
     (dape--with-request-bind (_body error)
-	(dape-request conn :restartFrame `(:frameId ,frame-id))
+	    (dape-request conn :restartFrame `(:frameId ,frame-id))
       (when error
         (dape--warn "Failed to restart stack frame: %s" error)))))
 
@@ -3806,8 +3826,8 @@ Helper for `dape--stack-frame-display'."
             (goto-char (marker-position marker))
             ;; ...like fixing `hl-line'
             (when (featurep 'hl-line)
-	      (cond (global-hl-line-mode (global-hl-line-highlight))
-	            ((and hl-line-mode hl-line-sticky-flag) (hl-line-highlight))))
+	          (cond (global-hl-line-mode (global-hl-line-highlight))
+	                ((and hl-line-mode hl-line-sticky-flag) (hl-line-highlight))))
             (run-hooks 'dape-display-source-hook)))))))
 
 (defun dape--stack-frame-display (conn)
@@ -4735,20 +4755,105 @@ current buffer with CONN config."
             (push prop columns)))))
     (nreverse columns)))
 
+(defun dape--info-variable-placeholder (object preview)
+  "Return a short placeholder for compound variable OBJECT.
+PREVIEW is the full preview string sent by the adapter.  The useful
+head of PREVIEW (class name, element count) is kept and its body is
+dropped:
+
+  Server {_events: {...}, ...}  ->  Server {…}
+  Map(2) {\\='a\\=' => 1}            ->  Map(2) {…}
+  (5) [1, 2, 3, 4, 5]           ->  (5) […]"
+  (let ((type (or (plist-get object :type) ""))
+        (indexed (plist-get object :indexedVariables)))
+    (cond
+     ((and (string-match "\\`\\([^{[]*\\)\\([{[]\\)" preview)
+           (<= (length (match-string 1 preview)) 40))
+      ;; Read both groups before calling `string-trim', which is free
+      ;; to clobber the match data.
+      (let* ((raw-head (match-string 1 preview))
+             (open (match-string 2 preview))
+             (head (string-trim raw-head)))
+        (concat head (unless (string-empty-p head) " ")
+                open "…" (if (equal open "{") "}" "]"))))
+     ((numberp indexed)
+      (format "%s(%d)" (if (string-empty-p type) "Array" type) indexed))
+     ((string-empty-p type) "{…}")
+     (t (format "%s {…}" type)))))
+
+(defun dape--info-variable-replace-preview (object shown preview &optional face)
+  "Return a copy of variable OBJECT that displays SHOWN instead of PREVIEW.
+SHOWN is given a `help-echo' with (a prefix of) PREVIEW and, if
+non-nil, FACE.  OBJECT itself is not modified."
+  (let ((copy (copy-sequence object))
+        (shown (apply #'propertize shown
+                      'help-echo (truncate-string-to-width preview 2000 nil nil "…")
+                      (when face (list 'font-lock-face face)))))
+    ;; Watch and evaluate results carry `:result' instead of `:value'.
+    (dolist (key '(:value :result))
+      (when (plist-member copy key)
+        (setq copy (plist-put copy key shown))))
+    copy))
+
+(defun dape--info-variable-compact (object)
+  "Return OBJECT, or a copy with a compact preview if it is too long.
+Only the displayed preview changes.  `:variables',
+`:variablesReference' etc. are kept, so expanding a variable works as
+before.  See `dape-info-variable-value-max-length' and
+`dape-info-scalar-value-max-length'."
+  (let ((ref (plist-get object :variablesReference))
+        (preview (or (plist-get object :value) (plist-get object :result))))
+    (cond
+     ((not (stringp preview)) object)
+     ;; Compound: has children.
+     ((and (integerp ref) (> ref 0))
+      (if (and dape-info-variable-value-max-length
+               (length> preview dape-info-variable-value-max-length))
+          (dape--info-variable-replace-preview
+           object
+           (dape--info-variable-placeholder object preview)
+           preview
+           'dape-variable-placeholder-face)
+        object))
+     ;; Scalar: strings, numbers, ...
+     ((and dape-info-scalar-value-max-length
+           (> (string-width preview) dape-info-scalar-value-max-length))
+      (dape--info-variable-replace-preview
+       object
+       (truncate-string-to-width preview dape-info-scalar-value-max-length
+                                 nil nil "…")
+       preview))
+     (t object))))
+
+(defun dape--info-variable-compact-context-p (path)
+  "Return non-nil if variables at PATH should get compact previews.
+PATH is the path given to `dape--info-scope-add-variable' with the
+innermost element first, so its last element identifies the buffer.
+Only scope and watch buffers are compacted.  In the REPL and in eldoc
+the preview is the whole output, hiding it would lose information."
+  (let ((root (car (last path))))
+    (or (integerp root) (equal root "Watch"))))
+
+
 (defun dape--info-scope-add-variable (table object reference path test-expanded
                                             &optional no-handles)
   "Add variable OBJECT with REFERENCE and PATH to TABLE.
 TEST-EXPANDED is called with PATH and OBJECT to determine if recursive
 calls should continue.  If NO-HANDLES is non-nil skip + - handles."
+
   (let* ((name (dape--variable-name object))
          (type (or (plist-get object :type) ""))
-         (value (or (plist-get object :value)
-                    (plist-get object :result)
+         (shown (if (dape--info-variable-compact-context-p path)
+                    (dape--info-variable-compact object)
+                  object))
+         (value (or (plist-get shown :value)
+                    (plist-get shown :result)
                     " "))
          (prefix (make-string (* (1- (length path)) 2) ?\s))
          (path (cons name path))
          (expanded-p (funcall test-expanded path))
          row)
+
     (setq
      name (propertize name
                       'font-lock-face 'font-lock-variable-name-face
@@ -4758,7 +4863,9 @@ calls should continue.  If NO-HANDLES is non-nil skip + - handles."
      type (propertize type 'font-lock-face 'font-lock-type-face)
      value (propertize value
                        'mouse-face 'highlight
-                       'help-echo "mouse-2: edit value"
+                       'help-echo (or (and (not (string-empty-p value))
+                                           (get-text-property 0 'help-echo value))
+                                      "mouse-2: edit value")
                        'keymap dape-info-variable-value-map)
      prefix (cond (no-handles prefix)
                   ((zerop (or (plist-get object :variablesReference) 0))
@@ -4918,7 +5025,7 @@ calls should continue.  If NO-HANDLES is non-nil skip + - handles."
         buffer-read-only nil
         font-lock-defaults '(dape--info-watch-edit-font-lock-keywords))
   (message "%s" (substitute-command-keys
-	         "Press \\[dape-info-watch-finish-edit] when finished \
+	             "Press \\[dape-info-watch-finish-edit] when finished \
 or \\[dape-info-watch-abort-changes] to abort changes"))
   (dape--info-set-related-buffers)
   (revert-buffer))
@@ -5006,7 +5113,7 @@ The search is done backwards from POINT.  The line is marked with
 (defun dape--repl-revert-region (&rest _)
   "Revert region by cont text property dape--revert-tag."
   (when-let* ((inhibit-read-only t)
-	      (fn (get-text-property (point) 'dape--revert-fn))
+	          (fn (get-text-property (point) 'dape--revert-fn))
               (start (save-excursion
                        (previous-single-property-change
                         (1+ (point)) 'dape--revert-tag)))
