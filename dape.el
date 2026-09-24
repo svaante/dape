@@ -6076,6 +6076,7 @@ mouse-1: Display minor mode menu"
 
 ;;; Keymaps
 
+;;;###autoload
 (defvar dape-global-map
   (let ((map (make-sparse-keymap)))
     (define-key map "d" #'dape)
