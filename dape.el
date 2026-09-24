@@ -4799,7 +4799,8 @@ calls should continue.  If NO-HANDLES is non-nil skip + - handles."
 (define-derived-mode dape-info-scope-mode dape-info-parent-mode "Scope"
   "Major mode for viewing and editing scoped variables."
   :interactive nil
-  (setq dape--info-buffer-index 0)
+  (setq dape--info-buffer-index 0
+        truncate-lines t)
   (dape--info-update-with (insert "No scope information available.")))
 
 (cl-defmethod dape--info-revert (&context (major-mode dape-info-scope-mode)
@@ -4847,7 +4848,8 @@ calls should continue.  If NO-HANDLES is non-nil skip + - handles."
 
 (define-derived-mode dape-info-watch-mode dape-info-parent-mode "Watch"
   "Major mode for viewing watch expressions."
-  :interactive nil)
+  :interactive nil
+  (setq truncate-lines t))
 
 (cl-defmethod dape--info-revert (&context (major-mode dape-info-watch-mode)
                                           &rest _)
