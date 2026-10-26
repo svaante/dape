@@ -2,6 +2,16 @@
 #+author: Daniel Pettersson
 #+language: en
 
+* Version 0.28.0
+- Add support for =haskell-debugger=
+- Add autoload cookie to =dape-global-map=
+- Change scope and watch buffers to truncate lines
+- Change launch/attach requests to never time out
+- Fix pointer dereference variables not being expandable
+- Fix compile hook targeting wrong compilation buffer
+- Fix =configurationDone= being sent when not supported by adapter
+- Fix thread update requests sent after connection stopped running
+
 * Version 0.27.1
 - Fix startup messages lost to echo area before REPL buffer creation
 
