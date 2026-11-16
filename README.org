@@ -114,7 +114,7 @@ Ensure that your GDB version is 14.1 or newer.
 For further details, consult the [[https://sourceware.org/gdb/current/onlinedocs/gdb.html/Debugger-Adapter-Protocol.html][documentation]].
 
 ** C and C++ - cpptools
-Download latesnd unpack =vsix= file with your favorite unzipper.
+Download latest and unpack =vsix= file with your favorite unzipper.
 
 1. Download latest =vsix= [[https://github.com/microsoft/vscode-cpptools/releases][release]] for your platform =cpptools-<platform>-<os>.vsix=
 2. Unpack ~mkdir -p ~/.emacs.d/debug-adapters && unzip cpptools-<os>-<platform>.vsix -d ~/.emacs.d/debug-adapters/cpptools~
