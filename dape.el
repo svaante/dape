@@ -3378,6 +3378,9 @@ Source is either a buffer or file name."
   (cl-remove (current-buffer) dape--breakpoints
              :key #'dape--breakpoint-buffer :test-not #'eq))
 
+;; Keep breakpoints in the fringe when other overlays are recreated
+(put 'dape-breakpoint 'priority 10)
+
 (defun dape--breakpoint-make-overlay (breakpoint)
   "Create and set overlay for BREAKPOINT."
   (add-hook 'kill-buffer-hook #'dape--breakpoint-buffer-kill-hook nil t)
